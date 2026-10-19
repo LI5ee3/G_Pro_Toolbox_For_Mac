@@ -33,7 +33,10 @@ extension AppState {
         if let timer = presetTimer { RunLoop.main.add(timer, forMode: .common) }
         presetWakeObserver = NSWorkspace.shared.notificationCenter.addObserver(
             forName: NSWorkspace.didWakeNotification, object: nil, queue: .main
-        ) { [weak self] _ in self?.checkAutomaticTasks() }
+        ) { [weak self] _ in
+            self?.recoverAfterWake()
+            self?.checkAutomaticTasks()
+        }
         updateAutomaticTaskStatus()
     }
 

@@ -15,6 +15,8 @@ Redmi G Pro 27U 2026显示器 ADB 控制工具
 
 ## macOS 版
 
+本 fork 增强了 Mac 唤醒后的网络 ADB 自动重连、音量与保活状态刷新，以及 AdbGuardian 部署后的回读结果提示。更新说明与实机测试范围见 [`macos/README.md`](macos/README.md)。
+
 `macos/` 下有一份**原生 SwiftUI 移植**，功能与原版对齐，另外多了些 macOS 独有的能力：
 
 ```bash

@@ -109,8 +109,10 @@ struct ToolsView: View {
 
                 // ADB 保活守护
                 SectionCard(title: "ADB 保活守护") {
-                    Text("部署电视端 AdbGuardian，重启、待机或唤醒后自动恢复无线 ADB，并保持 5555 端口可用。")
+                    Text("部署显示器端 AdbGuardian，尝试在重启、待机或唤醒后恢复 ADB。具体恢复效果需经过实际待机和重启测试确认。")
                         .foregroundColor(.secondary)
+                    Text("此操作会安装项目自带 APK，授予修改调试设置和无障碍权限，并开启网络 ADB 5555。深度待机期间服务可能停止，恢复时间取决于显示器系统。")
+                        .font(.caption).foregroundColor(.secondary)
                     Text(state.guardianStatus).foregroundColor(.secondary)
                     HStack(spacing: 8) {
                         Button("检测状态") { state.checkGuardian() }

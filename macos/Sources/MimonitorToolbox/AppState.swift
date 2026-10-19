@@ -198,6 +198,7 @@ final class AppState: ObservableObject {
     private var monitorChecking = false
     private var monitorTick = 0
     private var lastMonitorFailState = ""
+    private var displayWakeObserver: NSObjectProtocol?
     /// 切页时刻，用于统计刷新耗时
     private var pageAppearTimes: [String: Date] = [:]
 
@@ -278,9 +279,13 @@ final class AppState: ObservableObject {
             if self.isConnected && self.monitorTick % 5 != 0 { return }
             self.monitorAdbServer()
         }
+        displayWakeObserver = NSWorkspace.shared.notificationCenter.addObserver(
+            forName: NSWorkspace.screensDidWakeNotification, object: nil, queue: .main
+        ) { [weak self] _ in self?.recoverAfterWake() }
     }
 
     deinit {
+        if let observer = displayWakeObserver { NSWorkspace.shared.notificationCenter.removeObserver(observer) }
         presetTimer?.invalidate()
         pendingPresetSave?.cancel()
         if let observer = presetWakeObserver { NSWorkspace.shared.notificationCenter.removeObserver(observer) }
@@ -291,7 +296,7 @@ final class AppState: ObservableObject {
     /// 两种失效都会表现为连不上：server 长时间运行后失效（报 "No route to host"），
     /// 以及 adb connect 后卡在 offline 不翻转。两者都靠 kill-server + start-server 治，
     /// 但设备侧清掉旧 transport 需要时间，所以要反复重试而不是只试一次。
-    private func monitorAdbServer() {
+    private func monitorAdbServer(refreshState: Bool = false) {
         guard !monitorChecking else { return }
         guard connectionIntent.allowsAutomaticRecovery else { return }
         // 正在连接/扫描时不要插手：监控会重启 adb server，而重启会把
@@ -314,7 +319,18 @@ final class AppState: ObservableObject {
         runConnectionTask {
             defer { DispatchQueue.main.async { self.monitorChecking = false } }
 
-            if wasConnected && self.adb.deviceState() == "device" { return }   // 一切正常
+            if wasConnected && self.adb.deviceState() == "device" && self.adb.transportWorks() {
+                // 唤醒时连接可能仍可用，但显示器的音量和保活设置已经变化。
+                if refreshState {
+                    DispatchQueue.main.async {
+                        guard self.connectionIntent.isCurrent(request),
+                              self.connectionIntent.allowsAutomaticRecovery else { return }
+                        self.refreshMediaVolumeState()
+                        self.checkGuardian()
+                    }
+                }
+                return
+            }
 
             if !self.adb.isServerAlive() { self.adb.restartServer() }
             let (ok, state) = self.adb.ensureConnected()
@@ -339,6 +355,8 @@ final class AppState: ObservableObject {
                         self.log("ADB 链路已恢复")
                     }
                     self.lastMonitorFailState = ""
+                    self.refreshMediaVolumeState()
+                    self.checkGuardian()
                 } else if self.isConnected {
                     self.connectionStatus = .disconnected
                     self.log("ADB 链路恢复失败: \(state)")
@@ -352,6 +370,15 @@ final class AppState: ObservableObject {
     }
 
     // MARK: - 通用工具
+
+    func recoverAfterWake() {
+        guard connectionIntent.allowsAutomaticRecovery else { return }
+        let request = connectionIntent.generation
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) { [weak self] in
+            guard let self, self.connectionIntent.isCurrent(request) else { return }
+            self.monitorAdbServer(refreshState: true)
+        }
+    }
 
     var isConnected: Bool {
         if case .connected = connectionStatus { return true }
@@ -1552,7 +1579,7 @@ final class AppState: ObservableObject {
                 let s = self.readGuardianStatus()
                 DispatchQueue.main.async {
                     self.guardianStatus = s.summary
-                    self.log("ADB 保活守护部署完成")
+                    self.log(s.ok ? "ADB 保活守护部署并回读验证完成" : "APK 已安装，但保活检查未通过：\(s.summary)")
                 }
             } else {
                 DispatchQueue.main.async {
@@ -1573,7 +1600,7 @@ final class AppState: ObservableObject {
             let s = self.readGuardianStatus()
             DispatchQueue.main.async {
                 self.guardianStatus = s.summary
-                self.log("ADB 保活守护已启动")
+                self.log(s.ok ? "ADB 保活守护已启动并通过检查" : "已请求启动保活，检查结果：\(s.summary)")
             }
         }
     }

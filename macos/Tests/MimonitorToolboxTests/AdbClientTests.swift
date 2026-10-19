@@ -3,6 +3,47 @@ import XCTest
 @testable import MimonitorToolbox
 
 final class AdbClientTests: XCTestCase {
+    func testDeviceStateAloneDoesNotProveTransportIsUsable() throws {
+        try fake("""
+        case "$3" in
+          get-state) echo device ;;
+          shell) echo 'error: device offline'; exit 1 ;;
+          *) exit 2 ;;
+        esac
+        """) { client in
+            XCTAssertEqual(client.deviceState(), "device")
+            XCTAssertFalse(client.transportWorks())
+        }
+    }
+
+    func testEnsureConnectedRepairsStaleTransportReportedAsDevice() throws {
+        try fake("""
+        marker="$0.connected"
+        case "$1" in
+          connect)
+            [ "$2" = "192.168.1.20:5555" ] || exit 2
+            touch "$marker"
+            echo connected ;;
+          -s)
+            [ "$2" = "192.168.1.20:5555" ] || exit 2
+            case "$3" in
+              get-state) echo device ;;
+              shell)
+                if [ -f "$marker" ]; then echo __mimonitor_probe__
+                else echo 'error: device offline'; exit 1; fi ;;
+              *) exit 3 ;;
+            esac ;;
+          *) exit 4 ;;
+        esac
+        """) { client in
+            XCTAssertFalse(client.transportWorks())
+            let result = client.ensureConnected()
+            XCTAssertTrue(result.ok)
+            XCTAssertEqual(result.state, "device")
+            XCTAssertTrue(client.transportWorks())
+        }
+    }
+
     func testScanProbeReadsModelFromExplicitTargetAndLeavesCurrentIpUnchanged() throws {
         try fake("""
         case "$1" in
