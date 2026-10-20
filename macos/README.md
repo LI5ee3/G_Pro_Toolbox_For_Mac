@@ -1,7 +1,7 @@
 # 红米G Pro ToolBox — macOS (SwiftUI)
 
 Redmi G Pro 27U / 32U 显示器的原生 macOS 控制工具，使用 SwiftUI、AppKit 和 CoreAudio。
-本仓库仅维护 Mac 应用；设备端协议与实现源自 [原项目](https://github.com/YiHoooong/Mimonitor_Toolbox)，在此基础上继续开发。
+仅支持 macOS 13 及以上的 Apple Silicon Mac（M 系列芯片）。本仓库仅维护 Mac 应用；设备端协议与实现源自 [原项目](https://github.com/YiHoooong/Mimonitor_Toolbox)，在此基础上继续开发。
 
 ## 蓝牙优先的键盘音量控制
 
@@ -107,10 +107,9 @@ swift run MimonitorToolbox     # 开发调试
 open "红米G Pro ToolBox.app"
 ```
 
-产物：`红米G Pro ToolBox.app`（约 20MB，自包含、零外部依赖）+ `MimonitorToolbox-macos.dmg`。
+产物：`红米G Pro ToolBox.app`（约 20MB，自包含、零外部依赖）+ `MimonitorToolbox-macos-arm64.dmg`。
 
-默认产出**通用二进制**（Intel + Apple Silicon）—— 分架构各编一次再 `lipo` 合并，
-因为 `swift build --arch a --arch b` 依赖完整 Xcode。想加快本地构建用 `UNIVERSAL=0 ./build_app.sh`。
+构建固定使用 `--arch arm64`，不提供其他架构或通用包。主程序和内嵌 adb 都只包含 arm64；从官方 platform-tools 获取的多架构 adb 在打包时提取 arm64，原始缓存保持不变。
 
 脚本会内嵌 adb（仓库里没有就从 Google 官方下载，缓存在 `macos/.cache/`）、两个 jar、
 保活 apk，生成 `Info.plist`，签名，最后打 DMG。想固定 adb 版本就把 macOS 版 adb
@@ -253,9 +252,9 @@ EDID / FreeSync 这类会改变显示器输入信号格式（可能黑屏或改�
 `.github/workflows/macos.yml` 是本项目唯一的应用构建与发布流程：
 
 - **触发**：主分支的 push / PR（包含共享资源的变动）、`v*` 标签，以及手动运行
-- **build**：debug 编译 → 单元测试 → 导入签名证书 → 通用二进制打包 → 校验产物 → 上传 artifact
+- **build**：debug 编译 → 单元测试 → 导入签名证书 → Apple Silicon 打包 → 校验产物 → 上传 artifact
 - **release**：仅标签触发，把 DMG 和 zip 附到 GitHub Release
 
 校验步骤逐项确认：可执行文件存在、内嵌 adb / 两个 jar / 保活 apk 齐全、**确实是
-arm64 + x86_64 通用二进制**、签名有效且**不是 ad-hoc**、`LSUIElement` 未被设置、
+仅含 arm64 的主程序与内嵌 adb**、签名有效且**不是 ad-hoc**、`LSUIElement` 未被设置、
 分发包文件名只含 `[A-Za-z0-9._-]`、内嵌的 adb 真的能跑起来。

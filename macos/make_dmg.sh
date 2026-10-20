@@ -12,7 +12,7 @@ cd "$(dirname "$0")"
 # PACKAGE_NAME 是 DMG 文件名（必须 ASCII，见 build_app.sh 里的说明）。
 APP_NAME="红米G Pro ToolBox"
 EXEC_NAME="MimonitorToolbox"
-PACKAGE_NAME="MimonitorToolbox-macos"
+PACKAGE_NAME="MimonitorToolbox-macos-arm64"
 SRC_APP="$APP_NAME.app"
 OUT_DMG="$PACKAGE_NAME.dmg"
 # 卷标用产品名（中文没问题 —— 被 GitHub 改写的是**文件名**，卷标不经过它）。

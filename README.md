@@ -1,6 +1,6 @@
 # 红米G Pro ToolBox for Mac
 
-Redmi G Pro 27U / 32U 显示器的原生 macOS 控制应用，使用 SwiftUI、AppKit 和 CoreAudio。支持 macOS 13 及以上，提供 Apple Silicon 与 Intel 通用构建。
+Redmi G Pro 27U / 32U 显示器的原生 macOS 控制应用，使用 SwiftUI、AppKit 和 CoreAudio。仅支持运行 macOS 13 及以上的 Apple Silicon Mac（M 系列芯片）。
 
 本项目基于 [YiHoooong/Mimonitor_Toolbox](https://github.com/YiHoooong/Mimonitor_Toolbox) 的设备协议与 macOS 实现继续开发，保留原作者贡献。当前仓库仅维护 Mac 应用。
 
@@ -20,7 +20,7 @@ Redmi G Pro 27U / 32U 显示器的原生 macOS 控制应用，使用 SwiftUI、A
 
 ## 使用条件
 
-- Mac 运行 macOS 13 或更高版本。
+- Apple Silicon Mac（M1 或更新的 M 系列芯片），运行 macOS 13 或更高版本。
 - 网络 ADB 功能需要显示器开启 ADB，且 Mac 与显示器可通过网络互通（TCP 5555）。视频线本身不提供网络连接。
 - 蓝牙音量控制需要先在 macOS 中配对并连接显示器的蓝牙音频设备；无需网络 ADB。其他显示器设置仍通过 ADB 完成。
 - 全局键盘控制需要 macOS 辅助功能授权。
@@ -39,11 +39,7 @@ swift test
 open "红米G Pro ToolBox.app"
 ```
 
-默认生成 Apple Silicon + Intel 通用应用及 `MimonitorToolbox-macos.dmg`。仅为当前 Mac 架构构建可使用：
-
-```sh
-UNIVERSAL=0 ./build_app.sh
-```
+生成仅含 arm64 的应用及 `MimonitorToolbox-macos-arm64.dmg`。主程序和内嵌 adb 都仅保留 Apple Silicon 架构。
 
 打包会从 Google 官方获取 macOS 版 adb 并缓存，内嵌 adb、显示器端 JAR 与 AdbGuardian APK。最终用户无需安装 Python、Java 或 adb。使用 DMG 时，将应用拖入 Applications 即可。
 
@@ -74,7 +70,7 @@ Mimonitor_Toolbox/
 │  ├─ runtime/                    # 显示器端 JAR
 │  └─ adb_guardian/               # 显示器端保活 APK
 ├─ tools/                         # JAR 的 Java 源码
-└─ .github/                      # macOS CI、发布流程与反馈模板
+└─ .github/                      # Apple Silicon CI、发布流程与反馈模板
 ```
 
 ## 持续集成

@@ -12,4 +12,6 @@ runtime on the Mac. Their sources are in `tools/mtk_direct/` and
 
 `macos/build_app.sh` downloads the macOS adb client from Google's official
 platform-tools distribution and caches it under `macos/.cache/`. To use a fixed
-version instead, place a macOS adb binary at `assets/runtime/adb` before building.
+version instead, place a macOS adb binary containing arm64 at `assets/runtime/adb`
+before building. The packaged adb contains only arm64; a multi-architecture source
+binary is thinned during packaging without changing the cache.

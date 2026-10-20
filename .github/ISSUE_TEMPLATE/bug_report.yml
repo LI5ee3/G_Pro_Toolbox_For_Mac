@@ -20,7 +20,7 @@ body:
     id: os-version
     attributes:
       label: macOS 版本与 Mac 芯片
-      placeholder: 例如 macOS 15.7 / Apple M4，或 macOS 14 / Intel
+      placeholder: 例如 macOS 15.7 / Apple M4
     validations:
       required: true
   - type: input
