@@ -41,7 +41,7 @@ final class BluetoothVolumeController {
         guard let channel = device.channels.first else { throw Failure.unavailable }
         let scalar = try access.read(device, channel: channel)
         guard scalar.isFinite, (0...1).contains(scalar) else { throw Failure.invalidVolume }
-        let value = Int((scalar * 100).rounded())
+        let value = BluetoothVolumeScale.volume(forScalar: scalar)
         if value > 0 {
             restoreVolumes[device.uid] = value
             explicitlyMuted.remove(device.uid)
@@ -53,7 +53,7 @@ final class BluetoothVolumeController {
     @discardableResult
     func setVolume(_ value: Int, on device: BluetoothVolumeDevice) throws -> BluetoothVolumeState {
         let value = min(max(value, 0), 100)
-        try writeScalar(Float32(value) / 100, device: device)
+        try writeScalar(BluetoothVolumeScale.scalar(forVolume: value), device: device)
         explicitlyMuted.remove(device.uid)
         if value > 0 { restoreVolumes[device.uid] = value }
         return try state(device)

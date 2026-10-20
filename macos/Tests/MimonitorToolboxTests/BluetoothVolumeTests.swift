@@ -71,6 +71,50 @@ final class BluetoothVolumeTests: XCTestCase {
         XCTAssertEqual(access.values[2], 0)
     }
 
+    func testAll101DisplayValuesSurviveBothBluetoothConversionsExactly() {
+        var previousWire = -1
+        for value in 0...100 {
+            let scalar = BluetoothVolumeScale.scalar(forVolume: value)
+            // Actual wire model, independent of the production decoder and its tolerance.
+            let wire = Int((Double(scalar) * 127).rounded(.down))
+            let display = Int((Double(wire) * 100 / 127).rounded())
+            XCTAssertEqual(display, value, "wire round trip at \(value)")
+            XCTAssertEqual(BluetoothVolumeScale.volume(forScalar: scalar), value)
+            XCTAssertGreaterThan(wire, previousWire)
+            previousWire = wire
+        }
+    }
+
+    func testIncomingWireNotificationsDecodeDespiteFloat32Boundaries() {
+        for wire in 0...127 {
+            XCTAssertEqual(BluetoothVolumeScale.volume(forScalar: Float32(Double(wire) / 127)),
+                           Int((Double(wire) * 100 / 127).rounded()), "wire \(wire)")
+        }
+    }
+
+    func testExternalTenPercentStartsAtActualNineThenMovesOnePoint() throws {
+        let access = FakeAccess()
+        access.values = [1: 0.10, 2: 0.10]
+        let controller = BluetoothVolumeController(access: access)
+        XCTAssertEqual(try controller.state(access.display).volume, 9)
+        XCTAssertEqual(try controller.adjust(increase: true, nativeSteps: false, step: 1, on: access.display).volume, 10)
+        XCTAssertEqual(try controller.adjust(increase: true, nativeSteps: false, step: 1, on: access.display).volume, 11)
+        XCTAssertEqual(try controller.adjust(increase: false, nativeSteps: false, step: 1, on: access.display).volume, 10)
+    }
+
+    func testOnePointSequenceHasNoPlateausOrSkipsAcrossEntireRange() throws {
+        let access = FakeAccess()
+        let control = BluetoothVolumeController(access: access)
+        for value in 1...100 {
+            XCTAssertEqual(try control.adjust(increase: true, nativeSteps: false, step: 1, on: access.display).volume, value)
+        }
+        XCTAssertEqual(try control.adjust(increase: true, nativeSteps: false, step: 1, on: access.display).volume, 100)
+        for value in stride(from: 99, through: 0, by: -1) {
+            XCTAssertEqual(try control.adjust(increase: false, nativeSteps: false, step: 1, on: access.display).volume, value)
+        }
+        XCTAssertEqual(try control.adjust(increase: false, nativeSteps: false, step: 1, on: access.display).volume, 0)
+    }
+
     func testOutputGateAllowsBluetoothWithoutADBButProtectsOtherSpeakers() {
         func gate(_ output: String?, bt: Bool = true, adb: Bool = false, enabled: Bool = true) -> Bool {
             AudioOutputMonitor.shouldHandleVolumeKeys(enabled: enabled, bluetoothAvailable: bt, adbConnected: adb,
