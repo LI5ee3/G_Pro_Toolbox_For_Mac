@@ -358,9 +358,22 @@ struct HotkeyConfigSheet: View {
                         }
                         Spacer()
                     }
-                    Text("开启后音量加减键、静音键接管为显示器音量（0~100，一次一格）；仅在默认音频输出匹配下方设备时生效，其余情况交回系统。需辅助功能权限，且已连接显示器。")
+                    Text("开启后用音量加减键、静音键控制显示器。优先使用已连接的蓝牙设备，无需网络 ADB；蓝牙不可用时使用已连接的 ADB。需辅助功能权限。")
                         .font(.caption)
                         .foregroundColor(.secondary)
+
+                    Toggle("优先通过蓝牙控制音量", isOn: $state.mediaVolumeBluetoothPreferred)
+                        .toggleStyle(.checkbox)
+                        .disabled(!state.mediaVolumeKeysEnabled)
+                    HStack(spacing: 8) {
+                        Text("蓝牙设备名").font(.caption).foregroundColor(.secondary)
+                        TextField("REDMI G Pro 32U 2026", text: $state.mediaVolumeBluetoothName)
+                            .textFieldStyle(.roundedBorder).frame(width: 240)
+                    }
+                    .disabled(!state.mediaVolumeKeysEnabled || !state.mediaVolumeBluetoothPreferred)
+                    Text(state.mediaVolumeBluetoothStatus).font(.caption).foregroundColor(.secondary)
+                    Text("设备名需与 macOS 蓝牙音频设备名称一致。声音可以继续通过 DP/HDMI 输出；静音通过音量归零实现，再按可恢复原音量。")
+                        .font(.caption).foregroundColor(.secondary)
 
                     Toggle("使用 macOS 原生音量提示（OSD）", isOn: $state.mediaVolumeNativeOSD)
                         .toggleStyle(.checkbox)
@@ -384,6 +397,8 @@ struct HotkeyConfigSheet: View {
                         Spacer()
                     }
                     .disabled(!state.mediaVolumeKeysEnabled || !state.mediaVolumeOutputGateEnabled)
+                    Text("启用输出限制时，上方音频输出设备或指定蓝牙设备作为默认输出均可接管；其他耳机和扬声器交回系统处理。")
+                        .font(.caption).foregroundColor(.secondary)
                 }
                 .padding(16)
             }

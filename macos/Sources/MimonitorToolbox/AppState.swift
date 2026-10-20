@@ -190,6 +190,24 @@ final class AppState: ObservableObject {
         didSet { UserDefaults.standard.set(mediaVolumeOutputName, forKey: "media_volume_output_name") }
     }
 
+    @Published var mediaVolumeBluetoothPreferred = UserDefaults.standard.object(forKey: "media_volume_bluetooth_preferred") as? Bool ?? true {
+        didSet {
+            UserDefaults.standard.set(mediaVolumeBluetoothPreferred, forKey: "media_volume_bluetooth_preferred")
+            refreshMediaVolumeState()
+        }
+    }
+    @Published var mediaVolumeBluetoothName = UserDefaults.standard.string(forKey: "media_volume_bluetooth_name") ?? "REDMI G Pro 32U 2026" {
+        didSet {
+            UserDefaults.standard.set(mediaVolumeBluetoothName, forKey: "media_volume_bluetooth_name")
+            refreshMediaVolumeState()
+        }
+    }
+    @Published private(set) var mediaVolumeBluetoothStatus = "蓝牙音量：等待检测"
+    private let bluetoothVolume = BluetoothVolumeController()
+    // Bluetooth must not wait behind a slow/offline ADB command on deviceQueue.
+    private let bluetoothVolumeQueue = DispatchQueue(label: "com.mimonitor.toolbox.bluetooth-volume", qos: .userInitiated)
+    private var bluetoothVolumeRetryAfter = Date.distantPast
+
     private var hdrLastState: Bool?
     private var logFileHandle: FileHandle?
     private var logFileURL: URL?
@@ -256,6 +274,7 @@ final class AppState: ObservableObject {
         Timer.scheduledTimer(withTimeInterval: 5.0, repeats: true) { [weak self] _ in
             self?.refreshMediaVolumeState()
         }
+        refreshMediaVolumeState()
         // 配了快捷键却没授权：启动时引导一次。
         // 系统授权框每个 app 只会弹一次，之后再调用是静默的，所以只在有快捷键配置时尝试。
         if !accessibilityTrusted && !hotkeys.isEmpty {
@@ -2035,13 +2054,14 @@ final class AppState: ObservableObject {
     }
 
     private func handleHotkeyTrigger(_ id: String) {
-        guard !isPresetBusy, !presetConfiguration.applicationIncomplete else { return }
         // 系统亮度调节键：固定调背光，立即反馈 + 串行化下发
         if id == HotkeyManager.mediaBrightnessUpID {
+            guard !isPresetBusy, !presetConfiguration.applicationIncomplete else { return }
             adjustMediaBrightness(increase: true)
             return
         }
         if id == HotkeyManager.mediaBrightnessDownID {
+            guard !isPresetBusy, !presetConfiguration.applicationIncomplete else { return }
             adjustMediaBrightness(increase: false)
             return
         }
@@ -2058,6 +2078,7 @@ final class AppState: ObservableObject {
             toggleMediaMute()
             return
         }
+        guard !isPresetBusy, !presetConfiguration.applicationIncomplete else { return }
         if id.hasPrefix("adjust:"), let idx = Int(id.dropFirst("adjust:".count)),
            idx >= 0, idx < adjustHotkeys.count {
             let rule = adjustHotkeys[idx]
@@ -2336,21 +2357,77 @@ final class AppState: ObservableObject {
     /// 默认音频输出是否就是目标显示器 —— 音量键接管门。
     /// 读不到输出设备时返回 false：宁可交给系统，也不要吞掉按键却没反应。
     func shouldHandleNativeVolume() -> Bool {
-        guard mediaVolumeKeysEnabled, isConnected else { return false }
-        guard mediaVolumeOutputGateEnabled else { return true }
-        return AudioOutputMonitor.defaultOutputMatches(configuredName: mediaVolumeOutputName)
+        AudioOutputMonitor.shouldHandleVolumeKeys(enabled: mediaVolumeKeysEnabled,
+            bluetoothAvailable: bluetoothVolumeDevice != nil, adbConnected: isConnected,
+            gateEnabled: mediaVolumeOutputGateEnabled, configuredOutputName: mediaVolumeOutputName,
+            bluetoothOutputName: mediaVolumeBluetoothPreferred ? mediaVolumeBluetoothName.trimmingCharacters(in: .whitespacesAndNewlines) : nil,
+            outputName: AudioOutputMonitor.defaultOutputDeviceName())
+    }
+
+    private var bluetoothVolumeDevice: BluetoothVolumeDevice? {
+        guard mediaVolumeBluetoothPreferred, Date() >= bluetoothVolumeRetryAfter else { return nil }
+        return bluetoothVolume.device(named: mediaVolumeBluetoothName)
+    }
+
+    /// Resolve on the main thread; hardware operations run on a queue independent of ADB.
+    private func performBluetoothVolume(_ device: BluetoothVolumeDevice, showHUD: Bool = false,
+                                        muteHUD: Bool = false,
+                                        operation: @escaping (BluetoothVolumeController, BluetoothVolumeDevice) throws -> BluetoothVolumeState,
+                                        fallback: (() -> Void)? = nil) {
+        let name = mediaVolumeBluetoothName
+        mediaVolumeCommit?.cancel()
+        mediaVolumeCommit = nil
+        mediaVolumeNeedsUnmute = false
+        bluetoothVolumeQueue.async {
+            do {
+                let state = try operation(self.bluetoothVolume, device)
+                DispatchQueue.main.async {
+                    guard self.mediaVolumeBluetoothPreferred, self.mediaVolumeBluetoothName == name,
+                          self.bluetoothVolumeDevice?.uid == device.uid else { return }
+                    self.mediaVolumePreview = state.volume
+                    self.mediaVolumeHardware = state.volume
+                    self.mediaVolumeMuted = state.muted
+                    self.currentValues["volume_music_speaker"] = String(state.volume)
+                    self.mediaVolumeBluetoothStatus = "蓝牙音量：已连接 · \(device.name)"
+                    if showHUD {
+                        let shown = self.mediaVolumeNativeOSD && (muteHUD
+                            ? NativeOSD.shared.showMute() : NativeOSD.shared.showVolume(value: state.volume))
+                        if !shown { HUDWindow.shared.show(title: muteHUD ? "静音" : "音量",
+                            value: muteHUD ? (state.muted ? "开" : "关") : "\(state.volume)") }
+                        if self.hotkeyDebugEnabled {
+                            self.log("音量控制 [蓝牙]: 音量 \(state.volume)，静音 \(state.muted ? "开" : "关")")
+                        }
+                    }
+                }
+            } catch {
+                DispatchQueue.main.async {
+                    guard self.mediaVolumeBluetoothName == name else { return }
+                    self.bluetoothVolumeRetryAfter = Date().addingTimeInterval(5)
+                    self.mediaVolumeBluetoothStatus = "蓝牙音量：\(error.localizedDescription)"
+                    if showHUD { self.log("蓝牙音量控制失败：\(error.localizedDescription)") }
+                    // Only an explicit mutation may fall back; polling never writes over ADB.
+                    if self.isConnected { fallback?() }
+                }
+            }
+        }
     }
 
     /// 空闲时回读一次音量/静音状态（连接后 + 每 5 秒）。
     /// 连按/待下发期间跳过，避免把预览基准带偏。
     func refreshMediaVolumeState() {
-        guard mediaVolumeKeysEnabled, isConnected else { return }
+        guard mediaVolumeKeysEnabled else { return }
+        if let device = bluetoothVolumeDevice {
+            performBluetoothVolume(device, operation: { try $0.state($1) })
+            return
+        }
+        mediaVolumeBluetoothStatus = mediaVolumeBluetoothPreferred ? "蓝牙音量：未找到指定设备；ADB 已连接时自动回退" : "蓝牙音量：已关闭"
+        guard isConnected else { return }
         guard mediaVolumePreview == nil || mediaVolumePreview == mediaVolumeHardware else { return }
         runBackground {
             let volume = self.adb.mediaVolume()
             let muted = self.adb.mediaMuted()
             DispatchQueue.main.async {
-                guard self.mediaVolumeKeysEnabled, self.isConnected else { return }
+                guard self.mediaVolumeKeysEnabled, self.isConnected, self.bluetoothVolumeDevice == nil else { return }
                 if let volume {
                     self.mediaVolumePreview = volume
                     self.mediaVolumeHardware = volume
@@ -2360,9 +2437,16 @@ final class AppState: ObservableObject {
         }
     }
 
-    private func adjustMediaVolume(increase: Bool) {
-        guard isConnected else { return log("未连接") }
+    private func adjustMediaVolume(increase: Bool, useBluetooth: Bool = true) {
         guard shouldHandleNativeVolume() else { return }
+        if useBluetooth, let device = bluetoothVolumeDevice {
+            let native = mediaVolumeNativeOSD, step = mediaVolumeStep
+            performBluetoothVolume(device, showHUD: true,
+                operation: { try $0.adjust(increase: increase, nativeSteps: native, step: step, on: $1) },
+                fallback: { [weak self] in self?.adjustMediaVolume(increase: increase, useBluetooth: false) })
+            return
+        }
+        guard isConnected else { return }
 
         let base = mediaVolumePreview ?? mediaVolumeHardware ?? 50
         let next: Int
@@ -2415,6 +2499,7 @@ final class AppState: ObservableObject {
     /// 把当前预览值绝对写到设备。目标值和已下发值相同时跳过，避免空跑一次。
     private func commitMediaVolume() {
         guard isConnected, let value = mediaVolumePreview else { return }
+        guard bluetoothVolumeDevice == nil else { return }
         let unmute = mediaVolumeNeedsUnmute
         guard mediaVolumeHardware != value || unmute else { return }
         mediaVolumeNeedsUnmute = false
@@ -2422,8 +2507,9 @@ final class AppState: ObservableObject {
         runBackground {
             let usedBinder = self.adb.setMediaVolume(value, unmuteFirst: unmute)
             DispatchQueue.main.async {
-                self.mediaVolumeHardware = value
                 self.mediaVolumeCommitInFlight = false
+                guard self.bluetoothVolumeDevice == nil else { return }
+                self.mediaVolumeHardware = value
                 if !usedBinder, !self.mediaVolumeFallbackLogged {
                     self.mediaVolumeFallbackLogged = true
                     self.log("音量键: AudioService binder 不可用，已回退 input keyevent")
@@ -2432,9 +2518,15 @@ final class AppState: ObservableObject {
         }
     }
 
-    private func toggleMediaMute() {
-        guard isConnected else { return log("未连接") }
+    private func toggleMediaMute(useBluetooth: Bool = true) {
         guard shouldHandleNativeVolume() else { return }
+        if useBluetooth, let device = bluetoothVolumeDevice {
+            performBluetoothVolume(device, showHUD: true, muteHUD: true,
+                operation: { try $0.toggleMute(on: $1) },
+                fallback: { [weak self] in self?.toggleMediaMute(useBluetooth: false) })
+            return
+        }
+        guard isConnected else { return }
         if let known = mediaVolumeMuted {
             applyMediaMute(!known)
         } else {
