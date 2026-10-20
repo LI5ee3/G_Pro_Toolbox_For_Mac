@@ -2,7 +2,7 @@ import Foundation
 import Darwin
 
 /// 内网扫描（macOS 实现）。
-/// 原版在 Windows 用 IPHLPAPI 枚举物理网卡并做 TCP 探测；这里用 ifconfig 取本机网段，
+/// 通过 ifconfig 取本机网段，
 /// 再对 5555 端口做 TCP 探测。
 enum NetworkScan {
     /// 探测 host:port 是否可连。

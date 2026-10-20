@@ -1,15 +1,15 @@
-# Runtime Assets
+# Display Runtime Assets
 
-Files in this directory are bundled into the Nuitka executable and used by
-MonitorToolbox at runtime.
+The native Mac app bundles these helpers into `Contents/Resources/runtime/`,
+then deploys them to the display over network ADB:
 
-- `adb.exe`: ADB client used by the desktop app.
-- `AdbWinApi.dll` and `AdbWinUsbApi.dll`: Windows ADB runtime libraries.
-- `MtkDirectTool.jar`: Helper jar pushed to the display for MTK JNI calls.
-- `ColorfulLedTool.jar`: Helper jar used to call MiTV PM2 colorful LED HIDL.
+- `MtkDirectTool.jar`: MTK JNI calls for picture settings.
+- `ColorfulLedTool.jar`: MiTV PM2 colorful LED HIDL calls.
 
-Keep these files in this directory so local builds and GitHub Actions use the
-same resource layout.
+These JAR files run on the display's Android system. They do not require a Java
+runtime on the Mac. Their sources are in `tools/mtk_direct/` and
+`tools/colorful_led/` respectively.
 
-Source for `MtkDirectTool.jar` is kept in `tools/mtk_direct/`.
-Source for `ColorfulLedTool.jar` is kept in `tools/colorful_led/`.
+`macos/build_app.sh` downloads the macOS adb client from Google's official
+platform-tools distribution and caches it under `macos/.cache/`. To use a fixed
+version instead, place a macOS adb binary at `assets/runtime/adb` before building.

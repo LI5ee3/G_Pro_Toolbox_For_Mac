@@ -214,7 +214,7 @@ enum Page: String, CaseIterable, Identifiable, Hashable {
         case .game: return "游戏模式"
         case .source: return "信号源切换"
         case .light: return "屏幕灯"
-        // macOS 独有的一页：Windows 原版没有菜单栏这个概念（那边是托盘图标）
+        // 菜单栏快捷项的独立配置页
         case .menuBar: return "菜单栏"
         case .tools: return "工具与设置"
         case .remote: return "遥控器"

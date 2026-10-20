@@ -90,16 +90,22 @@ UNIVERSAL="${UNIVERSAL:-1}"
 
 echo "==> 1/6 编译 release 版本（通用二进制: ${UNIVERSAL}）..."
 if [ "$UNIVERSAL" = "1" ]; then
-    swift build -c release --arch arm64
-    swift build -c release --arch x86_64
-    BIN_PATH="$BUILD_DIR/release-universal/$EXEC_NAME"
-    mkdir -p "$(dirname "$BIN_PATH")"
+    UNIVERSAL_DIR="$BUILD_DIR/release-universal"
+    mkdir -p "$UNIVERSAL_DIR"
+    # 不同 SwiftPM 版本的产物目录不同；新构建引擎还会共用输出目录。
+    # 每个架构编译后立即复制，避免下一次构建覆盖前一个架构。
+    for arch in arm64 x86_64; do
+        swift build -c release --arch "$arch"
+        ARCH_BIN_DIR="$(swift build -c release --arch "$arch" --show-bin-path)"
+        cp "$ARCH_BIN_DIR/$EXEC_NAME" "$UNIVERSAL_DIR/$EXEC_NAME-$arch"
+    done
+    BIN_PATH="$UNIVERSAL_DIR/$EXEC_NAME"
     lipo -create -output "$BIN_PATH" \
-        "$BUILD_DIR/arm64-apple-macosx/release/$EXEC_NAME" \
-        "$BUILD_DIR/x86_64-apple-macosx/release/$EXEC_NAME"
+        "$UNIVERSAL_DIR/$EXEC_NAME-arm64" \
+        "$UNIVERSAL_DIR/$EXEC_NAME-x86_64"
 else
     swift build -c release
-    BIN_PATH="$BUILD_DIR/release/$EXEC_NAME"
+    BIN_PATH="$(swift build -c release --show-bin-path)/$EXEC_NAME"
 fi
 echo "    架构: $(lipo -archs "$BIN_PATH")"
 
@@ -139,12 +145,11 @@ if [ -f "$CACHE_DIR/platform-tools/NOTICE.txt" ]; then
     cp "$CACHE_DIR/platform-tools/NOTICE.txt" "$RES_DIR/runtime/NOTICE-platform-tools.txt"
 fi
 
-# 应用图标：直接复用 Windows 版的 assets/app/icon.ico，转换产物在 assets/AppIcon.icns
-# （Windows 图标更新后用 ./make_icon.sh 重新生成）
+# 应用图标：assets/AppIcon.png 为独立源文件，修改后用 ./make_icon.sh 重新生成 icns。
 ICON_SRC="assets/AppIcon.icns"
 if [ -f "$ICON_SRC" ]; then
     cp "$ICON_SRC" "$RES_DIR/AppIcon.icns"
-    echo "    已内嵌应用图标（源自 assets/app/icon.ico）"
+    echo "    已内嵌应用图标（assets/AppIcon.icns）"
 else
     echo "    警告：未找到 ${ICON_SRC}，将使用系统默认图标"
 fi

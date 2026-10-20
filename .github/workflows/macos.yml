@@ -4,22 +4,12 @@ on:
   push:
     branches:
       - master
-    # 只改了 Python 就别跑 macOS 构建了。
-    # 注意：官方文档明确「Path filters are not evaluated for pushes of tags」，
-    # 所以这条不会挡住下面的 tag 触发。
-    paths:
-      - 'macos/**'
-      - '.github/workflows/macos.yml'
-    # tags 必须写在 push 里面。之前误写在 on 下面与 push 同级，
-    # 那不是合法的触发器键，导致整个工作流 0 秒就挂（workflow file issue）。
+    # 所有源码及共享运行资源的变动都验证 macOS 构建。
     tags:
       - 'v*'
   pull_request:
     branches:
       - master
-    paths:
-      - 'macos/**'
-      - '.github/workflows/macos.yml'
   # 手动触发：Actions 页面点「Run workflow」，可选任意分支或标签。
   # 注意选标签时，用的是**那个标签里**的工作流文件 —— 老标签如果本身就是坏的，
   # 手动跑同样会失败，这时选 master 拿产物即可。

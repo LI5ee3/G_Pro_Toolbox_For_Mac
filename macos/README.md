@@ -1,7 +1,7 @@
 # 红米G Pro ToolBox — macOS (SwiftUI)
 
-红米 G Pro 27U 2026 显示器的原生 macOS 控制工具，原 PyQt6/Windows 版的 SwiftUI 移植。
-ADB 协议层对齐 `mimonitor_toolbox/adb.py`，各页面逐页对齐 `mimonitor_toolbox/pages.py`。
+Redmi G Pro 27U / 32U 显示器的原生 macOS 控制工具，使用 SwiftUI、AppKit 和 CoreAudio。
+本仓库仅维护 Mac 应用；设备端协议与实现源自 [原项目](https://github.com/YiHoooong/Mimonitor_Toolbox)，在此基础上继续开发。
 
 ## 蓝牙优先的键盘音量控制
 
@@ -75,7 +75,7 @@ MIMONITOR_TEST_BLUETOOTH=1 swift test --filter BluetoothHardwareTests
 | --- | --- |
 | **主页 & 连接**<br><img src="assets/screenshots/home.png" width="420"> | **画面设置**<br><img src="assets/screenshots/picture.png" width="420"> |
 | **游戏模式**<br><img src="assets/screenshots/game.png" width="420"> | **信号源切换**<br><img src="assets/screenshots/source.png" width="420"> |
-| **屏幕灯**<br><img src="assets/screenshots/light.png" width="420"> | **菜单栏**（macOS 独有）<br><img src="assets/screenshots/menubar.png" width="420"> |
+| **屏幕灯**<br><img src="assets/screenshots/light.png" width="420"> | **菜单栏**<br><img src="assets/screenshots/menubar.png" width="420"> |
 | **工具与设置**<br><img src="assets/screenshots/tools.png" width="420"> | **遥控器**<br><img src="assets/screenshots/remote.png" width="420"> |
 
 **菜单栏面板**（点顶栏图标展开，不用开主窗口就能调）：
@@ -86,6 +86,10 @@ MIMONITOR_TEST_BLUETOOTH=1 swift test --filter BluetoothHardwareTests
 
 最终用户双击 .app 即可，**不需要装任何东西**。从源码构建只需要 **Xcode 命令行工具**
 （`xcode-select -p` 能返回路径）。adb 在打包时自动下载并内嵌。显示器需已开启无线 ADB（端口 5555）。
+
+## 应用图标
+
+`assets/AppIcon.png` 是独立的 1024×1024 图标源。修改后运行 `./make_icon.sh`，生成包含标准尺寸的 `assets/AppIcon.icns`；打包直接使用 icns。
 
 ## 编译 / 运行
 
@@ -153,7 +157,7 @@ macos/
 └─ Sources/MimonitorToolbox/
    ├─ App.swift                   # @main 入口、菜单栏、Dock 图标显隐
    ├─ ContentView.swift           # 侧边栏导航外壳
-   ├─ Models.swift                # 寄存器映射表 + 选项表（移植自 core.py）
+   ├─ Models.swift                # 寄存器映射表 + 选项表
    ├─ AppState.swift              # 连接状态 / 当前值 / 日志 / 全部控制动作
    ├─ NetworkScan.swift           # 内网 5555 扫描
    ├─ Backend/AdbClient.swift     # ADB 协议层（settings / JNI / 灯效 / jar 部署 / apk）
@@ -161,27 +165,22 @@ macos/
    └─ Views/                      # 各页面 + 通用控件
 ```
 
-## 与原版的差异
+## Mac 功能
 
-| 功能 | Windows 原版 | macOS 移植 |
-| --- | --- | --- |
-| ADB 连接 / settings get·put / JNI 读写 / 灯效 | ✅ | ✅ |
-| 画面 / 游戏 / 信号源 / 屏幕灯 / 遥控器页面 | ✅ | ✅ |
-| 全局快捷键 + 可调参数快捷键（RegisterHotKey） | ✅ | ✅（CGEventTap，需辅助功能权限） |
-| 原生亮度调节键调显示器背光 | — | ✅（拦截系统亮度键，需辅助功能权限） |
-| 原生音量调节键调显示器音量 | — | ✅（仅默认音频输出匹配时拦截，也可置空过滤） |
-| HDR/SDR 分区控光记忆 | ✅（DXGI） | ✅（EDR 近似判断） |
-| FreeSync Pro 模式记忆 | ✅ | ✅ |
-| 开机自启动（注册表） | ✅ | ✅（LaunchAgent） |
-| ADB 保活守护（AdbGuardian） | ✅ | ✅ |
-| APK 安装 / ADB 命令行 / 4K UI | ✅ | ✅ |
-| 日志落盘 / 导出 / 打开目录 | ✅ | ✅ |
-| 物理网卡枚举 | ✅（IPHLPAPI） | ✅（简化：ifconfig + TCP 探测） |
-| 主题切换（跟随系统 / 深色 / 浅色） | — | ✅ |
-| 快捷键倒计时（时长可调，可关闭） | — | ✅ |
-| macOS 原生亮度提示（OSD） | — | ✅（私有 OSDUIHelper，失败自动回退 HUD） |
+| 功能 | 实现 |
+| --- | --- |
+| 画面 / 游戏 / 信号源 / 屏幕灯 / 遥控器 | 网络 ADB、settings 与显示器端 JNI |
+| 键盘音量键 | 蓝牙优先，回退至已连接的 ADB；支持精确 1 点步进 |
+| 全局快捷键与亮度键 | CGEventTap，需辅助功能权限 |
+| HDR/SDR 分区控光记忆 | 主机 EDR 与显示器画面模式综合判断 |
+| 登录后自动启动 | LaunchAgent |
+| ADB 保活守护 | AdbGuardian 部署与实际状态回读 |
+| APK 安装 / ADB 命令行 / 4K UI | 工具页高级功能 |
+| 日志 | 落盘、导出与打开目录 |
+| 网络扫描 | ifconfig 网段识别与 TCP 探测 |
+| 主题与悬浮提示 | 跟随系统 / 深色 / 浅色；自定义 HUD 或原生 OSD |
 
-### macOS 独有的部分
+### 系统集成
 
 | 能力 | 说明 |
 | --- | --- |
@@ -194,7 +193,7 @@ macos/
 
 ## 设计要点
 
-和原版实现不同、或容易踩的地方。**详细原因写在对应源码的注释里**，这里只列要点。
+实现中需要关注的行为与边界。**详细原因写在对应源码的注释里**，这里只列要点。
 
 **通信与状态**
 
@@ -247,13 +246,13 @@ python3 verify_jni.py     # 需要已连接显示器（adb server 在 5038）
 EDID / FreeSync 这类会改变显示器输入信号格式（可能黑屏或改分辨率）的键只读不写。
 
 - **色彩增益写入是异步的**，约 0.5s 后才生效。立刻回读拿到旧值不是故障。
-- **HDR 色调映射只在部分画面模式下存在**，SDR 模式下原版会隐藏该控件，本版同样处理。
+- **HDR 色调映射只在部分画面模式下存在**，SDR 模式下隐藏该控件。
 
 ## CI
 
-`.github/workflows/macos.yml`（与原有的 Windows `build.yml` 并存）：
+`.github/workflows/macos.yml` 是本项目唯一的应用构建与发布流程：
 
-- **触发**：改动 `macos/**` 的 push / PR；打 `v*` 标签（标签不受路径过滤限制）
+- **触发**：主分支的 push / PR（包含共享资源的变动）、`v*` 标签，以及手动运行
 - **build**：debug 编译 → 单元测试 → 导入签名证书 → 通用二进制打包 → 校验产物 → 上传 artifact
 - **release**：仅标签触发，把 DMG 和 zip 附到 GitHub Release
 

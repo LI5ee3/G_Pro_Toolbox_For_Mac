@@ -1,8 +1,7 @@
 import SwiftUI
 
 /// 配置菜单栏下拉里放哪些快捷项。
-///
-/// macOS 独有 —— Windows 原版那边是托盘图标，没有等价的自定义能力。
+/// 支持选择、排序菜单栏中的常用控制。
 struct MenuBarSettingsView: View {
     @EnvironmentObject var state: AppState
 

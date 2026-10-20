@@ -27,7 +27,7 @@ struct ToolsView: View {
                     HStack(spacing: 16) {
                         Text("窗口关闭行为:").frame(width: 120, alignment: .leading)
                         // 对应 AppDelegate.applicationShouldTerminateAfterLastWindowClosed。
-                        // macOS 上没有 Windows 那种"托盘"，等价物是菜单栏图标。
+                        // 关闭窗口后可继续在菜单栏运行。
                         Picker("", selection: $closeBehavior) {
                             Text("隐藏窗口（继续在菜单栏运行）").tag("tray")
                             Text("退出应用").tag("exit")

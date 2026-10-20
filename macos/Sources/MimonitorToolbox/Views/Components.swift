@@ -53,7 +53,7 @@ extension View {
     }
 }
 
-// MARK: - 卡片容器（对应 qfluentwidgets 的 SimpleCardWidget）
+// MARK: - 卡片容器
 
 struct SectionCard<Content: View>: View {
     let title: String

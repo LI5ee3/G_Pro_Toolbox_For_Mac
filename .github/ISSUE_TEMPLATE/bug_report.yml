@@ -8,16 +8,6 @@ body:
         感谢反馈！提交前请先搜索是否已有相同 Issue，并确认使用的是较新的版本。
         截图和日志可以直接粘贴到下方；公开发布前请隐藏设备序列号等敏感信息。
         反馈时请告诉我是否开启双频合一和AP隔离及简单的内网设置情况
-  - type: dropdown
-    id: platform
-    attributes:
-      label: 运行平台
-      options:
-        - Windows
-        - macOS
-        - 其他
-    validations:
-      required: true
   - type: input
     id: app-version
     attributes:
@@ -29,8 +19,8 @@ body:
   - type: input
     id: os-version
     attributes:
-      label: 系统版本
-      placeholder: 例如 Windows 11 24H2 / macOS 15.7
+      label: macOS 版本与 Mac 芯片
+      placeholder: 例如 macOS 15.7 / Apple M4，或 macOS 14 / Intel
     validations:
       required: true
   - type: input
