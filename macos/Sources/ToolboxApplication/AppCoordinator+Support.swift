@@ -85,7 +85,14 @@ extension AppCoordinator {
     }
 
     /// Deterministic test/readiness barrier for typed async completions; never blocks MainActor.
-    package func waitForPendingWork() async { await workTasks.waitForAll() }
+    package func waitForPendingWork() async {
+        repeat {
+            await workTasks.waitForAll()
+            await withCheckedContinuation { continuation in
+                DispatchQueue.main.async { continuation.resume() }
+            }
+        } while workTasks.count > 0
+    }
 
     /// Drop callbacks queued by a replaced session or a stopped/restarted app lifetime.
     nonisolated internal func publish(_ work: @escaping @MainActor () -> Void) {

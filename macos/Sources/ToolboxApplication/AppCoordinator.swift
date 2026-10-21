@@ -201,7 +201,8 @@ public final class AppCoordinator {
             return false
         }
         hotkeyManager.onTapDisabled = { [weak self] in
-            self?.log("快捷键诊断: 事件监听被系统禁用，已重新启用")
+            self?.log("快捷键诊断: 事件监听被系统暂停，正在重新检测权限")
+            self?.refreshAccessibilityStatus()
         }
         applyHotkeys()
         updateHdrMemoryStatus()
@@ -212,13 +213,7 @@ public final class AppCoordinator {
         // 避免下次按 Mac 音量键时从过期值起步。
         runtimeTasks.append(environment.scheduler.repeating(every: 5, commonModes: false) { [weak self] in self?.refreshMediaVolumeState() })
         refreshMediaVolumeState()
-        // 配了快捷键却没授权：启动时引导一次。
-        // 系统授权框每个 app 只会弹一次，之后再调用是静默的，所以只在有快捷键配置时尝试。
-        if !accessibilityTrusted && !hotkeys.isEmpty {
-            scheduleStartup(after: 1.5) { [weak self] in
-                _ = self?.environment.system.promptAccessibility()
-            }
-        }
+        runtimeTasks.append(environment.system.observeActivation { [weak self] in self?.refreshSystemStatus() })
 
         // 先把 adb server 预热起来，省得自动连接那一步还要等它冷启动
         runConnectionTask { self.adb.warmUpServer() }
@@ -264,6 +259,8 @@ public final class AppCoordinator {
         isPresetOperationInFlight = false; isPresetBusy = false; presetOperationText = ""
         mediaBrightnessCommitInFlight = false
         hotkeyManager.stop()
+        keyboard.listenerStatus = .stopped
+        settings.terminalBusy = false
         environment.feedback.stop()
         environment.system.stopLog()
     }

@@ -47,13 +47,14 @@ final class RuntimeSafetyTests: XCTestCase {
         XCTAssertTrue(runtime.display.recordedCommands.allSatisfy { $0 == "start-server" })
     }
 
-    func testSettingsAndSystemActionsOnlyUseProvidedMemoryAndFakes() {
+    func testSettingsAndSystemActionsOnlyUseProvidedMemoryAndFakes() async {
         let runtime = PreviewRuntime()
         let simulated = runtime.makeState()
         simulated.theme = "light"; simulated.closeBehavior = "exit"
         simulated.setAutostart(true); simulated.requestAccessibilityPermission()
         simulated.toggleLogFile(true); simulated.copyLog(); simulated.chooseLogExport()
         simulated.openLogDir(); simulated.openAdbCmd()
+        await simulated.waitForPendingWork()
         XCTAssertEqual(runtime.preferences.string(forKey: "theme"), "light")
         XCTAssertEqual(runtime.preferences.string(forKey: "close_behavior"), "exit")
         XCTAssertTrue(runtime.effects.contains("terminal"))

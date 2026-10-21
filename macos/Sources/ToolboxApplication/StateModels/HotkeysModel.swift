@@ -6,6 +6,7 @@ import MimonitorPresetCore
 @MainActor @Observable
 package final class HotkeysModel {
     package var accessibilityTrusted = false
+    package var listenerStatus = HotkeyListenerStatus.stopped
     package var hotkeyDebugEnabled = false
     package var hotkeys: [String: HotkeyConfig] = [:]
     package var adjustHotkeys: [AdjustHotkeyConfig] = []

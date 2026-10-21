@@ -112,9 +112,13 @@ struct ToolsView: View {
                         .toolboxAction()
                     Button("重新检测") { state.refreshAccessibilityStatus() }
                         .toolboxAction()
-                    Text("授权后请重启本应用。")
+                    Text("授权后返回应用会自动重新检测。")
                         .font(.system(size: 13)).foregroundStyle(Theme.secondaryText)
                 }
+            }
+            if keyboard.listenerStatus == .failed {
+                Text("辅助功能已允许，但监听尚未启动。请重新检测权限或重启应用。")
+                    .font(.system(size: 13)).foregroundStyle(Theme.warning)
             }
             Divider().padding(.vertical, 2)
             Toggle("快捷键松手后生效", isOn: Binding(
@@ -171,6 +175,12 @@ struct ToolsView: View {
                 Button("登录项设置") { state.openLoginItemSettings() }.toolboxAction()
                 Button("重新检测") { state.refreshLoginItem() }.toolboxAction()
                     .disabled(settings.loginItemBusy)
+            }
+            HStack {
+                Text("局域网权限由系统管理；网络或设备故障也可能导致连接失败。")
+                    .font(.system(size: 13)).foregroundStyle(Theme.secondaryText)
+                Spacer()
+                Button("网络权限设置") { state.openLocalNetworkSettings() }.toolboxAction()
             }
         }
     }
@@ -276,6 +286,11 @@ struct ToolsView: View {
                 Button("进入 ADB Shell") { state.openAdbShell() }
                     .toolboxAction()
             }
+            if let result = settings.terminalResult, result.outcome != .opened {
+                Text(result.outcome == .denied ? "上次 Terminal 请求被拒绝，请在系统设置中允许后重试。" : "Terminal 未确认完成，请检查日志后重试。")
+                    .font(.system(size: 13)).foregroundStyle(Theme.warning)
+            }
+            Button("自动化权限设置") { state.openAutomationSettings() }.toolboxAction()
         }
     }
 }

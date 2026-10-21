@@ -19,7 +19,10 @@ extension AppCoordinator {
     package func chooseAPK() { environment.system.chooseAPK { [weak self] in self?.installApk($0) } }
     package func copyLog() { environment.system.copyText(logLines.joined(separator: "\n")); log("日志已复制到剪贴板") }
     package func openLogDir() { environment.system.openLogDirectory() }
-    package func requestAccessibilityPrompt() { _ = environment.system.promptAccessibility() }
+    package func requestAccessibilityPrompt() {
+        guard !environment.system.isTrusted() else { return }
+        _ = environment.system.promptAccessibility()
+    }
 
 
     /// 信号源页停留期间每 2 秒轮询一次：显示器可能被遥控器/按键切走，
@@ -82,8 +85,8 @@ extension AppCoordinator {
     /// 进入显示器上的 adb shell。
     package func openAdbShell() {
         guard isConnected else { log("请先连接显示器"); return }
-        openTerminal(title: "Mimonitor · Shell",
-                     command: "adb -s \(adb.serial) shell")
+        openTerminal(title: "Mimonitor · Shell · \(adb.serial)",
+                     command: "adb -s \(TerminalExecution.shellQuote(adb.serial)) shell")
     }
 
     /// 打开一个配好环境的终端：PATH 里有 adb，端口也设好了，直接敲 `adb devices` 就能用。
@@ -98,15 +101,16 @@ extension AppCoordinator {
     internal func openTerminal(title: String, command: String) {
         let adbDir = (adb.adbPath as NSString).deletingLastPathComponent
         // 把 adb 所在目录塞进 PATH，用户才能直接敲 adb
-        let setup = "export PATH=\"\(adbDir):$PATH\"; export ANDROID_ADB_SERVER_PORT=\(adb.serverPort)"
+        let setup = "export PATH=\(TerminalExecution.shellQuote(adbDir)):$PATH; export ANDROID_ADB_SERVER_PORT=\(TerminalExecution.shellQuote(adb.serverPort))"
         let body = command.isEmpty ? "\(setup); clear" : "\(setup); clear; \(command)"
 
+        let escapedTitle = Self.appleScriptEscape(title)
         let script = """
         tell application "Terminal"
             -- 已经开过就切过去，不再新开一个 —— 之前点一次开一个，很快就堆一堆窗口
             repeat with w in windows
                 repeat with t in tabs of w
-                    if (custom title of t) is "\(title)" then
+                    if (custom title of t) is "\(escapedTitle)" then
                         set selected tab of w to t
                         set index of w to 1
                         activate
@@ -115,19 +119,31 @@ extension AppCoordinator {
                 end repeat
             end repeat
             set newTab to do script "\(Self.appleScriptEscape(body))"
-            set custom title of newTab to "\(title)"
+            set custom title of newTab to "\(escapedTitle)"
             activate
         end tell
         """
 
-        let ok = environment.system.terminal(script)
-        log(ok ? "已在终端打开 ADB 会话（\(title)）" : "打开终端失败，请检查自动化权限与终端状态")
+        guard !settings.terminalBusy else { return }
+        settings.terminalBusy = true
+        let terminal = environment.system.terminal
+        submitSystemOperation(work: { terminal(script, $0) }) { result in
+            self.settings.terminalBusy = false
+            self.settings.terminalResult = result
+            switch result.outcome {
+            case .opened: self.log("已在终端打开 ADB 会话（\(title)）")
+            case .denied: self.log("终端自动化授权被拒绝，请在系统设置中允许本应用控制 Terminal：\(result.detail)")
+            case .failed: self.log("终端尚未确认打开：\(result.detail)")
+            }
+        }
     }
 
     /// 套进 AppleScript 字符串字面量前的转义
     internal static func appleScriptEscape(_ s: String) -> String {
         s.replacingOccurrences(of: "\\", with: "\\\\")
          .replacingOccurrences(of: "\"", with: "\\\"")
+         .replacingOccurrences(of: "\n", with: "\\n")
+         .replacingOccurrences(of: "\r", with: "\\r")
     }
 
 

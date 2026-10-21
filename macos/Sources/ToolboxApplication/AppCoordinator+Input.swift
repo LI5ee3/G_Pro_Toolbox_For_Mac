@@ -6,23 +6,35 @@ import MimonitorPresetCore
 extension AppCoordinator {
     package func refreshAccessibilityStatus() {
         let trusted = environment.system.isTrusted()
-        guard accessibilityTrusted != trusted else { return }
+        let changed = accessibilityTrusted != trusted
         accessibilityTrusted = trusted
-        if trusted {
-            log("辅助功能权限已授权，正在重新注册全局快捷键")
+        if !trusted {
+            hotkeyManager.stop()
+            keyboard.listenerStatus = .permissionRequired
+            if changed { log("辅助功能权限已撤销，已停止全局快捷键监听") }
+        } else if changed || keyboard.listenerStatus == .failed || keyboard.listenerStatus == .permissionRequired {
+            if changed { log("辅助功能权限已授权，正在重新注册全局快捷键") }
             applyHotkeys()
-        } else {
-            log("辅助功能权限已撤销，全局快捷键将失效")
         }
     }
 
-    /// 引导授权：先弹系统框（只能弹一次），同时把设置页打开
-    package func requestAccessibilityPermission() {
-        _ = environment.system.promptAccessibility()
-        environment.system.openAccessibility()
-        log("请在「系统设置 → 隐私与安全性 → 辅助功能」中勾选本应用，然后回到这里")
+    package func refreshSystemStatus() {
+        refreshAccessibilityStatus()
+        refreshLoginItem()
     }
 
+    /// Prompt only after an explicit user action. Returning to the app refreshes actual status.
+    package func requestAccessibilityPermission() {
+        requestAccessibilityPrompt()
+        environment.system.openAccessibility()
+        log("请在系统授权页允许本应用控制键盘，返回后会自动重新检测")
+    }
+
+    package func openAutomationSettings() { environment.system.openAutomation() }
+    package func openLocalNetworkSettings() {
+        environment.system.openLocalNetwork()
+        log("已请求打开局域网权限设置；连接失败也可能来自网络或设备，不能据此断言权限被拒绝")
+    }
 
     internal static func loadHotkeys(_ preferences: any PreferencesStore) -> [String: HotkeyConfig] {
         guard let data = preferences.data(forKey: "hotkeys"),
@@ -50,6 +62,7 @@ extension AppCoordinator {
 
     internal func applyHotkeys() {
         guard isRunning else { return }
+        accessibilityTrusted = environment.system.isTrusted()
         hotkeyManager.clear()
         for (action, cfg) in hotkeys where cfg.isEnabled {
             hotkeyManager.register(id: action, modifierName: cfg.modifier, keyName: cfg.key)
@@ -83,7 +96,15 @@ extension AppCoordinator {
             hotkeyManager.registerRaw(id: HotkeyManager.mediaMuteID,
                                       keyCode: HotkeyManager.keyCodeMute)
         }
+        let wantsListener = hotkeyManager.bindingCount > 0 || hotkeyManager.mediaBindingCount > 0 || hotkeyDebugEnabled
+        guard wantsListener else {
+            hotkeyManager.stop(); keyboard.listenerStatus = .stopped; return
+        }
+        guard accessibilityTrusted else {
+            hotkeyManager.stop(); keyboard.listenerStatus = .permissionRequired; return
+        }
         let started = hotkeyManager.start()
+        keyboard.listenerStatus = started ? .running : .failed
         log("全局快捷键: 注册 \(hotkeyManager.bindingCount) 个"
             + (hotkeyManager.mediaBindingCount > 0 ? " + 媒体键 \(hotkeyManager.mediaBindingCount) 个" : "")
             + "，监听\(started ? "已启动" : "启动失败")"

@@ -103,7 +103,7 @@ struct ContentView: View {
             withAnimation(reduceMotion ? nil : .easeOut(duration: 0.3)) { appeared = true }
         }
         .onChange(of: scenePhase) { _, phase in
-            if phase == .active { state.refreshAccessibilityStatus() }
+            if phase == .active { state.refreshSystemStatus() }
         }
         .onChange(of: navigation.requestedPage) { _, page in
             guard let page else { return }

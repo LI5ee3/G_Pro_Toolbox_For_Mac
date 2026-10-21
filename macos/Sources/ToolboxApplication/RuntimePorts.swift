@@ -53,6 +53,9 @@ package struct SystemActions {
     package var isTrusted: () -> Bool = { false }
     package var promptAccessibility: () -> Bool = { false }
     package var openAccessibility: () -> Void = {}
+    package var openAutomation: () -> Void = {}
+    package var openLocalNetwork: () -> Void = {}
+    package var observeActivation: (@escaping () -> Void) -> RuntimeCancellation = { _ in RuntimeCancellation() }
     package var defaultOutput: () -> String? = { nil }
     package var hostHDR: () -> Bool = { false }
     package var targetDisplay: (String) -> CGDirectDisplayID? = { _ in nil }
@@ -74,7 +77,7 @@ package struct SystemActions {
     package var openURL: (URL) -> Void = { _ in }
     package var chooseAPK: (@escaping (URL) -> Void) -> Void = { _ in }
     package var chooseLogExport: (@escaping (URL) -> Void) -> Void = { _ in }
-    package var terminal: (String) -> Bool = { _ in false }
+    package var terminal: (String, CommandCancellation) -> TerminalResult = { _, _ in TerminalResult(outcome: .failed) }
     package var startLog: (String) -> Void = { _ in }
     package var appendLog: (String) -> Void = { _ in }
     package var stopLog: () -> Void = {}

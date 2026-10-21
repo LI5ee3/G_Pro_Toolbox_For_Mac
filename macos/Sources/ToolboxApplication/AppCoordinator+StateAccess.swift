@@ -125,7 +125,7 @@ extension AppCoordinator {
     /// 快捷键诊断日志。默认关闭：正常打字时每按一个不匹配的键都会记一行，很快把日志刷满。
     package var hotkeyDebugEnabled: Bool {
         get { keyboard.hotkeyDebugEnabled }
-        set { keyboard.hotkeyDebugEnabled = newValue; guard !isConfiguring else { return }; preferences.set(hotkeyDebugEnabled, forKey: "hotkey_debug") }
+        set { keyboard.hotkeyDebugEnabled = newValue; guard !isConfiguring else { return }; preferences.set(hotkeyDebugEnabled, forKey: "hotkey_debug"); applyHotkeys() }
     }
     package var hotkeys: [String: HotkeyConfig] {
         get { keyboard.hotkeys }

@@ -28,14 +28,17 @@ final class LiveHotkeyDriver: HotkeyDriving {
     func start(handler: @escaping (CGEventType, CGEvent) -> Bool,
                onDisabled: @escaping () -> Void) -> Bool {
         self.handler = handler; self.onDisabled = onDisabled
-        if eventTap != nil { return true }
+        if let eventTap {
+            CGEvent.tapEnable(tap: eventTap, enable: true)
+            return CGEvent.tapIsEnabled(tap: eventTap)
+        }
         let mask = (CGEventMask(1) << CGEventType.keyDown.rawValue) | (CGEventMask(1) << 14)
         guard let tap = CGEvent.tapCreate(tap: .cgSessionEventTap, place: .headInsertEventTap,
             options: .defaultTap, eventsOfInterest: mask, callback: { _, type, event, context in
                 guard let context else { return Unmanaged.passUnretained(event) }
                 let driver = Unmanaged<LiveHotkeyDriver>.fromOpaque(context).takeUnretainedValue()
                 if type == .tapDisabledByTimeout || type == .tapDisabledByUserInput {
-                    if let tap = driver.eventTap { CGEvent.tapEnable(tap: tap, enable: true) }
+                    if AXIsProcessTrusted(), let tap = driver.eventTap { CGEvent.tapEnable(tap: tap, enable: true) }
                     driver.onDisabled?()
                     return Unmanaged.passUnretained(event)
                 }
@@ -45,11 +48,11 @@ final class LiveHotkeyDriver: HotkeyDriving {
         source = CFMachPortCreateRunLoopSource(kCFAllocatorDefault, tap, 0)
         if let source { CFRunLoopAddSource(CFRunLoopGetMain(), source, .commonModes) }
         CGEvent.tapEnable(tap: tap, enable: true)
-        return true
+        return CGEvent.tapIsEnabled(tap: tap)
     }
     func stop() {
-        if let eventTap { CGEvent.tapEnable(tap: eventTap, enable: false) }
-        if let source { CFRunLoopRemoveSource(CFRunLoopGetMain(), source, .commonModes) }
+        if let eventTap { CGEvent.tapEnable(tap: eventTap, enable: false); CFMachPortInvalidate(eventTap) }
+        if let source { CFRunLoopRemoveSource(CFRunLoopGetMain(), source, .commonModes); CFRunLoopSourceInvalidate(source) }
         eventTap = nil; source = nil; handler = nil; onDisabled = nil
     }
     deinit { stop() }
@@ -117,6 +120,13 @@ extension AppEnvironment {
         system.openAccessibility = {
             NSWorkspace.shared.open(URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility")!)
         }
+        system.openAutomation = { NSWorkspace.shared.open(URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Automation")!) }
+        system.openLocalNetwork = { NSWorkspace.shared.open(URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_LocalNetwork")!) }
+        system.observeActivation = { action in
+            let observer = NotificationCenter.default.addObserver(forName: NSApplication.didBecomeActiveNotification,
+                object: nil, queue: .main) { _ in action() }
+            return RuntimeCancellation { NotificationCenter.default.removeObserver(observer) }
+        }
         system.defaultOutput = CoreAudioOutputReader.defaultOutputDeviceName
         system.hostHDR = HDRDetector.hostSideHDR
         system.targetDisplay = { name in
@@ -162,9 +172,9 @@ extension AppEnvironment {
             panel.allowedContentTypes = [.plainText]; panel.canCreateDirectories = true
             if panel.runModal() == .OK, let url = panel.url { completion(url) }
         }
-        system.terminal = { script in
-            let task = Process(); task.executableURL = URL(fileURLWithPath: "/usr/bin/osascript"); task.arguments = ["-e", script]
-            do { try task.run(); return true } catch { return false }
+        system.terminal = { script, token in
+            let request = CommandRequest(executable: "/usr/bin/osascript", arguments: ["-e", script], serverPort: "0", timeout: 30, cancellation: token)
+            return TerminalExecution.result(SystemProcessRunner.run(request))
         }
         system.startLog = logFile.start; system.stopLog = logFile.stop
         system.appendLog = { try? logFile.handle?.write(contentsOf: Data($0.utf8)) }

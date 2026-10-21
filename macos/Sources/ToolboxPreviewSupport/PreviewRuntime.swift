@@ -167,6 +167,8 @@ package final class PreviewRuntime {
         system.isTrusted = { record("permission.read"); return false }
         system.promptAccessibility = { record("permission.prompt"); return false }
         system.openAccessibility = { record("permission.settings") }
+        system.openAutomation = { record("automation.settings") }
+        system.openLocalNetwork = { record("network.settings") }
         system.defaultOutput = { "Mi Monitor" }
         system.scan = { [self.display.identity] }; system.subnets = { ["192.0.2"] }
         func loginSnapshot() -> LoginItemSnapshot {
@@ -191,7 +193,10 @@ package final class PreviewRuntime {
         system.chooseLogExport = { completion in record("log.choose"); completion(URL(fileURLWithPath: "/mock/log.txt")) }
         system.startLog = { _ in record("log.start") }; system.appendLog = { _ in record("log.append") }
         system.stopLog = { record("log.stop") }; system.exportLog = { _, _ in record("log.export") }
-        system.openLogDirectory = { record("log.open") }; system.terminal = { _ in record("terminal"); return true }
+        system.openLogDirectory = { record("log.open") }; system.terminal = { _, token in
+            if token.isCancelled { return TerminalResult(outcome: .failed, detail: "模拟任务已取消") }
+            record("terminal"); return TerminalResult(outcome: .opened)
+        }
         return AppEnvironment(mode: mode, preferences: preferences,
             adb: AdbClient(resources: resources, execute: display.execute),
             hotkeys: HotkeyManager(driver: hotkeyDriver), feedback: feedback, scheduler: scheduler,
