@@ -6,6 +6,7 @@ import json
 import os
 from pathlib import Path
 import shutil
+import struct
 import subprocess
 import tempfile
 import urllib.request
@@ -76,7 +77,19 @@ def unsigned_arm64(path):
         if arch == 'arm64': shutil.copyfile(path, target)
         else: subprocess.run(['lipo', str(path), '-thin', 'arm64', '-output', str(target)], check=True)
         subprocess.run(['codesign', '--remove-signature', str(target)], check=True, capture_output=True)
-        return digest(target)
+        # Re-signing changes the signature-only __LINKEDIT virtual allocation. Normalize
+        # that allocation after removing the signature; every other byte is compared.
+        data = bytearray(target.read_bytes())
+        if data[:4] != b'\xcf\xfa\xed\xfe': raise ValueError('Expected little-endian Mach-O 64')
+        count = struct.unpack_from('<I', data, 16)[0]
+        offset = 32
+        for _ in range(count):
+            command, size = struct.unpack_from('<II', data, offset)
+            if command == 0x19 and data[offset+8:offset+24].rstrip(b'\0') == b'__LINKEDIT':
+                filesize = struct.unpack_from('<Q', data, offset+48)[0]
+                struct.pack_into('<Q', data, offset+32, (filesize + 0x3fff) & ~0x3fff)
+            offset += size
+        return hashlib.sha256(data).hexdigest()
 
 def copy_resources(destination):
     sources = inputs()  # Validate all required files before writing any.

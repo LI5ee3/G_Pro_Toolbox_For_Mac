@@ -34,6 +34,13 @@ class RuntimeAssetsTests(unittest.TestCase):
             with patch.object(assets, 'inputs', side_effect=ValueError('missing APK')):
                 with self.assertRaises(ValueError): assets.copy_resources(target)
             self.assertFalse(target.exists())
+    def test_resigning_runtime_preserves_locked_code(self):
+        import shutil, subprocess
+        with tempfile.TemporaryDirectory() as tmp:
+            source = assets.inputs()['runtime/adb']; target = Path(tmp) / 'adb'
+            subprocess.run(['lipo', str(source), '-thin', 'arm64', '-output', str(target)], check=True)
+            subprocess.run(['codesign', '--force', '--sign', '-', '--options', 'runtime', str(target)], check=True, capture_output=True)
+            self.assertEqual(assets.unsigned_arm64(target), assets.load()['platform_tools']['arm64_unsigned_sha256'])
     def test_signed_adb_code_normalizes_to_pinned_code(self):
         self.assertEqual(assets.unsigned_arm64(assets.inputs()['runtime/adb']), assets.load()['platform_tools']['arm64_unsigned_sha256'])
 

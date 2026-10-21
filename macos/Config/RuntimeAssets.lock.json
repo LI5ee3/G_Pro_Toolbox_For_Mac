@@ -6,7 +6,7 @@
     "archive_sha256": "ee39ad5967e95c2a07f04dbcbde96b1a0c916ba376096db5d2f498b7727a5d1d",
     "adb_sha256": "1811e253b21b12cbfda7201ebaf86c10e7ddcb5c606a7a81f7c82b4c429c2d3b",
     "notice_sha256": "356cc66516060e4da6bdc53e6f0bbb8e8101673f326b73c68d535eddd04dd7b1",
-    "arm64_unsigned_sha256": "4cde6f436a12b72131ae7978918fdfd76441aedea555d47398f806867151775c"
+    "arm64_unsigned_sha256": "5d1715ccb4bda31a33fa48980c7401cced544cc6e38fb469c555a3b1b06ec067"
   },
   "resources": [
     {
