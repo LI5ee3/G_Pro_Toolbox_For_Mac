@@ -135,11 +135,10 @@ struct MimonitorToolboxApp: App {
         Window("红米G Pro ToolBox", id: "main") {
             ContentView()
                 .environmentObject(state)
-                // 主页连接那一行是全局最宽的内容：
-                // 「显示器 IP:」标签 + 输入框 + 四个按钮 + 间距 + 内边距，再加 220 的侧边栏，
-                // 实测要 ~935pt。原来给 900 会把「开始连接」和「扫描内网」挤到一起。
-                .frame(minWidth: 1020, minHeight: 660)
+                .frame(minWidth: 1020, minHeight: 740)
+
         }
+        .defaultSize(width: 1120, height: 820)
         .windowResizability(.contentMinSize)
         .commands {
             // 去掉「显示 → 隐藏边栏」（以及对应的快捷键），
@@ -178,7 +177,7 @@ private struct MenuBarPanel: View {
                     .fill(state.statusColor)
                     .frame(width: 8, height: 8)
                 Text(state.statusText)
-                    .font(.callout)
+                    .font(.system(size: 14, weight: .medium))
                     .lineLimit(1)
                     .truncationMode(.middle)
                 Spacer()
@@ -246,7 +245,11 @@ private struct MenuBarPanel: View {
             .padding(.horizontal, 14)
             .padding(.vertical, 8)
         }
-        .frame(width: 320)
+        .padding(6)
+        .toolboxGlass(cornerRadius: 18)
+        .tint(Theme.accent)
+        .accentColor(Theme.accent)
+        .frame(width: 340)
         .fixedSize(horizontal: false, vertical: true)
     }
 }

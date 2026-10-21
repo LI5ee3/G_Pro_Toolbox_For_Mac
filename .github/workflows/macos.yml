@@ -4,22 +4,12 @@ on:
   push:
     branches:
       - master
-    # 只改了 Python 就别跑 macOS 构建了。
-    # 注意：官方文档明确「Path filters are not evaluated for pushes of tags」，
-    # 所以这条不会挡住下面的 tag 触发。
-    paths:
-      - 'macos/**'
-      - '.github/workflows/macos.yml'
-    # tags 必须写在 push 里面。之前误写在 on 下面与 push 同级，
-    # 那不是合法的触发器键，导致整个工作流 0 秒就挂（workflow file issue）。
+    # 所有源码及共享运行资源的变动都验证 macOS 构建。
     tags:
       - 'v*'
   pull_request:
     branches:
       - master
-    paths:
-      - 'macos/**'
-      - '.github/workflows/macos.yml'
   # 手动触发：Actions 页面点「Run workflow」，可选任意分支或标签。
   # 注意选标签时，用的是**那个标签里**的工作流文件 —— 老标签如果本身就是坏的，
   # 手动跑同样会失败，这时选 master 拿产物即可。
@@ -61,6 +51,7 @@ jobs:
 
       - name: 工具链版本
         run: |
+          test "$(uname -m)" = "arm64" || { echo "需要 Apple Silicon runner"; exit 1; }
           swift --version
           sw_vers
 
@@ -122,7 +113,7 @@ jobs:
           security find-identity -v -p codesigning | grep "MimonitorToolbox" | sed 's/^/  /'
           echo "SIGNED_WITH_CERT=1" >> "$GITHUB_ENV"
 
-      - name: 打包 .app（通用二进制）
+      - name: 打包 .app（Apple Silicon arm64）
         working-directory: macos
         run: ./build_app.sh
 
@@ -164,8 +155,10 @@ jobs:
           ARCH_MAIN=$(lipo -archs "$M")
           echo "主程序架构: $ARCH_MAIN"
           echo "内嵌 adb 架构: $(lipo -archs "$R/runtime/adb")"
-          [[ "$ARCH_MAIN" == *x86_64* && "$ARCH_MAIN" == *arm64* ]] \
-              || { echo "不是通用二进制"; exit 1; }
+          [ "$ARCH_MAIN" = "arm64" ] \
+              || { echo "主程序必须仅包含 arm64"; exit 1; }
+          [ "$(lipo -archs "$R/runtime/adb")" = "arm64" ] \
+              || { echo "内嵌 adb 必须仅包含 arm64"; exit 1; }
 
           codesign --verify --strict "$APP" || { echo "签名校验失败"; exit 1; }
 
@@ -194,7 +187,7 @@ jobs:
 
       # build_app.sh 最后一步已经生成 DMG，这里再补一个 zip：
       # DMG 给普通用户（挂载后拖进 Applications），zip 给习惯解压的人。
-      # 分发包用 ASCII 名（MimonitorToolbox-macos.zip），但里面装的仍是
+      # 分发包用 ASCII 名（MimonitorToolbox-macos-arm64.zip），但里面装的仍是
       # 中文名的 .app —— GitHub Release 会改写非 ASCII 的**文件名**，
       # 实测「红米G Pro ToolBox.dmg」上传后变成「G.Pro.ToolBox.dmg」。
       - name: 补一个 zip（ditto 保留符号链接与权限）
@@ -202,34 +195,32 @@ jobs:
         run: |
           set -euo pipefail
           test -d "红米G Pro ToolBox.app" || { echo "❌ 缺 .app"; exit 1; }
-          ditto -c -k --sequesterRsrc --keepParent "红米G Pro ToolBox.app" "MimonitorToolbox-macos.zip"
+          ditto -c -k --sequesterRsrc --keepParent "红米G Pro ToolBox.app" "MimonitorToolbox-macos-arm64.zip"
 
       - name: 确认分发包都在
         working-directory: macos
         run: |
           set -euo pipefail
-          test -f "MimonitorToolbox-macos.dmg" || { echo "缺 DMG"; exit 1; }
-          test -f "MimonitorToolbox-macos.zip" || { echo "缺 zip"; exit 1; }
+          test -f "MimonitorToolbox-macos-arm64.dmg" || { echo "缺 DMG"; exit 1; }
+          test -f "MimonitorToolbox-macos-arm64.zip" || { echo "缺 zip"; exit 1; }
           # 分发文件名必须只含 [A-Za-z0-9._-]，否则 GitHub 上传时会改写它：
           # 实测「红米G Pro ToolBox.dmg」变成了「G.Pro.ToolBox.dmg」
           # （中文被剥掉、空格还变成了点）。白名单比「排除非 ASCII」严 ——
           # 空格是 ASCII，但照样会被 GitHub 换掉。
-          for f in MimonitorToolbox-macos.dmg MimonitorToolbox-macos.zip; do
+          for f in MimonitorToolbox-macos-arm64.dmg MimonitorToolbox-macos-arm64.zip; do
             case "$f" in
               *[!A-Za-z0-9._-]*) echo "❌ $f 含 GitHub 会改写的字符"; exit 1 ;;
             esac
           done
-          ls -lh MimonitorToolbox-macos.dmg MimonitorToolbox-macos.zip
+          ls -lh MimonitorToolbox-macos-arm64.dmg MimonitorToolbox-macos-arm64.zip
 
-      # path 用通配符而不是写死文件名：文件名带空格和中文，
-      # upload-artifact 内部走 glob 匹配，写死容易在空格上翻车。
-      # 少文件的情况由上一步的 test -f 兜底，这里再加 if-no-files-found 双保险。
+      # 仅上传本次架构对应的包，避免旧构建残留混入。
       - uses: actions/upload-artifact@v4
         with:
-          name: mimonitor-macos
+          name: mimonitor-macos-arm64
           path: |
-            macos/*.dmg
-            macos/*.zip
+            macos/MimonitorToolbox-macos-arm64.dmg
+            macos/MimonitorToolbox-macos-arm64.zip
           if-no-files-found: error
           retention-days: 30
 
@@ -242,12 +233,11 @@ jobs:
     steps:
       - uses: actions/download-artifact@v4
         with:
-          name: mimonitor-macos
+          name: mimonitor-macos-arm64
 
       - uses: softprops/action-gh-release@v2
         with:
           # DMG 是主推的（拖进 Applications 即安装），zip 作为备选。
-          # 同样用通配符：真实文件名是「红米G Pro ToolBox.dmg」，带中文和空格。
           files: |
-            *.dmg
-            *.zip
+            MimonitorToolbox-macos-arm64.dmg
+            MimonitorToolbox-macos-arm64.zip

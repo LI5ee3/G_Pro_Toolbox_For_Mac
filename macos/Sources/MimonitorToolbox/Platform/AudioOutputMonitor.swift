@@ -11,6 +11,14 @@ import Foundation
 ///   - 经过 eqMac 等虚拟声卡转发：`Mi Monitor (eqMac)`
 /// 所以匹配用「包含」而不是全等，默认关键字 `Mi Monitor` 两种都能命中。
 enum AudioOutputMonitor {
+    static func shouldHandleVolumeKeys(enabled: Bool, bluetoothAvailable: Bool, adbConnected: Bool,
+                                       gateEnabled: Bool, configuredOutputName: String,
+                                       bluetoothOutputName: String?, outputName: String?) -> Bool {
+        guard enabled, bluetoothAvailable || adbConnected else { return false }
+        guard gateEnabled else { return true }
+        return matches(configuredName: configuredOutputName, outputName: outputName)
+            || (bluetoothOutputName != nil && outputName?.caseInsensitiveCompare(bluetoothOutputName!) == .orderedSame)
+    }
     /// 默认输出设备的名称。查不到（无输出设备 / CoreAudio 异常）时返回 nil。
     static func defaultOutputDeviceName() -> String? {
         var deviceID = AudioDeviceID(kAudioObjectUnknown)

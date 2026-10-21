@@ -3,7 +3,7 @@ import CoreGraphics
 
 /// HDR 状态检测。
 ///
-/// macOS 没有 Windows DXGI 那样的「系统 HDR 开关」查询接口，所以这里用两条互补的信号：
+/// HDR 状态通过主机 EDR 与显示器画面模式两条互补信号判断：
 ///
 /// 1. **主机侧**：macOS 给外接屏打开「高动态范围」后，该屏的 *potential* EDR 峰值会从
 ///    1.0 跳到远大于 1（实测 Mi Monitor：1.000 → 10.152）。注意必须用

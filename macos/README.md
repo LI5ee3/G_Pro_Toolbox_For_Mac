@@ -1,7 +1,41 @@
 # 红米G Pro ToolBox — macOS (SwiftUI)
 
-红米 G Pro 27U 2026 显示器的原生 macOS 控制工具，原 PyQt6/Windows 版的 SwiftUI 移植。
-ADB 协议层对齐 `mimonitor_toolbox/adb.py`，各页面逐页对齐 `mimonitor_toolbox/pages.py`。
+Redmi G Pro 27U / 32U 显示器的原生 macOS 控制工具，使用 SwiftUI、AppKit 和 CoreAudio。
+仅支持 macOS 13 及以上的 Apple Silicon Mac（M 系列芯片）。本仓库仅维护 Mac 应用；设备端协议与实现源自 [原项目](https://github.com/YiHoooong/Mimonitor_Toolbox)，在此基础上继续开发。
+
+## 蓝牙优先的键盘音量控制
+
+已配对并连接的蓝牙音频设备可以用于控制显示器音量，无需网络 ADB，也无需把 Mac 默认音频输出从 DP/HDMI 切到蓝牙。
+
+在「工具与设置 → 配置快捷键…」中：
+
+1. 打开「音量调节键调显示器音量」，完成已有的 macOS 辅助功能授权。
+2. 打开「优先通过蓝牙控制音量」（默认开启），填入 macOS 中显示的完整蓝牙音频设备名。默认是 `REDMI G Pro 32U 2026`，其他型号需改成自己的名称。
+3. 保留默认音频输出限制时，DP 输出 `Mi Monitor` 或指定的蓝牙设备作为默认输出均可接管；切到其他耳机或扬声器后，音量键交回系统。
+4. 要让每次短按准确加减 1，关闭「使用 macOS 原生音量提示（OSD）」并把步长设为 1；开启原生 OSD 的 16 格模式仍按格调节。
+
+路由顺序为：指定且可写音量的蓝牙设备 → 已连接的网络 ADB → 不接管。不会选择其他蓝牙耳机；同名设备不唯一时也不会猜测目标。蓝牙写入失败后暂缓重试 5 秒，有可用 ADB 才回退。蓝牙使用独立队列，不会等待离线 ADB 请求。主窗口的 ADB 状态可以显示未连接，键盘蓝牙音量仍可使用；其他画面、背光等控制仍需 ADB。
+
+开启原生 OSD 时仍使用 16 格音量刻度，每次约 6～7 点；关闭后沿用可调步长。蓝牙静音通过把音量设为 0 实现，再按静音恢复本次 App 运行中记住的原音量；刚启动时若设备已经为 0、尚无可恢复的音量，则从 6 开始。蓝牙声道音量同时更新，不切换默认音频输出。
+
+验证：114 项常规 Swift 测试通过；2 项实机蓝牙测试已在 Mac mini M4 + Redmi G Pro 32U 2026 上单独运行通过。测试直接使用生产蓝牙代码，确认加减、静音/恢复、无 ADB 的按键接管条件及默认音频输出保持不变。
+
+实体键盘复测也已通过：ToolBox 主动断开 ADB、暂停自动重连且自身 adb server 无设备时，捕获到音量加、音量减和静音按键，App 日志确认走蓝牙；独立只读回读观察到显示器音量 `8 → 9 → 0（静音）→ 9（恢复）→ 8`，设备日志调用方为 `com.android.bluetooth`。旧版曾在此测试中出现约 1 点取整差异，现已通过下面的整数映射修复。
+
+### 精确的 1 点步进
+
+原来直接把 10 写成 CoreAudio 的 0.10，在本机链路上会先截断为蓝牙档位 12，再被显示器换算成 9。现在先为目标整数选择 AVRCP 0～127 中的对应档位，再把控制值放进该档位的稳定区间，避免浮点边界截断；读取也按相同链路解码。因此 Mac 系统蓝牙音量百分比与显示器整数值可以不同，ToolBox 以显示器的整数值为准。
+
+已用独立只读 ADB 验证生产代码从 **0 → 1 → … → 20 → 19 → … → 0** 每步精确命中，静音及恢复也正确；测试控制全程通过蓝牙。0～100 的全部 101 个目标值、128 个蓝牙通知档位及全范围连续加减均有单元测试。高音量区间没有逐点实机测试。
+
+```sh
+swift test
+# 可选：已配对显示器、当前音量不超过 25% 时运行，结束会恢复原音量。
+MIMONITOR_TEST_BLUETOOTH=1 swift test --filter BluetoothHardwareTests
+# 其他设备名称可通过 MIMONITOR_BLUETOOTH_NAME 指定。
+# 可选只读显示器回读验证：同时指定 MIMONITOR_VERIFY_ADB_IP 和
+# MIMONITOR_TEST_ADB_PATH（adb 完整路径）；观察连接使用独立端口 5041。
+```
 
 ## 本分支更新：唤醒恢复与保活状态验证
 
@@ -16,6 +50,19 @@ ADB 协议层对齐 `mimonitor_toolbox/adb.py`，各页面逐页对齐 `mimonito
 在 Mac mini M4、Redmi G Pro 32U 2026（P32UEA-RGP，固件 OS3.0.120.0.UFFMAMN）上，前序实机测试中电源键待机唤醒约 18 秒恢复 ADB、Android 重启约 41 秒首次连通且约 58 秒起稳定、DP 息屏唤醒约 28 秒恢复 ADB。这些是该设备和网络下的观察结果，其他型号和固件仍需实测。
 
 本分支沿用原项目的网络 ADB 连接界面。
+
+## C 方向界面更新：屏幕即遥控器
+
+- 用顶部导航替代固定侧栏；画面、游戏、信号源、灯光、预设、自动任务和遥控器均保留独立入口，工具与菜单栏配置在右上角设置中。
+- 首页以显示器轮廓呈现连接、输入源和画面模式，下方集中放置音量、静音、背光与常用模式。未知读数显示「—」，断开时禁用设备控制。
+- 音量滑块和静音复用现有媒体音量提交逻辑；键盘音量键仍保留原来的输出设备过滤、步长、OSD 与权限设置。
+- 统一浅色/深色配色、分组和选中状态，重排长页面与快捷键配置；高级系统操作保持可访问，部署保活前明确说明权限与影响。
+- 提供按压反馈、导航选中块过渡和首次进入淡入；响应系统「减少动态效果」。自绘滑块支持辅助功能增减操作。
+
+<img src="assets/screenshots/ui-c-home.png" width="800" alt="C 方向控制台">
+<img src="assets/screenshots/ui-c-remote.png" width="800" alt="C 方向遥控器">
+
+本轮通过 Swift debug 构建、全部页面原生界面检查，以及隔离模拟设备上的音量/静音、断开重连、预设创建/重命名/收藏、自动任务保存和重启读回检查。没有向真实显示器发送 UI 测试指令，也没有重复测试真实键盘拦截或显示器待机/重启。下方旧版截图保留作历史参考。
 
 ## 命名
 
@@ -33,15 +80,15 @@ ADB 协议层对齐 `mimonitor_toolbox/adb.py`，各页面逐页对齐 `mimonito
 （实测 `红米G Pro ToolBox.dmg` → `G.Pro.ToolBox.dmg`，中文被剥掉、空格变点）。
 由 `PACKAGE_NAME` 控制，CI 有白名单校验。DMG 的**卷标**和包内的 `.app` 不受影响，仍是中文。
 
-## 软件截图
+## 旧版软件截图
 
-均为深色模式（`assets/screenshots/`）。
+以下为改版前截图，均为深色模式（`assets/screenshots/`）。
 
 | | |
 | --- | --- |
 | **主页 & 连接**<br><img src="assets/screenshots/home.png" width="420"> | **画面设置**<br><img src="assets/screenshots/picture.png" width="420"> |
 | **游戏模式**<br><img src="assets/screenshots/game.png" width="420"> | **信号源切换**<br><img src="assets/screenshots/source.png" width="420"> |
-| **屏幕灯**<br><img src="assets/screenshots/light.png" width="420"> | **菜单栏**（macOS 独有）<br><img src="assets/screenshots/menubar.png" width="420"> |
+| **屏幕灯**<br><img src="assets/screenshots/light.png" width="420"> | **菜单栏**<br><img src="assets/screenshots/menubar.png" width="420"> |
 | **工具与设置**<br><img src="assets/screenshots/tools.png" width="420"> | **遥控器**<br><img src="assets/screenshots/remote.png" width="420"> |
 
 **菜单栏面板**（点顶栏图标展开，不用开主窗口就能调）：
@@ -52,6 +99,10 @@ ADB 协议层对齐 `mimonitor_toolbox/adb.py`，各页面逐页对齐 `mimonito
 
 最终用户双击 .app 即可，**不需要装任何东西**。从源码构建只需要 **Xcode 命令行工具**
 （`xcode-select -p` 能返回路径）。adb 在打包时自动下载并内嵌。显示器需已开启无线 ADB（端口 5555）。
+
+## 应用图标
+
+`assets/AppIcon.png` 是独立的 1024×1024 图标源。修改后运行 `./make_icon.sh`，生成包含标准尺寸的 `assets/AppIcon.icns`；打包直接使用 icns。
 
 ## 编译 / 运行
 
@@ -69,10 +120,9 @@ swift run MimonitorToolbox     # 开发调试
 open "红米G Pro ToolBox.app"
 ```
 
-产物：`红米G Pro ToolBox.app`（约 20MB，自包含、零外部依赖）+ `MimonitorToolbox-macos.dmg`。
+产物：`红米G Pro ToolBox.app`（约 20MB，自包含、零外部依赖）+ `MimonitorToolbox-macos-arm64.dmg`。
 
-默认产出**通用二进制**（Intel + Apple Silicon）—— 分架构各编一次再 `lipo` 合并，
-因为 `swift build --arch a --arch b` 依赖完整 Xcode。想加快本地构建用 `UNIVERSAL=0 ./build_app.sh`。
+构建固定使用 `--arch arm64`，不提供其他架构或通用包。主程序和内嵌 adb 都只包含 arm64；从官方 platform-tools 获取的多架构 adb 在打包时提取 arm64，原始缓存保持不变。
 
 脚本会内嵌 adb（仓库里没有就从 Google 官方下载，缓存在 `macos/.cache/`）、两个 jar、
 保活 apk，生成 `Info.plist`，签名，最后打 DMG。想固定 adb 版本就把 macOS 版 adb
@@ -118,8 +168,8 @@ macos/
 ├─ reinstall.sh                   # 装到 /Applications 并重启
 └─ Sources/MimonitorToolbox/
    ├─ App.swift                   # @main 入口、菜单栏、Dock 图标显隐
-   ├─ ContentView.swift           # 侧边栏导航外壳
-   ├─ Models.swift                # 寄存器映射表 + 选项表（移植自 core.py）
+   ├─ ContentView.swift           # 顶部导航外壳
+   ├─ Models.swift                # 寄存器映射表 + 选项表
    ├─ AppState.swift              # 连接状态 / 当前值 / 日志 / 全部控制动作
    ├─ NetworkScan.swift           # 内网 5555 扫描
    ├─ Backend/AdbClient.swift     # ADB 协议层（settings / JNI / 灯效 / jar 部署 / apk）
@@ -127,27 +177,22 @@ macos/
    └─ Views/                      # 各页面 + 通用控件
 ```
 
-## 与原版的差异
+## Mac 功能
 
-| 功能 | Windows 原版 | macOS 移植 |
-| --- | --- | --- |
-| ADB 连接 / settings get·put / JNI 读写 / 灯效 | ✅ | ✅ |
-| 画面 / 游戏 / 信号源 / 屏幕灯 / 遥控器页面 | ✅ | ✅ |
-| 全局快捷键 + 可调参数快捷键（RegisterHotKey） | ✅ | ✅（CGEventTap，需辅助功能权限） |
-| 原生亮度调节键调显示器背光 | — | ✅（拦截系统亮度键，需辅助功能权限） |
-| 原生音量调节键调显示器音量 | — | ✅（仅默认音频输出匹配时拦截，也可置空过滤） |
-| HDR/SDR 分区控光记忆 | ✅（DXGI） | ✅（EDR 近似判断） |
-| FreeSync Pro 模式记忆 | ✅ | ✅ |
-| 开机自启动（注册表） | ✅ | ✅（LaunchAgent） |
-| ADB 保活守护（AdbGuardian） | ✅ | ✅ |
-| APK 安装 / ADB 命令行 / 4K UI | ✅ | ✅ |
-| 日志落盘 / 导出 / 打开目录 | ✅ | ✅ |
-| 物理网卡枚举 | ✅（IPHLPAPI） | ✅（简化：ifconfig + TCP 探测） |
-| 主题切换（跟随系统 / 深色 / 浅色） | — | ✅ |
-| 快捷键倒计时（时长可调，可关闭） | — | ✅ |
-| macOS 原生亮度提示（OSD） | — | ✅（私有 OSDUIHelper，失败自动回退 HUD） |
+| 功能 | 实现 |
+| --- | --- |
+| 画面 / 游戏 / 信号源 / 屏幕灯 / 遥控器 | 网络 ADB、settings 与显示器端 JNI |
+| 键盘音量键 | 蓝牙优先，回退至已连接的 ADB；支持精确 1 点步进 |
+| 全局快捷键与亮度键 | CGEventTap，需辅助功能权限 |
+| HDR/SDR 分区控光记忆 | 主机 EDR 与显示器画面模式综合判断 |
+| 登录后自动启动 | LaunchAgent |
+| ADB 保活守护 | AdbGuardian 部署与实际状态回读 |
+| APK 安装 / ADB 命令行 / 4K UI | 工具页高级功能 |
+| 日志 | 落盘、导出与打开目录 |
+| 网络扫描 | ifconfig 网段识别与 TCP 探测 |
+| 主题与悬浮提示 | 跟随系统 / 深色 / 浅色；自定义 HUD 或原生 OSD |
 
-### macOS 独有的部分
+### 系统集成
 
 | 能力 | 说明 |
 | --- | --- |
@@ -160,7 +205,7 @@ macos/
 
 ## 设计要点
 
-和原版实现不同、或容易踩的地方。**详细原因写在对应源码的注释里**，这里只列要点。
+实现中需要关注的行为与边界。**详细原因写在对应源码的注释里**，这里只列要点。
 
 **通信与状态**
 
@@ -213,16 +258,16 @@ python3 verify_jni.py     # 需要已连接显示器（adb server 在 5038）
 EDID / FreeSync 这类会改变显示器输入信号格式（可能黑屏或改分辨率）的键只读不写。
 
 - **色彩增益写入是异步的**，约 0.5s 后才生效。立刻回读拿到旧值不是故障。
-- **HDR 色调映射只在部分画面模式下存在**，SDR 模式下原版会隐藏该控件，本版同样处理。
+- **HDR 色调映射只在部分画面模式下存在**，SDR 模式下隐藏该控件。
 
 ## CI
 
-`.github/workflows/macos.yml`（与原有的 Windows `build.yml` 并存）：
+`.github/workflows/macos.yml` 是本项目唯一的应用构建与发布流程：
 
-- **触发**：改动 `macos/**` 的 push / PR；打 `v*` 标签（标签不受路径过滤限制）
-- **build**：debug 编译 → 单元测试 → 导入签名证书 → 通用二进制打包 → 校验产物 → 上传 artifact
+- **触发**：主分支的 push / PR（包含共享资源的变动）、`v*` 标签，以及手动运行
+- **build**：debug 编译 → 单元测试 → 导入签名证书 → Apple Silicon 打包 → 校验产物 → 上传 artifact
 - **release**：仅标签触发，把 DMG 和 zip 附到 GitHub Release
 
 校验步骤逐项确认：可执行文件存在、内嵌 adb / 两个 jar / 保活 apk 齐全、**确实是
-arm64 + x86_64 通用二进制**、签名有效且**不是 ad-hoc**、`LSUIElement` 未被设置、
+仅含 arm64 的主程序与内嵌 adb**、签名有效且**不是 ad-hoc**、`LSUIElement` 未被设置、
 分发包文件名只含 `[A-Za-z0-9._-]`、内嵌的 adb 真的能跑起来。

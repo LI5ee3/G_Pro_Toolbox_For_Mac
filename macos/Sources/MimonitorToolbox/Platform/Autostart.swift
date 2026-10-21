@@ -1,7 +1,7 @@
 import Foundation
 
 /// 开机自启动（LaunchAgent）。
-/// 原版在 Windows 写注册表 Run 键；macOS 等价物是写 ~/Library/LaunchAgents/<label>.plist。
+/// 通过 ~/Library/LaunchAgents/<label>.plist 记录登录启动项。
 /// 写入后下次登录自动加载（当前会话可用 launchctl 加载，这里仅写文件并提示重启登录）。
 enum Autostart {
     static let label = "com.mimonitor.toolbox"

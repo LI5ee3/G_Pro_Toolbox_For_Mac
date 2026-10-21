@@ -9,54 +9,75 @@ struct AutomaticTasksView: View {
 
     var body: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 16) {
-                Text("自动任务").font(.title2.bold())
-                Text("每天按本地时间切换预设，时段结束返回任务开始前的预设（使用其最新值）。支持跨午夜；时段重叠时靠下的任务优先。")
-                    .foregroundColor(.secondary)
-                Label("应用需保持运行，关闭窗口驻留菜单栏也可执行；睡眠期间不执行，唤醒或重连后重新判断。", systemImage: "info.circle")
-                    .font(.callout).foregroundColor(.secondary)
-                SectionCard(title: "调度状态") {
-                    Text(state.automaticTaskStatus).foregroundColor(.secondary)
-                    if let session = state.presetConfiguration.session {
-                        let previous = state.presetConfiguration.presets.first { $0.id == session.previousPresetID }?.name ?? "无预设"
-                        Text("本轮任务结束后返回：\(previous)").font(.callout)
+            VStack(alignment: .leading, spacing: 18) {
+                HStack(alignment: .top, spacing: 20) {
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("自动任务").font(.system(size: 23, weight: .semibold))
                     }
+                    Spacer(minLength: 12)
+                    Button {
+                        editing = ScheduledPresetTask(presetID: state.presetConfiguration.presets.first?.id ?? PicturePreset.baselineID,
+                                                       start: "18:00", end: "20:00")
+                    } label: {
+                        Label("新增任务", systemImage: "plus")
+                    }
+                    .toolboxAction(prominent: true)
+                    .controlSize(.regular)
                 }
-                ForEach(Array(state.presetConfiguration.tasks.enumerated()), id: \.element.id) { index, task in
-                    SectionCard(title: "\(task.start) – \(task.end)\(isOvernight(task) ? " · 跨午夜" : "")") {
-                        HStack(spacing: 12) {
-                            Toggle("启用", isOn: Binding(
-                                get: { task.enabled },
-                                set: { enabled in var updated = task; updated.enabled = enabled; state.saveAutomaticTask(updated) }
-                            ))
-                            .toggleStyle(.switch).fixedSize()
-                            Text(presetName(task.presetID)).font(.headline)
-                            if state.presetConfiguration.session?.taskID == task.id,
-                               state.presetConfiguration.session?.appliedTargetID == task.presetID {
-                                Text("已执行").font(.callout).foregroundColor(.accentColor)
+                VStack(alignment: .leading, spacing: 7) {
+                    Text("每天按本地时间执行，结束后返回原预设的最新设置。支持跨午夜；重叠时靠下的任务优先。")
+                    Label("应用需保持运行，关闭窗口驻留菜单栏也可执行。睡眠期间暂停，唤醒或重连后重新判断。", systemImage: "info.circle")
+                }
+                .font(.system(size: 13))
+                .foregroundColor(Theme.secondaryText)
+                .fixedSize(horizontal: false, vertical: true)
+                if !state.presetConfiguration.tasks.isEmpty || state.presetConfiguration.session != nil {
+                    HStack(alignment: .top, spacing: 10) {
+                        Image(systemName: "clock.arrow.circlepath").foregroundColor(Theme.accent)
+                        VStack(alignment: .leading, spacing: 5) {
+                            Text(state.automaticTaskStatus)
+                                .font(.system(size: 13, weight: .medium))
+                            if let session = state.presetConfiguration.session {
+                                let previous = state.presetConfiguration.presets.first { $0.id == session.previousPresetID }?.name ?? "无预设"
+                                Text("本轮结束后返回：\(previous)")
+                                    .font(.system(size: 12)).foregroundColor(Theme.secondaryText)
                             }
-                            Spacer()
-                            Button { state.moveAutomaticTask(id: task.id, offset: -1) } label: {
-                                Image(systemName: "arrow.up")
+                        }
+                        Spacer(minLength: 0)
+                    }
+                    .padding(.horizontal, 14).padding(.vertical, 12)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .background(Theme.control.opacity(0.65), in: RoundedRectangle(cornerRadius: 10))
+                }
+                if state.presetConfiguration.tasks.isEmpty {
+                    VStack(spacing: 12) {
+                        Image(systemName: "calendar.badge.clock")
+                            .font(.system(size: 30, weight: .light))
+                            .foregroundColor(Theme.accent)
+                        Text("还没有自动任务").font(.system(size: 16, weight: .semibold))
+                        Text("添加一个时段，自动切换到需要的预设。")
+                            .font(.system(size: 13)).foregroundColor(Theme.secondaryText)
+                    }
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 38)
+                }
+                if !state.presetConfiguration.tasks.isEmpty {
+                    VStack(spacing: 0) {
+                        ForEach(Array(state.presetConfiguration.tasks.enumerated()), id: \.element.id) { index, task in
+                            if index > 0 {
+                                Divider().overlay(Theme.stroke.opacity(0.65)).padding(.horizontal, 18)
                             }
-                            .help("上移，降低重叠时的优先级").disabled(index == 0)
-                            Button { state.moveAutomaticTask(id: task.id, offset: 1) } label: {
-                                Image(systemName: "arrow.down")
-                            }
-                            .help("下移，提高重叠时的优先级").disabled(index == state.presetConfiguration.tasks.count - 1)
-                            Button("编辑") { editing = task }
-                            Button("删除…", role: .destructive) { deleting = task; showDelete = true }
+                            taskRow(task, index: index)
                         }
                     }
+                    .background(Theme.card, in: RoundedRectangle(cornerRadius: 16))
+                    .overlay(RoundedRectangle(cornerRadius: 16).stroke(Theme.stroke.opacity(0.65)))
                 }
-                Button {
-                    editing = ScheduledPresetTask(presetID: state.presetConfiguration.presets.first?.id ?? PicturePreset.baselineID,
-                                                   start: "18:00", end: "20:00")
-                } label: {
-                    Label("新增自动任务", systemImage: "plus").frame(maxWidth: .infinity).padding(14)
-                }
+
             }
-            .padding(24)
+            .padding(28)
+            .font(.system(size: 14))
+            .tint(Theme.accent)
             .disabled(state.isPresetOperationInFlight)
         }
         .onAppear { state.checkAutomaticTasks() }
@@ -70,6 +91,63 @@ struct AutomaticTasksView: View {
             Text("若它正在生效，会重新判断剩余任务；没有其他命中任务时返回本轮开始前的预设。")
         }
     }
+    private func taskRow(_ task: ScheduledPresetTask, index: Int) -> some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(spacing: 12) {
+                Text("\(task.start) – \(task.end)")
+                    .font(.system(size: 26, weight: .medium))
+                    .monospacedDigit()
+                    .foregroundColor(task.enabled ? .primary : Theme.secondaryText)
+                Text(isOvernight(task) ? "每天 · 跨午夜" : "每天")
+                    .font(.system(size: 12)).foregroundColor(Theme.secondaryText)
+                Spacer(minLength: 8)
+                Toggle("启用", isOn: Binding(
+                    get: { task.enabled },
+                    set: { enabled in var updated = task; updated.enabled = enabled; state.saveAutomaticTask(updated) }
+                ))
+                .toggleStyle(.switch).controlSize(.small)
+                .fixedSize()
+                .font(.system(size: 13))
+            }
+            HStack(spacing: 10) {
+                Label(presetName(task.presetID), systemImage: "display")
+                    .font(.system(size: 13, weight: .medium))
+                    .lineLimit(2)
+                if state.presetConfiguration.session?.taskID == task.id,
+                   state.presetConfiguration.session?.appliedTargetID == task.presetID {
+                    Label("已执行", systemImage: "checkmark.circle.fill")
+                        .font(.system(size: 12)).foregroundColor(Theme.accent).fixedSize()
+                }
+                Spacer(minLength: 12)
+                Text("优先级 \(index + 1)")
+                    .font(.system(size: 12)).foregroundColor(Theme.secondaryText)
+                    .fixedSize()
+                    .help("重叠时靠下的任务优先")
+                HStack(spacing: 5) {
+                    Button { state.moveAutomaticTask(id: task.id, offset: -1) } label: {
+                        Image(systemName: "arrow.up")
+                    }
+                    .toolboxAction()
+                    .help("上移，降低重叠时的优先级")
+                    .accessibilityLabel("上移任务")
+                    .disabled(index == 0)
+                    Button { state.moveAutomaticTask(id: task.id, offset: 1) } label: {
+                        Image(systemName: "arrow.down")
+                    }
+                    .toolboxAction()
+                    .help("下移，提高重叠时的优先级")
+                    .accessibilityLabel("下移任务")
+                    .disabled(index == state.presetConfiguration.tasks.count - 1)
+                }
+                Button("编辑") { editing = task }.toolboxAction()
+                Button("删除…", role: .destructive) { deleting = task; showDelete = true }
+                    .toolboxAction()
+            }
+        }
+        .padding(18)
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
     private func presetName(_ id: String) -> String {
         id == PicturePreset.baselineID ? "无预设" : state.presetConfiguration.presets.first { $0.id == id }?.name ?? "预设已删除"
     }
@@ -89,7 +167,8 @@ private struct AutomaticTaskSheet: View {
     }
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
-            Text("自动任务").font(.title2)
+            Label("自动任务", systemImage: "calendar.badge.clock")
+                .font(.system(size: 23, weight: .semibold))
             Form {
                 Picker("时段内使用", selection: $task.presetID) {
                     Text("无预设").tag(PicturePreset.baselineID)
@@ -100,16 +179,20 @@ private struct AutomaticTaskSheet: View {
                 Toggle("启用任务", isOn: $task.enabled)
             }
             Text("每天按所选时间执行，支持跨午夜，例如 23:00–02:00。开始时间包含在时段内，结束时间不包含；两者不能相同。")
-                .font(.callout).foregroundColor(.secondary)
-            if !task.isValid { Text("请填写有效且不同的开始、结束时间。") .font(.callout).foregroundColor(.orange) }
+                .font(.system(size: 13)).foregroundColor(Theme.secondaryText)
+            if !task.isValid { Text("请填写有效且不同的开始、结束时间。") .font(.system(size: 13)).foregroundColor(Theme.warning) }
             HStack {
                 Spacer()
                 Button("取消") { dismiss() }.keyboardShortcut(.cancelAction)
+                    .toolboxAction()
                 Button("保存") { save(task); dismiss() }.keyboardShortcut(.defaultAction)
+                    .toolboxAction(prominent: true)
                     .disabled(!task.isValid)
             }
         }
-        .padding(24).frame(width: 440)
+        .padding(28).frame(width: 460)
+        .font(.system(size: 14))
+        .tint(Theme.accent)
     }
 
     private func timeBinding(start: Bool) -> Binding<Date> {

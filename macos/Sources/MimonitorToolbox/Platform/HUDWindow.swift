@@ -17,7 +17,7 @@ final class HUDModel: ObservableObject {
 /// 悬浮提示的界面。
 ///
 /// 原生 macOS 风格：系统材质做底、语义色做前景，自动适配浅色/深色模式与
-/// 「增强对比度」等辅助功能设置 —— 不再是照抄 Windows 版那套硬编码的深色 + 蓝色。
+/// 「增强对比度」等辅助功能设置。
 /// 数值用 rounded 字型 + 等宽数字，滚动时不会左右跳。
 private struct HUDView: View {
     @ObservedObject var model: HUDModel

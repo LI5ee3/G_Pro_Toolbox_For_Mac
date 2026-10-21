@@ -1,4 +1,5 @@
 import SwiftUI
+import AppKit
 
 // MARK: - 主题色
 //
@@ -8,15 +9,99 @@ import SwiftUI
 // 用 Color.primary 叠加透明度代替：同样是浅灰/浅白，但完全由 SwiftUI 解析，开销可忽略。
 
 enum Theme {
-    /// 卡片背景（原 controlBackgroundColor）
-    static let card = Color.primary.opacity(0.05)
-    /// 未选中按钮背景（原 controlColor）
-    static let control = Color.primary.opacity(0.08)
-    // 不再提供 panel 色：浮层底色用 .regularMaterial。
-    // 曾经写成 `Color.primary.opacity(0.92)` —— Color.primary 是**文字色**，
-    // 浅色模式下它是黑色，于是卡片底色渲染成了近黑。
-    /// 卡片描边
-    static let stroke = Color.primary.opacity(0.08)
+    static let accent = adaptive(NSColor(srgbRed: 0.19, green: 0.35, blue: 0.98, alpha: 1),
+                                 NSColor(srgbRed: 0.49, green: 0.63, blue: 1, alpha: 1))
+    static let onAccent = adaptive(.white, NSColor(srgbRed: 0.06, green: 0.09, blue: 0.17, alpha: 1))
+    static let success = adaptive(NSColor(srgbRed: 0.07, green: 0.43, blue: 0.27, alpha: 1),
+                                  NSColor(srgbRed: 0.38, green: 0.84, blue: 0.64, alpha: 1))
+    static let warning = adaptive(NSColor(srgbRed: 0.65, green: 0.28, blue: 0.07, alpha: 1),
+                                  NSColor(srgbRed: 1, green: 0.68, blue: 0.36, alpha: 1))
+    private static func adaptive(_ light: NSColor, _ dark: NSColor) -> Color {
+        Color(nsColor: NSColor(name: nil) { appearance in
+            appearance.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua ? dark : light
+        })
+    }
+    static let canvas = adaptive(NSColor(srgbRed: 0.967, green: 0.976, blue: 0.989, alpha: 1),
+                                 NSColor(srgbRed: 0.075, green: 0.087, blue: 0.12, alpha: 1))
+    static let card = adaptive(.white, NSColor(srgbRed: 0.115, green: 0.13, blue: 0.17, alpha: 1))
+    static let control = adaptive(NSColor(srgbRed: 0.934, green: 0.948, blue: 0.975, alpha: 1),
+                                  NSColor(srgbRed: 0.17, green: 0.19, blue: 0.25, alpha: 1))
+    static let stroke = adaptive(NSColor(srgbRed: 0.84, green: 0.88, blue: 0.94, alpha: 1),
+                                 NSColor(srgbRed: 0.25, green: 0.29, blue: 0.37, alpha: 1))
+    static let secondaryText = adaptive(NSColor(srgbRed: 0.32, green: 0.38, blue: 0.48, alpha: 1),
+                                       NSColor(srgbRed: 0.7, green: 0.76, blue: 0.86, alpha: 1))
+}
+
+/// Liquid Glass is reserved for floating navigation and control surfaces.
+/// Text-heavy parameter groups retain opaque backgrounds.
+private struct ToolboxGlassSurface: ViewModifier {
+    @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
+    let cornerRadius: CGFloat
+    func body(content: Content) -> some View {
+        if #available(macOS 26.0, *), !reduceTransparency {
+            content.glassEffect(.regular, in: .rect(cornerRadius: cornerRadius))
+        } else {
+            content.background(Theme.card, in: RoundedRectangle(cornerRadius: cornerRadius))
+                .overlay(RoundedRectangle(cornerRadius: cornerRadius).stroke(Theme.stroke.opacity(0.7)))
+        }
+    }
+}
+
+struct ToolboxActionStyle: ButtonStyle {
+    @Environment(\.isEnabled) private var isEnabled
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .font(.system(size: 13, weight: .medium))
+            .padding(.horizontal, 12).padding(.vertical, 7)
+            .background(configuration.isPressed ? Theme.control : Theme.card,
+                        in: RoundedRectangle(cornerRadius: 8))
+            .overlay(RoundedRectangle(cornerRadius: 8).stroke(Theme.stroke.opacity(0.8)))
+            .opacity(isEnabled ? 1 : 0.45)
+            .scaleEffect(configuration.isPressed && !reduceMotion ? 0.98 : 1)
+            .animation(reduceMotion ? nil : .easeOut(duration: 0.14), value: configuration.isPressed)
+    }
+}
+
+private struct ToolboxActionModifier: ViewModifier {
+    @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
+    let prominent: Bool
+    @ViewBuilder func body(content: Content) -> some View {
+        if prominent {
+            if #available(macOS 26.0, *), !reduceTransparency {
+                content.controlSize(.large).buttonStyle(.glassProminent)
+            } else { content.controlSize(.large).buttonStyle(.borderedProminent) }
+        } else { content.buttonStyle(ToolboxActionStyle()) }
+    }
+}
+
+extension View {
+    func toolboxGlass(cornerRadius: CGFloat = 16) -> some View {
+        modifier(ToolboxGlassSurface(cornerRadius: cornerRadius))
+    }
+    func toolboxAction(prominent: Bool = false) -> some View {
+        modifier(ToolboxActionModifier(prominent: prominent))
+    }
+}
+
+struct ToolboxGlassGroup<Content: View>: View {
+    @ViewBuilder let content: Content
+    var body: some View {
+        if #available(macOS 26.0, *) {
+            GlassEffectContainer(spacing: 16) { content }
+        } else { content }
+    }
+}
+
+/// A small, interruptible response shared by the screen controls and navigation.
+struct ControlPressStyle: ButtonStyle {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .opacity(configuration.isPressed ? 0.76 : 1)
+            .scaleEffect(configuration.isPressed && !reduceMotion ? 0.98 : 1)
+            .animation(reduceMotion ? nil : .easeOut(duration: 0.16), value: configuration.isPressed)
+    }
 }
 
 // MARK: - 页面刷新时的 loading 遮罩（对应原版 _show_loading_overlay）
@@ -53,7 +138,7 @@ extension View {
     }
 }
 
-// MARK: - 卡片容器（对应 qfluentwidgets 的 SimpleCardWidget）
+// MARK: - 卡片容器
 
 struct SectionCard<Content: View>: View {
     let title: String
@@ -61,13 +146,13 @@ struct SectionCard<Content: View>: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text(title).font(.headline)
+            Text(title).font(.system(size: 15, weight: .semibold))
             content
         }
-        .padding(16)
+        .padding(18)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(RoundedRectangle(cornerRadius: 12).fill(Theme.card))
-        .overlay(RoundedRectangle(cornerRadius: 12).stroke(Theme.stroke))
+        .background(Theme.card, in: RoundedRectangle(cornerRadius: 16))
+        .overlay(RoundedRectangle(cornerRadius: 16).stroke(Theme.stroke.opacity(0.65), lineWidth: 1))
     }
 }
 
@@ -86,10 +171,11 @@ struct SelectableButton: View {
                 .padding(.horizontal, 14)
                 .padding(.vertical, 6)
                 .background(isSelected ? Color.accentColor : Theme.control)
-                .foregroundColor(isSelected ? .white : .primary)
+                .foregroundColor(isSelected ? Theme.onAccent : .primary)
                 .clipShape(RoundedRectangle(cornerRadius: 8))
         }
-        .buttonStyle(.plain)
+        .buttonStyle(ControlPressStyle())
+        .accessibilityAddTraits(isSelected ? .isSelected : [])
     }
 }
 
@@ -102,7 +188,8 @@ struct ButtonGroupSection: View {
     let onSelect: (Int) -> Void
 
     var body: some View {
-        SectionCard(title: title) {
+        VStack(alignment: .leading, spacing: 12) {
+            Text(title).font(.system(size: 14, weight: .semibold))
             HStack(spacing: 8) {
                 ForEach(options) { opt in
                     SelectableButton(title: opt.label,
@@ -113,6 +200,8 @@ struct ButtonGroupSection: View {
                 Spacer(minLength: 0)
             }
         }
+        .padding(.vertical, 10)
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 }
 
@@ -129,7 +218,8 @@ struct FastSlider: View {
     let onCommit: (Double) -> Void
 
     private let trackHeight: CGFloat = 4
-    private let knobSize: CGFloat = 15
+    private let knobSize: CGFloat = 17
+    @Environment(\.isEnabled) private var isEnabled
 
     var body: some View {
         GeometryReader { geo in
@@ -168,7 +258,22 @@ struct FastSlider: View {
                     .onEnded { _ in onCommit(value) }
             )
         }
-        .frame(height: 22)
+        .frame(height: 28)
+        .opacity(isEnabled ? 1 : 0.4)
+        .allowsHitTesting(isEnabled)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("调节数值")
+        .accessibilityValue(String(format: "%g", value))
+        .accessibilityAdjustableAction { direction in
+            guard isEnabled else { return }
+            let delta = step > 0 ? step : 1
+            switch direction {
+            case .increment: value = min(value + delta, range.upperBound)
+            case .decrement: value = max(value - delta, range.lowerBound)
+            @unknown default: return
+            }
+            onCommit(value)
+        }
     }
 }
 
@@ -199,6 +304,7 @@ struct SliderRow: View {
             FastSlider(value: $value, range: range, step: 1) { v in
                 onCommit(Int(v))
             }
+            .accessibilityLabel(title)
             Text("\(Int(value))")
                 .monospacedDigit()
                 .frame(width: 44, alignment: .trailing)
@@ -210,8 +316,7 @@ struct SliderRow: View {
         .padding(.horizontal, 16)
         .padding(.vertical, 12)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(RoundedRectangle(cornerRadius: 12).fill(Theme.card))
-        .overlay(RoundedRectangle(cornerRadius: 12).stroke(Theme.stroke))
+        .background(Theme.card.opacity(0.65), in: RoundedRectangle(cornerRadius: 12))
         .onChange(of: externalValue) { newValue in
             value = Double(newValue)
         }
@@ -226,11 +331,11 @@ struct PageHeader: View {
 
     var body: some View {
         HStack {
-            Text(title).font(.title2.bold())
+            Text(title).font(.system(size: 23, weight: .semibold))
             Spacer()
             Button(action: onRefresh) {
-                Label("刷新数据", systemImage: "arrow.clockwise")
-            }
+                Label("刷新", systemImage: "arrow.clockwise")
+            }.toolboxAction()
         }
     }
 }

@@ -3,7 +3,7 @@
 #
 # 用法：  cd macos && ./build_app.sh
 # 产物：  macos/红米G Pro ToolBox.app（app 用中文名）
-#         macos/MimonitorToolbox-macos.dmg（分发文件用 ASCII 名，见 PACKAGE_NAME）
+#         macos/MimonitorToolbox-macos-arm64.dmg（分发文件用 ASCII 名，见 PACKAGE_NAME）
 #
 # 所有运行时资源都会被内嵌进 .app，最终用户无需安装任何东西（不需要 brew / adb）：
 #   - adb      : 优先用仓库 assets/runtime/adb；没有就自动从 Google 官方下载 platform-tools 并缓存
@@ -27,9 +27,8 @@ EXEC_NAME="MimonitorToolbox"
 # GitHub Release 会把非 ASCII 的文件名改写掉：实测 `红米G Pro ToolBox.dmg`
 # 上传后变成了 `G.Pro.ToolBox.dmg`（中文被剥掉、空格变点），用户看到的
 # 是个残缺名字。包内的 .app 不受影响，仍然是「红米G Pro ToolBox.app」。
-PACKAGE_NAME="MimonitorToolbox-macos"
+PACKAGE_NAME="MimonitorToolbox-macos-arm64"
 
-BUILD_DIR=".build"   # swift 的中间产物，隐藏目录
 CACHE_DIR=".cache"   # platform-tools 下载缓存，隐藏目录
 # 最终 .app 直接放在 macos/ 下，方便在 Finder 里直接看到（已在 .gitignore 中排除 *.app）
 APP_DIR="$APP_NAME.app"
@@ -82,25 +81,12 @@ fetch_adb() {
     echo "$CACHE_DIR/platform-tools/adb"
 }
 
-# 通用二进制（Intel + Apple Silicon）。分架构各编一次再 lipo 合并 ——
-# `swift build --arch a --arch b` 那种写法依赖 xcbuild（完整 Xcode），
-# 纯命令行工具会报错，所以这里退而求其次分开编。
-# 想加快本地构建可以 UNIVERSAL=0 ./build_app.sh
-UNIVERSAL="${UNIVERSAL:-1}"
-
-echo "==> 1/6 编译 release 版本（通用二进制: ${UNIVERSAL}）..."
-if [ "$UNIVERSAL" = "1" ]; then
-    swift build -c release --arch arm64
-    swift build -c release --arch x86_64
-    BIN_PATH="$BUILD_DIR/release-universal/$EXEC_NAME"
-    mkdir -p "$(dirname "$BIN_PATH")"
-    lipo -create -output "$BIN_PATH" \
-        "$BUILD_DIR/arm64-apple-macosx/release/$EXEC_NAME" \
-        "$BUILD_DIR/x86_64-apple-macosx/release/$EXEC_NAME"
-else
-    swift build -c release
-    BIN_PATH="$BUILD_DIR/release/$EXEC_NAME"
-fi
+# 仅构建 Apple Silicon；通过 SwiftPM 查询产物目录，兼容不同构建引擎。
+echo "==> 1/6 编译 Apple Silicon release 版本（arm64）..."
+swift build -c release --arch arm64
+BIN_PATH="$(swift build -c release --arch arm64 --show-bin-path)/$EXEC_NAME"
+[ "$(lipo -archs "$BIN_PATH")" = "arm64" ] \
+    || { echo "❌ 主程序必须仅包含 arm64"; exit 1; }
 echo "    架构: $(lipo -archs "$BIN_PATH")"
 
 echo "==> 2/6 组装 .app 目录结构..."
@@ -113,7 +99,17 @@ echo "==> 3/6 内嵌运行时资源（adb / jar / 保活 apk）..."
 mkdir -p "$RES_DIR/runtime" "$RES_DIR/adb_guardian"
 
 ADB_SRC="$(fetch_adb)"
-cp "$ADB_SRC" "$RES_DIR/runtime/adb"
+ADB_ARCHS="$(lipo -archs "$ADB_SRC")"
+case " $ADB_ARCHS " in
+    *" arm64 "*) ;;
+    *) echo "❌ adb 不含 Apple Silicon arm64 架构"; exit 1 ;;
+esac
+if [ "$ADB_ARCHS" = "arm64" ]; then
+    cp "$ADB_SRC" "$RES_DIR/runtime/adb"
+else
+    # 官方下载可能含多个架构；发布包只保留 arm64，缓存保持原样。
+    lipo "$ADB_SRC" -thin arm64 -output "$RES_DIR/runtime/adb"
+fi
 chmod +x "$RES_DIR/runtime/adb"
 echo "    已内嵌 adb: $("$RES_DIR/runtime/adb" version 2>/dev/null | head -n 2 | tail -n 1)"
 
@@ -139,12 +135,11 @@ if [ -f "$CACHE_DIR/platform-tools/NOTICE.txt" ]; then
     cp "$CACHE_DIR/platform-tools/NOTICE.txt" "$RES_DIR/runtime/NOTICE-platform-tools.txt"
 fi
 
-# 应用图标：直接复用 Windows 版的 assets/app/icon.ico，转换产物在 assets/AppIcon.icns
-# （Windows 图标更新后用 ./make_icon.sh 重新生成）
+# 应用图标：assets/AppIcon.png 为独立源文件，修改后用 ./make_icon.sh 重新生成 icns。
 ICON_SRC="assets/AppIcon.icns"
 if [ -f "$ICON_SRC" ]; then
     cp "$ICON_SRC" "$RES_DIR/AppIcon.icns"
-    echo "    已内嵌应用图标（源自 assets/app/icon.ico）"
+    echo "    已内嵌应用图标（assets/AppIcon.icns）"
 else
     echo "    警告：未找到 ${ICON_SRC}，将使用系统默认图标"
 fi
