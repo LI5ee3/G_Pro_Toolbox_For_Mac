@@ -27,21 +27,14 @@ extension AppState {
     func startPresetFeatures() {
         presetConfiguration = presetEngine.configuration
         if let error = presetEngine.loadError { presetError = error; log(error) }
-        presetTimer = Timer(timeInterval: 15, repeats: true) { [weak self] _ in
-            self?.checkAutomaticTasks()
-        }
-        if let timer = presetTimer { RunLoop.main.add(timer, forMode: .common) }
-        presetWakeObserver = NSWorkspace.shared.notificationCenter.addObserver(
-            forName: NSWorkspace.didWakeNotification, object: nil, queue: .main
-        ) { [weak self] _ in
-            self?.recoverAfterWake()
+        presetTimer = environment.scheduler.repeating(every: 15, commonModes: true) { [weak self] in
             self?.checkAutomaticTasks()
         }
         updateAutomaticTaskStatus()
     }
 
     private func currentMinute() -> Int {
-        let parts = Calendar.current.dateComponents([.hour, .minute], from: Date())
+        let parts = environment.calendar.dateComponents([.hour, .minute], from: environment.now())
         return (parts.hour ?? 0) * 60 + (parts.minute ?? 0)
     }
 
@@ -80,7 +73,7 @@ extension AppState {
         runPresetOperation("自动任务切换", automatic: true, refresh: true,
                            switchHUDTitle: "预设：\(targetName)") { engine, device in
             // The device queue may have been busy. Do not execute a window that already ended.
-            try engine.reconcile(minute: self.currentMinute(), device: device)
+            try engine.reconcile(minute: self.currentMinute(), device: device, now: self.environment.now(), calendar: self.environment.calendar)
         }
     }
 
@@ -150,7 +143,7 @@ extension AppState {
         if presetID != nil { pendingPresetSaveID = presetID; pendingPresetSaveDevice = identity }
         pendingPresetSave?.cancel()
         pendingPresetSave = nil
-        deviceQueue.async {
+        runBackground {
             let current = DispatchQueue.main.sync {
                 self.isConnected && self.connectionIntent.isCurrent(request) && self.adb.ip == identity
             }
@@ -185,13 +178,13 @@ extension AppState {
             }
         }
         pendingPresetSave = save
-        DispatchQueue.main.asyncAfter(deadline: .now() + delay, execute: save)
+        environment.scheduler.after(delay, work: save)
     }
 
     private func runPresetOperation(_ label: String, automatic: Bool = false, refresh: Bool = false,
                                     navigateToPicture: Bool = false, flushAutosave: Bool = true,
                                     switchHUDTitle: String? = nil,
-                                    operation: @escaping (PresetEngine, AdbPresetDevice?) throws -> Void) {
+                                    operation: @escaping (PresetEngine, (any PresetDevice)?) throws -> Void) {
         guard !isPresetOperationInFlight else { return }
         let request = connectionIntent.generation
         let identity = adb.ip
@@ -208,15 +201,15 @@ extension AppState {
         mediaBrightnessPreview = nil
         mediaBrightnessHardware = nil
         if refresh || navigateToPicture { invalidatePictureRefreshesForPreset() }
-        let hudToken = switchHUDTitle.map { HUDWindow.shared.beginOperation(title: $0) }
+        let hudToken = switchHUDTitle.map { environment.feedback.beginOperation(title: $0) }
         updateHdrMemoryStatus()
         updateFreesyncMemoryStatus()
 
-        deviceQueue.async {
+        runBackground {
             let current = DispatchQueue.main.sync {
                 self.isConnected && self.connectionIntent.isCurrent(request) && self.adb.ip == identity
             }
-            let device = connected && current ? AdbPresetDevice(adb: self.adb, identity: identity) : nil
+            let device = connected && current ? self.environment.presetDevice(self.adb, identity) : nil
             var reports: [PresetApplyReport] = []
             self.presetEngine.onReport = { reports.append($0) }
             var errorText: String?
@@ -283,7 +276,7 @@ extension AppState {
                     let result = HUDOperationResult.completion(
                         isCurrentConnection: self.isConnected && self.connectionIntent.isCurrent(request) && self.adb.ip == identity,
                         hasError: errorText != nil, verifiedApplications: reports.map { $0.ok })
-                    HUDWindow.shared.finishOperation(token: hudToken, result: result,
+                    self.environment.feedback.finishOperation(token: hudToken, result: result,
                                                     title: result == .success ? "预设：\(self.activePresetName)" : nil)
                 }
                 if !automatic { self.checkAutomaticTasks() }

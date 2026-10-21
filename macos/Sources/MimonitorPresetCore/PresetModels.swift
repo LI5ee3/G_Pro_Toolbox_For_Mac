@@ -157,11 +157,11 @@ public protocol PresetDevice {
 
 /// Accessed on the same serial queue as PresetEngine. Failed decode never overwrites saved data.
 public final class PresetStore {
-    public let defaults: UserDefaults
+    public let defaults: any PreferencesStore
     public private(set) var configuration = PresetConfiguration()
     public private(set) var loadError: String?
     private let key = "picture_presets_v1"
-    public init(defaults: UserDefaults = .standard) {
+    public init(defaults: any PreferencesStore = UserDefaults.standard) {
         self.defaults = defaults
         if let data = defaults.data(forKey: key) {
             do { configuration = try JSONDecoder().decode(PresetConfiguration.self, from: data) }

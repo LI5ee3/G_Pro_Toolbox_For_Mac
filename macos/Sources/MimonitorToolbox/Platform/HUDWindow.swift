@@ -115,6 +115,8 @@ final class HUDWindow {
 
     private init() {}
 
+    func stop() { hideTimer?.invalidate(); hideTimer = nil; panel?.orderOut(nil) }
+
     // MARK: - 对外接口
 
     /// 显示一条提示（不带倒计时）。

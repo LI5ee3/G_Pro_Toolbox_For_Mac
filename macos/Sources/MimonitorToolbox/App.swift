@@ -103,11 +103,14 @@ enum DockVisibility {
 /// 「隐藏窗口」不会顺带退出 —— 见 DockVisibility：没窗口时应用退回 .accessory
 /// 策略，菜单栏图标还在，所以进程继续活着。
 final class AppDelegate: NSObject, NSApplicationDelegate {
+    weak var state: AppState?
     func applicationDidFinishLaunching(_ notification: Notification) {
         // 启动时先把主题应用上，否则会先闪一下系统外观再切换
         AppTheme.applyCurrent()
         DockVisibility.startMonitoring()
     }
+
+    func applicationWillTerminate(_ notification: Notification) { state?.stop() }
 
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
         UserDefaults.standard.string(forKey: "close_behavior") == "exit"
@@ -117,7 +120,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 @main
 struct MimonitorToolboxApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
-    @StateObject private var state = AppState()
+    @StateObject private var state = AppState(environment: .live())
 
     init() {
         // 默认值为 true 的设置必须在这里注册，不能放 AppState.init()：
@@ -135,6 +138,7 @@ struct MimonitorToolboxApp: App {
         Window("红米G Pro ToolBox", id: "main") {
             ContentView()
                 .environmentObject(state)
+                .onAppear { appDelegate.state = state; state.start() }
                 .frame(minWidth: 1020, minHeight: 740)
 
         }

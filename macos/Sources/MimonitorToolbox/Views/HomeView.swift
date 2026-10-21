@@ -256,20 +256,11 @@ private struct OperationLogSheet: View {
                 Toggle("记录到本地文件", isOn: Binding(get: { state.logToFileEnabled }, set: { state.toggleLogFile($0) }))
                 Spacer()
                 Button("复制全部") {
-                    NSPasteboard.general.clearContents()
-                    NSPasteboard.general.setString(state.logLines.joined(separator: "\n"), forType: .string)
-                    state.log("日志已复制到剪贴板")
+                    state.copyLog()
                 }
-                Button("导出日志") { exportLog() }
+                Button("导出日志") { state.chooseLogExport() }
                 Button("打开目录") { state.openLogDir() }
             }.font(.system(size: 13))
         }.padding(28).frame(width: 850).background(Theme.canvas).tint(Theme.accent)
-    }
-    private func exportLog() {
-        let panel = NSSavePanel()
-        let formatter = DateFormatter(); formatter.dateFormat = "yyyyMMdd_HHmmss"
-        panel.nameFieldStringValue = "Mimonitor_log_\(formatter.string(from: Date())).txt"
-        panel.allowedContentTypes = [.plainText]; panel.canCreateDirectories = true
-        if panel.runModal() == .OK, let url = panel.url { state.exportLog(to: url) }
     }
 }

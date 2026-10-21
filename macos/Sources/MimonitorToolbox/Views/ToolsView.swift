@@ -3,12 +3,8 @@ import UniformTypeIdentifiers
 
 struct ToolsView: View {
     @EnvironmentObject var state: AppState
-    @AppStorage("theme") private var theme: String = "dark"
-    @AppStorage("close_behavior") private var closeBehavior: String = "tray"
-    @State private var autostart = Autostart.isEnabled()
     @State private var pending4K = false
     @State private var show4KConfirm = false
-    @State private var showApkImporter = false
     @State private var showHotkeySheet = false
     @State private var showAdvancedTools = false
     @State private var showGuardianConfirm = false
@@ -52,9 +48,9 @@ struct ToolsView: View {
                 }
                 HStack(spacing: 6) {
                     Image(systemName: "chevron.left.forwardslash.chevron.right")
-                    Link("项目源代码", destination: URL(string: "https://github.com/LI5ee3/Mimonitor_Toolbox")!)
+                    Button("项目源代码") { state.environment.system.openURL(URL(string: "https://github.com/LI5ee3/Mimonitor_Toolbox")!) }
                     Spacer()
-                    Link("原项目", destination: URL(string: "https://github.com/YiHoooong/Mimonitor_Toolbox")!)
+                    Button("原项目") { state.environment.system.openURL(URL(string: "https://github.com/YiHoooong/Mimonitor_Toolbox")!) }
                 }
                 .font(.system(size: 13))
                 .foregroundStyle(Theme.secondaryText)
@@ -83,10 +79,7 @@ struct ToolsView: View {
         } message: {
             Text("将安装项目自带 APK，授予修改调试设置和无障碍权限，并开启网络 ADB 5555。完成后会回读实际状态。")
         }
-        .fileImporter(isPresented: $showApkImporter,
-                      allowedContentTypes: [UTType(filenameExtension: "apk") ?? .item]) { result in
-            if case .success(let url) = result { state.installApk(url) }
-        }
+
     }
 
     private var keyboardSettings: some View {
@@ -144,7 +137,7 @@ struct ToolsView: View {
         SettingsTaskSection(title: "应用偏好") {
             HStack(spacing: 16) {
                 Text("关闭窗口时").frame(width: 110, alignment: .leading)
-                Picker("关闭窗口时", selection: $closeBehavior) {
+                Picker("关闭窗口时", selection: $state.closeBehavior) {
                     Text("在菜单栏继续运行").tag("tray")
                     Text("退出应用").tag("exit")
                 }
@@ -153,18 +146,16 @@ struct ToolsView: View {
             }
             HStack(spacing: 16) {
                 Text("外观").frame(width: 110, alignment: .leading)
-                Picker("外观", selection: $theme) {
+                Picker("外观", selection: $state.theme) {
                     Text("跟随系统").tag("auto")
                     Text("深色").tag("dark")
                     Text("浅色").tag("light")
                 }
                 .labelsHidden().pickerStyle(.segmented).frame(maxWidth: 360)
-                .onChange(of: theme) { AppTheme.apply($0) }
                 Spacer(minLength: 0)
             }
             Divider().padding(.vertical, 2)
-            Toggle("登录后自动启动，仅显示菜单栏图标", isOn: $autostart)
-                .onChange(of: autostart) { state.setAutostart($0) }
+            Toggle("登录后自动启动，仅显示菜单栏图标", isOn: Binding(get: { state.autostartEnabled }, set: { state.setAutostart($0) }))
         }
     }
 
@@ -249,7 +240,7 @@ struct ToolsView: View {
             Text("选择本地 APK，使用 adb install -r -d 安装到显示器。")
                 .font(.system(size: 13)).foregroundStyle(Theme.secondaryText)
             HStack(spacing: 12) {
-                Button("选择 APK 并安装…") { showApkImporter = true }
+                Button("选择 APK 并安装…") { state.chooseAPK() }
                     .toolboxAction()
                 if state.isConnected {
                     Label("已连接", systemImage: "checkmark.circle").foregroundStyle(Theme.success)

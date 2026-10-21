@@ -205,8 +205,6 @@ final class HotkeyManager {
 
     private var bindings: [Binding] = []
     private var mediaBindings: [MediaBinding] = []
-    private var eventTap: CFMachPort?
-    private var runLoopSource: CFRunLoopSource?
 
     /// 触发回调：参数为绑定 id（cycle 用 action 名，adjust 用 "adjust:<index>"）。
     var onTrigger: ((String) -> Void)?
@@ -260,53 +258,23 @@ final class HotkeyManager {
     /// 返回是否成功建立了事件监听。
     /// `tapCreate` 在缺权限时会直接返回 nil —— 这种情况必须让调用方知道，
     /// 否则表现就是"快捷键配了但完全没反应"。
+    private let driver: any HotkeyDriving
+    init(driver: any HotkeyDriving) { self.driver = driver }
+
     @discardableResult
     func start() -> Bool {
-        if eventTap != nil { return true }
-        // 普通按键是 keyDown；硬件亮度键是 NX_SYSDEFINED（类型 14），两种都要听。
-        let mask = (CGEventMask(1) << CGEventType.keyDown.rawValue)
-            | (CGEventMask(1) << nxSystemDefinedEventType)
-        let selfPtr = Unmanaged.passUnretained(self).toOpaque()
-        guard let tap = CGEvent.tapCreate(
-            tap: .cgSessionEventTap,
-            place: .headInsertEventTap,
-            options: .defaultTap,
-            eventsOfInterest: mask,
-            callback: { _, type, event, refcon in
-                guard let refcon else { return Unmanaged.passUnretained(event) }
-                let manager = Unmanaged<HotkeyManager>.fromOpaque(refcon).takeUnretainedValue()
-
-                // 回调超时会被系统临时禁用。不重新启用的话快捷键就永久失效了，
-                // 而且表面上完全看不出来（tap 还在，只是收不到事件）。
-                if type == .tapDisabledByTimeout || type == .tapDisabledByUserInput {
-                    if let tap = manager.eventTap { CGEvent.tapEnable(tap: tap, enable: true) }
-                    manager.onTapDisabled?()
-                    return Unmanaged.passUnretained(event)
-                }
-
-                if type == .keyDown {
-                    manager.receivedKeyEvents += 1
-                    manager.onKeyEvent?(event)
-                    // 亮度调节键若以普通 keyDown 到达（keyCode 144/145），先拦下并吞掉，
-                    // 否则内置屏会跟着变亮度。
-                    if manager.handleMediaKeyDown(event) { return nil }
-                    manager.handle(event)
-                } else if type.rawValue == nxSystemDefinedEventType {
-                    // 命中我们注册的亮度键就吞掉（返回 nil），内置屏幕不再改亮度。
-                    if manager.handleSystemDefined(event) { return nil }
-                }
-                return Unmanaged.passUnretained(event)
-            },
-            userInfo: selfPtr
-        ) else { return false }
-
-        eventTap = tap
-        runLoopSource = CFMachPortCreateRunLoopSource(kCFAllocatorDefault, tap, 0)
-        if let runLoopSource {
-            CFRunLoopAddSource(CFRunLoopGetMain(), runLoopSource, .commonModes)
-        }
-        CGEvent.tapEnable(tap: tap, enable: true)
-        return true
+        driver.start(handler: { [weak self] type, event in
+            guard let self else { return false }
+            if type == .keyDown {
+                self.receivedKeyEvents += 1
+                self.onKeyEvent?(event)
+                if self.handleMediaKeyDown(event) { return true }
+                self.handle(event)
+            } else if type.rawValue == nxSystemDefinedEventType {
+                return self.handleSystemDefined(event)
+            }
+            return false
+        }, onDisabled: { [weak self] in self?.onTapDisabled?() })
     }
 
     /// 已注册的绑定数量（用于诊断）
@@ -315,14 +283,7 @@ final class HotkeyManager {
     /// 已注册的系统媒体键数量（用于诊断）
     var mediaBindingCount: Int { mediaBindings.count }
 
-    func stop() {
-        if let eventTap { CGEvent.tapEnable(tap: eventTap, enable: false) }
-        if let runLoopSource {
-            CFRunLoopRemoveSource(CFRunLoopGetMain(), runLoopSource, .commonModes)
-            self.runLoopSource = nil
-        }
-        eventTap = nil
-    }
+    func stop() { driver.stop() }
 
     private func handle(_ event: CGEvent) {
         let keyCode = CGKeyCode(event.getIntegerValueField(.keyboardEventKeycode))
@@ -397,29 +358,4 @@ final class HotkeyManager {
     /// 系统媒体键事件计数（用于诊断）
     private(set) var receivedMediaKeyEvents = 0
 
-    // MARK: 权限
-
-    static var isTrusted: Bool { AXIsProcessTrusted() }
-
-    /// 弹出系统授权引导。
-    ///
-    /// 系统会弹一个「「App」想要控制此电脑」的框，带「打开系统设置」按钮。
-    /// **每个 app 只会弹一次**，之后这个调用就静默无效了 —— 所以用户拒绝过之后
-    /// 必须靠 `openAccessibilitySettings()` 引导。
-    @discardableResult
-    static func promptForAccessibility() -> Bool {
-        let options = [kAXTrustedCheckOptionPrompt.takeUnretainedValue() as String: true] as CFDictionary
-        return AXIsProcessTrustedWithOptions(options)
-    }
-
-    /// 直接打开「系统设置 → 隐私与安全性 → 辅助功能」
-    static func openAccessibilitySettings() {
-        let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility")!
-        NSWorkspace.shared.open(url)
-    }
-
-    /// 兼容旧调用点
-    static func requestAccessibility() {
-        _ = promptForAccessibility()
-    }
 }

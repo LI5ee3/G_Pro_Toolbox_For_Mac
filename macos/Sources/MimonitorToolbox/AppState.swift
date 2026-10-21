@@ -55,13 +55,20 @@ fileprivate struct GuardianStatus {
 /// 应用状态：连接状态、当前读取值、日志，以及所有显示器控制动作。
 /// 对应原版 App 类的职责（不含 UI 控件，UI 由各 View 负责）。
 final class AppState: ObservableObject {
-    let adb = AdbClient()
-    let hotkeyManager = HotkeyManager()
+    let adb: AdbClient
+    let environment: AppEnvironment
+    let preferences: any PreferencesStore
+    private let executionLifetime = RuntimeGeneration()
+    private var isConfiguring = true
+    private(set) var isRunning = false
+    private var runtimeTasks: [RuntimeCancellation] = []
+    private var startupWork: [DispatchWorkItem] = []
+    let hotkeyManager: HotkeyManager
     var connectionIntent = ConnectionIntent()
     private var pageRefreshIntent = PageRefreshIntent()
     private let connectionQueue = DispatchQueue(label: "com.mimonitor.toolbox.connection")
     let deviceQueue = DispatchQueue(label: "com.mimonitor.toolbox.device", qos: .userInitiated)
-    let presetEngine = PresetEngine(store: PresetStore())
+    let presetEngine: PresetEngine
     @Published var presetConfiguration = PresetConfiguration()
     @Published var isPresetBusy = false
     @Published var isPresetOperationInFlight = false
@@ -69,8 +76,7 @@ final class AppState: ObservableObject {
     @Published var presetError: String?
     @Published var automaticTaskStatus = ""
     @Published var requestedPage: Page?
-    var presetTimer: Timer?
-    var presetWakeObserver: NSObjectProtocol?
+    var presetTimer: RuntimeCancellation?
     var pendingPresetSave: DispatchWorkItem?
     var pendingPresetSaveID: String?
     var pendingPresetSaveDevice: String?
@@ -95,110 +101,107 @@ final class AppState: ObservableObject {
     /// 正在刷新的页面，用于显示 loading 遮罩
     @Published var loadingPages: Set<String> = []
 
-    @Published var ipInput: String = UserDefaults.standard.string(forKey: "saved_ip") ?? ""
+    @Published var ipInput: String = ""
 
     // 工具页状态
     @Published var logToFileEnabled = false
     @Published var guardianStatus = "状态：未检测"
-    @Published var hdrMemoryEnabled = UserDefaults.standard.bool(forKey: "hdr_sdr_local_dimming_enabled")
+    @Published var hdrMemoryEnabled = false
     /// 显示器当前是否处于 4K UI 模式（由 check4KState 检测得到）
     @Published var is4KUI = false
-    @Published var freesyncMemoryEnabled = UserDefaults.standard.bool(forKey: "freesync_mode_memory_enabled")
+    @Published var freesyncMemoryEnabled = false
     @Published var hdrMemoryStatusText = ""
     @Published var freesyncMemoryStatusText = ""
     /// 准星是否只在游戏模式下生效。默认值 true 在 App.init() 里用
     /// register(defaults:) 注册，所以这里可以直接用 bool(forKey:)。
-    @Published var crosshairGameModeOnly = UserDefaults.standard.bool(forKey: "crosshair_game_mode_only")
+    @Published var crosshairGameModeOnly = false
     @Published var crosshairModeStatusText = ""
     /// 准星联动写入进行中，挡住重入的 reconcile
     private var crosshairReconcileBusy = false
     /// 上一次对账时的画面模式，用于区分「进入游戏模式」与「一直在游戏模式」
     private var crosshairLastMode: String?
     /// 本 app 是否已获辅助功能权限（和终端是两回事，各算各的）
-    @Published var accessibilityTrusted = HotkeyManager.isTrusted
+    @Published var accessibilityTrusted = false
 
     /// 快捷键诊断日志。默认关闭：正常打字时每按一个不匹配的键都会记一行，很快把日志刷满。
-    @Published var hotkeyDebugEnabled = UserDefaults.standard.bool(forKey: "hotkey_debug") {
-        didSet { UserDefaults.standard.set(hotkeyDebugEnabled, forKey: "hotkey_debug") }
+    @Published var hotkeyDebugEnabled = false {
+        didSet { guard !isConfiguring else { return }; preferences.set(hotkeyDebugEnabled, forKey: "hotkey_debug") }
     }
-    @Published var hotkeys: [String: HotkeyConfig] = AppState.loadHotkeys()
-    @Published var adjustHotkeys: [AdjustHotkeyConfig] = AppState.loadAdjustHotkeys()
+    @Published var hotkeys: [String: HotkeyConfig] = [:]
+    @Published var adjustHotkeys: [AdjustHotkeyConfig] = []
 
     /// 是否把系统亮度调节键接管为显示器背光调节。
     /// 开启后 HotkeyManager 会吞掉系统亮度调节键事件，内置屏幕不再跟着变。
-    @Published var mediaBrightnessKeysEnabled = UserDefaults.standard.bool(forKey: "media_brightness_keys_enabled") {
-        didSet {
-            UserDefaults.standard.set(mediaBrightnessKeysEnabled, forKey: "media_brightness_keys_enabled")
+    @Published var mediaBrightnessKeysEnabled = false {
+        didSet { guard !isConfiguring else { return };
+            preferences.set(mediaBrightnessKeysEnabled, forKey: "media_brightness_keys_enabled")
             applyHotkeys()
-            if mediaBrightnessKeysEnabled, !HotkeyManager.isTrusted {
-                HotkeyManager.requestAccessibility()
+            if mediaBrightnessKeysEnabled, !environment.system.isTrusted() {
+                requestAccessibilityPrompt()
             }
         }
     }
 
     /// 亮度调节键每按一次的背光步长
-    @Published var mediaBrightnessStep = UserDefaults.standard.object(forKey: "media_brightness_step") as? Int ?? 5 {
-        didSet { UserDefaults.standard.set(mediaBrightnessStep, forKey: "media_brightness_step") }
+    @Published var mediaBrightnessStep = 5 {
+        didSet { guard !isConfiguring else { return }; preferences.set(mediaBrightnessStep, forKey: "media_brightness_step") }
     }
 
     /// 亮度调节键是否显示 macOS 原生亮度 OSD（而不是本应用 HUD）。
     /// 走私有 OSDUIHelper，失败会自动回退到 HUD。
-    @Published var mediaBrightnessNativeOSD = UserDefaults.standard.object(forKey: "media_brightness_native_osd") as? Bool ?? true {
-        didSet { UserDefaults.standard.set(mediaBrightnessNativeOSD, forKey: "media_brightness_native_osd") }
+    @Published var mediaBrightnessNativeOSD = true {
+        didSet { guard !isConfiguring else { return }; preferences.set(mediaBrightnessNativeOSD, forKey: "media_brightness_native_osd") }
     }
 
     /// 多屏时是否只在焦点位于目标显示器上才拦截亮度键；焦点不在时就交回系统。
-    @Published var mediaBrightnessFocusOnly = UserDefaults.standard.object(forKey: "media_brightness_focus_only") as? Bool ?? true {
-        didSet { UserDefaults.standard.set(mediaBrightnessFocusOnly, forKey: "media_brightness_focus_only") }
+    @Published var mediaBrightnessFocusOnly = true {
+        didSet { guard !isConfiguring else { return }; preferences.set(mediaBrightnessFocusOnly, forKey: "media_brightness_focus_only") }
     }
 
     /// 目标显示器的系统名称（用于多屏焦点判断），默认按 EDID 名 "Mi Monitor"。
-    @Published var mediaBrightnessDisplayName = UserDefaults.standard.string(forKey: "media_brightness_display_name") ?? "Mi Monitor" {
-        didSet { UserDefaults.standard.set(mediaBrightnessDisplayName, forKey: "media_brightness_display_name") }
+    @Published var mediaBrightnessDisplayName = "Mi Monitor" {
+        didSet { guard !isConfiguring else { return }; preferences.set(mediaBrightnessDisplayName, forKey: "media_brightness_display_name") }
     }
 
     /// 是否把系统音量调节键接管为显示器音量。
     /// 只在「当前默认音频输出匹配目标设备」时生效，否则交回系统去调内置扬声器/AirPods。
-    @Published var mediaVolumeKeysEnabled = UserDefaults.standard.bool(forKey: "media_volume_keys_enabled") {
-        didSet {
-            UserDefaults.standard.set(mediaVolumeKeysEnabled, forKey: "media_volume_keys_enabled")
+    @Published var mediaVolumeKeysEnabled = false {
+        didSet { guard !isConfiguring else { return };
+            preferences.set(mediaVolumeKeysEnabled, forKey: "media_volume_keys_enabled")
             applyHotkeys()
             if mediaVolumeKeysEnabled {
-                if !HotkeyManager.isTrusted { HotkeyManager.requestAccessibility() }
+                if !environment.system.isTrusted() { requestAccessibilityPrompt() }
                 refreshMediaVolumeState()
             }
         }
     }
 
     /// 关掉原生音量 OSD 时，每按一次的音量步长
-    @Published var mediaVolumeStep = UserDefaults.standard.object(forKey: "media_volume_step") as? Int ?? 5 {
-        didSet { UserDefaults.standard.set(mediaVolumeStep, forKey: "media_volume_step") }
+    @Published var mediaVolumeStep = 5 {
+        didSet { guard !isConfiguring else { return }; preferences.set(mediaVolumeStep, forKey: "media_volume_step") }
     }
 
     /// 音量键是否显示 macOS 原生音量 OSD（走私有 OSDUIHelper，失败回退本应用 HUD）。
-    @Published var mediaVolumeNativeOSD = UserDefaults.standard.object(forKey: "media_volume_native_osd") as? Bool ?? true {
-        didSet { UserDefaults.standard.set(mediaVolumeNativeOSD, forKey: "media_volume_native_osd") }
+    @Published var mediaVolumeNativeOSD = true {
+        didSet { guard !isConfiguring else { return }; preferences.set(mediaVolumeNativeOSD, forKey: "media_volume_native_osd") }
     }
 
     /// 是否只在默认音频输出匹配指定名称时才接管音量键
-    @Published var mediaVolumeOutputGateEnabled = UserDefaults.standard.object(forKey: "media_volume_output_gate") as? Bool ?? true {
-        didSet { UserDefaults.standard.set(mediaVolumeOutputGateEnabled, forKey: "media_volume_output_gate") }
+    @Published var mediaVolumeOutputGateEnabled = true {
+        didSet { guard !isConfiguring else { return }; preferences.set(mediaVolumeOutputGateEnabled, forKey: "media_volume_output_gate") }
     }
 
     /// 目标音频输出设备名（CoreAudio 设备名，匹配用「包含」）
-    @Published var mediaVolumeOutputName = UserDefaults.standard.string(forKey: "media_volume_output_name") ?? "Mi Monitor" {
-        didSet { UserDefaults.standard.set(mediaVolumeOutputName, forKey: "media_volume_output_name") }
+    @Published var mediaVolumeOutputName = "Mi Monitor" {
+        didSet { guard !isConfiguring else { return }; preferences.set(mediaVolumeOutputName, forKey: "media_volume_output_name") }
     }
 
     private var hdrLastState: Bool?
-    private var logFileHandle: FileHandle?
-    private var logFileURL: URL?
-    private var sourcePollTimer: Timer?
+    private var sourcePollTimer: RuntimeCancellation?
     private var sourcePollArmed = false
     private var monitorChecking = false
     private var monitorTick = 0
     private var lastMonitorFailState = ""
-    private var displayWakeObserver: NSObjectProtocol?
     /// 切页时刻，用于统计刷新耗时
     private var pageAppearTimes: [String: Date] = [:]
 
@@ -214,7 +217,66 @@ final class AppState: ObservableObject {
         return f
     }()
 
-    init() {
+    @Published var theme = "auto" {
+        didSet { guard !isConfiguring else { return }; preferences.set(theme, forKey: "theme"); environment.system.applyTheme(theme) }
+    }
+    @Published var closeBehavior = "tray" {
+        didSet { guard !isConfiguring else { return }; preferences.set(closeBehavior, forKey: "close_behavior") }
+    }
+    @Published var autostartEnabled = false
+
+    init(environment: AppEnvironment) {
+        self.environment = environment
+        self.preferences = environment.preferences
+        self.adb = environment.adb
+        self.hotkeyManager = environment.hotkeys
+        preferences.register(defaults: ["crosshair_game_mode_only": true])
+        self.presetEngine = PresetEngine(store: PresetStore(defaults: preferences))
+        self.ipInput = preferences.string(forKey: "saved_ip") ?? ""
+        self.hdrMemoryEnabled = preferences.bool(forKey: "hdr_sdr_local_dimming_enabled")
+        self.freesyncMemoryEnabled = preferences.bool(forKey: "freesync_mode_memory_enabled")
+        self.crosshairGameModeOnly = preferences.bool(forKey: "crosshair_game_mode_only")
+        self.accessibilityTrusted = false
+        self.hotkeyDebugEnabled = preferences.bool(forKey: "hotkey_debug")
+        self.hotkeys = Self.loadHotkeys(preferences)
+        self.adjustHotkeys = Self.loadAdjustHotkeys(preferences)
+        self.mediaBrightnessKeysEnabled = preferences.bool(forKey: "media_brightness_keys_enabled")
+        self.mediaBrightnessStep = preferences.object(forKey: "media_brightness_step") as? Int ?? 5
+        self.mediaBrightnessNativeOSD = preferences.object(forKey: "media_brightness_native_osd") as? Bool ?? true
+        self.mediaBrightnessFocusOnly = preferences.object(forKey: "media_brightness_focus_only") as? Bool ?? true
+        self.mediaBrightnessDisplayName = preferences.string(forKey: "media_brightness_display_name") ?? "Mi Monitor"
+        self.mediaVolumeKeysEnabled = preferences.bool(forKey: "media_volume_keys_enabled")
+        self.mediaVolumeStep = preferences.object(forKey: "media_volume_step") as? Int ?? 5
+        self.mediaVolumeNativeOSD = preferences.object(forKey: "media_volume_native_osd") as? Bool ?? true
+        self.mediaVolumeOutputGateEnabled = preferences.object(forKey: "media_volume_output_gate") as? Bool ?? true
+        self.mediaVolumeOutputName = preferences.string(forKey: "media_volume_output_name") ?? "Mi Monitor"
+        self.menuBarItems = Self.loadMenuBarItems(preferences)
+        self.hotkeyCountdownEnabled = preferences.object(forKey: "hotkey_countdown_enabled") as? Bool ?? true
+        self.hotkeyCountdownSeconds = preferences.object(forKey: "hotkey_countdown_seconds") as? Double ?? 0.8
+        self.theme = preferences.string(forKey: "theme") ?? "auto"
+        self.closeBehavior = preferences.string(forKey: "close_behavior") ?? "tray"
+        self.presetConfiguration = presetEngine.configuration
+        self.presetError = presetEngine.loadError
+        self.isConfiguring = false
+        if environment.mode == .simulation { executionLifetime.begin() }
+    }
+
+    /// Fixture entry point. It cannot modify a production runtime.
+    func seedSimulationReadings(volume: Int?, muted: Bool?) {
+        precondition(environment.mode == .simulation)
+        dashboardVolume = volume; dashboardMuted = muted
+        mediaVolumeHardware = volume; mediaVolumePreview = volume; mediaVolumeMuted = muted
+    }
+
+    /// The app lifetime owns live services; construction and previews never start them.
+    func start() {
+        guard !isRunning, environment.mode == .live else { return }
+        isRunning = true
+        executionLifetime.begin()
+        accessibilityTrusted = environment.system.isTrusted()
+        autostartEnabled = environment.system.autostartEnabled()
+        environment.system.applyTheme(theme)
+
         startPresetFeatures()
         log("系统就绪，等待连接...")
         hotkeyManager.onTrigger = { [weak self] id in self?.handleHotkeyTrigger(id) }
@@ -244,24 +306,19 @@ final class AppState: ObservableObject {
             self?.log("快捷键诊断: 事件监听被系统禁用，已重新启用")
         }
         applyHotkeys()
-        hotkeyManager.start()
         updateHdrMemoryStatus()
         updateFreesyncMemoryStatus()
         updateCrosshairModeStatus()
-        Timer.scheduledTimer(withTimeInterval: 3.0, repeats: true) { [weak self] _ in
-            self?.pollHdrState()
-        }
+        runtimeTasks.append(environment.scheduler.repeating(every: 3, commonModes: false) { [weak self] in self?.pollHdrState() })
         // 音量缓存：显示器自带的遥控器/按键也能改音量，定期回读一次，
         // 避免下次按 Mac 音量键时从过期值起步。
-        Timer.scheduledTimer(withTimeInterval: 5.0, repeats: true) { [weak self] _ in
-            self?.refreshMediaVolumeState()
-        }
+        runtimeTasks.append(environment.scheduler.repeating(every: 5, commonModes: false) { [weak self] in self?.refreshMediaVolumeState() })
         refreshMediaVolumeState()
         // 配了快捷键却没授权：启动时引导一次。
         // 系统授权框每个 app 只会弹一次，之后再调用是静默的，所以只在有快捷键配置时尝试。
         if !accessibilityTrusted && !hotkeys.isEmpty {
-            DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
-                _ = HotkeyManager.promptForAccessibility()
+            scheduleStartup(after: 1.5) { [weak self] in
+                _ = self?.environment.system.promptAccessibility()
             }
         }
 
@@ -269,27 +326,55 @@ final class AppState: ObservableObject {
         runConnectionTask { self.adb.warmUpServer() }
 
         // 启动后自动连接上次设备（原版延迟 900ms，等窗口先出来）
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.9) { [weak self] in
+        scheduleStartup(after: 0.9) { [weak self] in
             self?.autoConnectOnStartup()
         }
         // adb 链路监控（对应原版 _monitor_adb_server）。
         // 每 6 秒一跳：未连接时每跳都重试（故障恢复要快），已连接时每 5 跳体检一次。
-        Timer.scheduledTimer(withTimeInterval: 6.0, repeats: true) { [weak self] _ in
+        runtimeTasks.append(environment.scheduler.repeating(every: 6, commonModes: false) { [weak self] in
             guard let self else { return }
             self.monitorTick &+= 1
             if self.isConnected && self.monitorTick % 5 != 0 { return }
             self.monitorAdbServer()
-        }
-        displayWakeObserver = NSWorkspace.shared.notificationCenter.addObserver(
-            forName: NSWorkspace.screensDidWakeNotification, object: nil, queue: .main
-        ) { [weak self] _ in self?.recoverAfterWake() }
+        })
+        runtimeTasks.append(environment.system.observeWake({ [weak self] in
+            self?.recoverAfterWake(); self?.checkAutomaticTasks()
+        }, { [weak self] in self?.recoverAfterWake() }))
+    }
+
+    func stop() {
+        executionLifetime.end()
+        isRunning = false
+        connectionIntent.disconnect()
+        runtimeTasks.forEach { $0.invalidate() }; runtimeTasks.removeAll()
+        startupWork.forEach { $0.cancel() }; startupWork.removeAll()
+        presetTimer?.invalidate(); presetTimer = nil
+        sourcePollTimer?.invalidate(); sourcePollTimer = nil; sourcePollArmed = false
+        pendingPresetSave?.cancel(); pendingPresetSave = nil
+        pendingRefreshWork?.cancel(); pendingRefreshWork = nil
+        cyclePending.values.forEach { $0.work.cancel() }; cyclePending.removeAll()
+        adjustPendingWork.values.forEach { $0.cancel() }; adjustPendingWork.removeAll()
+        mediaBrightnessCommit?.cancel(); mediaBrightnessCommit = nil
+        mediaVolumeCommit?.cancel(); mediaVolumeCommit = nil
+        hotkeyManager.stop()
+        environment.feedback.stop()
+        environment.system.stopLog()
     }
 
     deinit {
-        if let observer = displayWakeObserver { NSWorkspace.shared.notificationCenter.removeObserver(observer) }
-        presetTimer?.invalidate()
-        pendingPresetSave?.cancel()
-        if let observer = presetWakeObserver { NSWorkspace.shared.notificationCenter.removeObserver(observer) }
+        runtimeTasks.forEach { $0.invalidate() }
+        startupWork.forEach { $0.cancel() }
+        presetTimer?.invalidate(); sourcePollTimer?.invalidate()
+        pendingPresetSave?.cancel(); pendingRefreshWork?.cancel()
+        hotkeyManager.stop()
+    }
+
+    private func scheduleStartup(after delay: TimeInterval, _ action: @escaping () -> Void) {
+        let work = DispatchWorkItem { [weak self] in
+            guard self?.isRunning == true else { return }; action()
+        }
+        startupWork.append(work)
+        environment.scheduler.after(delay, work: work)
     }
 
     /// 探活并自愈。
@@ -309,7 +394,7 @@ final class AppState: ObservableObject {
 
         // 未连接时也要能重试，所以目标从 adb.ip 兜底到上次保存的 IP
         let target = adb.ip.isEmpty
-            ? (UserDefaults.standard.string(forKey: "saved_ip") ?? "").trimmingCharacters(in: .whitespaces)
+            ? (preferences.string(forKey: "saved_ip") ?? "").trimmingCharacters(in: .whitespaces)
             : adb.ip
         guard !target.isEmpty else { return }
 
@@ -375,7 +460,7 @@ final class AppState: ObservableObject {
     func recoverAfterWake() {
         guard connectionIntent.allowsAutomaticRecovery else { return }
         let request = connectionIntent.generation
-        DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) { [weak self] in
+        scheduleStartup(after: 1.5) { [weak self] in
             guard let self, self.connectionIntent.isCurrent(request) else { return }
             self.monitorAdbServer(refreshState: true)
         }
@@ -452,25 +537,31 @@ final class AppState: ObservableObject {
     private func clamp(_ v: Int, _ lo: Int, _ hi: Int) -> Int { max(lo, min(hi, v)) }
 
     func log(_ message: String) {
-        let line = "[\(Self.timeFormatter.string(from: Date()))] \(message)"
+        let line = "[\(Self.timeFormatter.string(from: environment.now()))] \(message)"
         DispatchQueue.main.async {
             self.logLines.append(line)
             if self.logLines.count > 500 {
                 self.logLines.removeFirst(self.logLines.count - 500)
             }
             self.logSeq &+= 1
-            if self.logToFileEnabled, let handle = self.logFileHandle {
-                try? handle.write(contentsOf: (line + "\n").data(using: .utf8)!)
-            }
+            if self.logToFileEnabled { self.environment.system.appendLog(line + "\n") }
         }
     }
 
-    private func runBackground(_ work: @escaping () -> Void) {
-        deviceQueue.async(execute: work)
+    func runBackground(_ work: @escaping () -> Void) {
+        guard isRunning || environment.mode == .simulation else { return }
+        let token = executionLifetime.token()
+        deviceQueue.async { [executionLifetime] in
+            guard executionLifetime.allows(token) else { return }; work()
+        }
     }
 
     private func runConnectionTask(_ work: @escaping () -> Void) {
-        connectionQueue.async(execute: work)
+        guard isRunning || environment.mode == .simulation else { return }
+        let token = executionLifetime.token()
+        connectionQueue.async { [executionLifetime] in
+            guard executionLifetime.allows(token) else { return }; work()
+        }
     }
 
     private func setValue(_ key: String, _ value: String) {
@@ -483,7 +574,7 @@ final class AppState: ObservableObject {
     func autoConnectOnStartup() {
         guard connectionIntent.allowsStartupAttempt else { return }
         guard !isConnected else { return }
-        let saved = (UserDefaults.standard.string(forKey: "saved_ip") ?? "")
+        let saved = (preferences.string(forKey: "saved_ip") ?? "")
             .trimmingCharacters(in: .whitespaces)
         if saved.isEmpty {
             log("启动自动连接: 未找到上次设备，开始扫描内网")
@@ -499,7 +590,7 @@ final class AppState: ObservableObject {
         let ip = ipInput.trimmingCharacters(in: .whitespaces)
         guard !ip.isEmpty else { log("请输入显示器 IP 地址"); return }
         let request = connectionIntent.beginConnection()
-        UserDefaults.standard.set(ip, forKey: "saved_ip")
+        preferences.set(ip, forKey: "saved_ip")
         adb.ip = ip
         connectionStatus = .connecting
         if !isAuto { log("正在连接 \(ip)...") }
@@ -564,7 +655,7 @@ final class AppState: ObservableObject {
             stopSourcePolling()
         }
         // 记下切页时刻，用于衡量「切换 → 数据上屏」的耗时
-        pageAppearTimes[page.rawValue] = Date()
+        pageAppearTimes[page.rawValue] = environment.now()
         refreshPage(page.rawValue)
     }
 
@@ -613,11 +704,11 @@ final class AppState: ObservableObject {
         log("开始扫描内网...")
         runConnectionTask {
             guard DispatchQueue.main.sync(execute: { self.connectionIntent.isCurrent(request) }) else { return }
-            let subnets = NetworkScan.localIPv4Subnets()
+            let subnets = self.environment.system.subnets()
             DispatchQueue.main.async {
                 self.log("本机网段: \(subnets.isEmpty ? "未识别" : subnets.joined(separator: ", "))")
             }
-            let candidates = NetworkScan.scan()
+            let candidates = self.environment.system.scan()
             var found: [ScannedDevice] = []
             for ip in candidates {
                 guard DispatchQueue.main.sync(execute: { self.connectionIntent.isCurrent(request) }) else { return }
@@ -677,7 +768,7 @@ final class AppState: ObservableObject {
             for page in pages { self.refreshPage(page) }
         }
         pendingRefreshWork = work
-        DispatchQueue.main.asyncAfter(deadline: .now() + delay, execute: work)
+        environment.scheduler.after(delay, work: work)
     }
 
     // MARK: - 页面数据加载
@@ -783,7 +874,7 @@ final class AppState: ObservableObject {
                     // 首屏数据到手就撤遮罩，不必等慢一档的 JNI
                     self.loadingPages.remove(page)
                     if let t0 = self.pageAppearTimes[page] {
-                        let ms = Int(Date().timeIntervalSince(t0) * 1000)
+                        let ms = Int(self.environment.now().timeIntervalSince(t0) * 1000)
                         if ms > 50 { self.log("⏱ \(page) 首屏数据 \(ms)ms") }
                     }
                 }
@@ -827,7 +918,7 @@ final class AppState: ObservableObject {
                 }
                 self.loadingPages.remove(page)
                 if let t0 = self.pageAppearTimes[page] {
-                    let ms = Int(Date().timeIntervalSince(t0) * 1000)
+                    let ms = Int(self.environment.now().timeIntervalSince(t0) * 1000)
                     self.pageAppearTimes[page] = nil
                     self.log("已刷新 \(page) 页面数据（合计 \(ms)ms）")
                 } else {
@@ -866,7 +957,7 @@ final class AppState: ObservableObject {
         for item in adjustPendingWork.values { item.cancel() }
         adjustPendingWork.removeAll()
         adjustPendingValues.removeAll()
-        HUDWindow.shared.endCountdown()
+        environment.feedback.endCountdown()
     }
 
     // MARK: - 画面
@@ -922,7 +1013,7 @@ final class AppState: ObservableObject {
                 // 单格亮度变化约为 6–7%，不必按 1% 拆成多次 JNI 写入；
                 // 更大的变化仍保留渐变，并把总步数压到 ~16 步内。
                 let delta = abs(value - jniRampFrom)
-                let oneChiclet = Int(ceil(100.0 / Double(NativeOSD.chicletCount)))
+                let oneChiclet = Int(ceil(100.0 / Double(16)))
                 let isOneChiclet = delta <= oneChiclet
                 let step = isOneChiclet ? max(1, delta) : max(1, Int(ceil(Double(delta) / 16.0)))
                 let rampFrom = isOneChiclet ? value : jniRampFrom
@@ -1184,18 +1275,18 @@ final class AppState: ObservableObject {
                     // Dolby Vision、游戏子模式（SDR 游戏 RPG 之类）这些不是用户手动选的档位，
                     // 记下来再还原会很突兀 —— 而且它们在 FreeSync 开关时本来就会被自动切换。
                     if RegisterMap.modeNames[mode] != nil {
-                        UserDefaults.standard.set(mode, forKey: "freesync_previous_mode")
+                        self.preferences.set(mode, forKey: "freesync_previous_mode")
                         DispatchQueue.main.async {
                             self.log("FreeSync 模式记忆: 记录开启前模式 \(RegisterMap.modeNames[mode] ?? "\(mode)")")
                         }
                     } else {
-                        UserDefaults.standard.removeObject(forKey: "freesync_previous_mode")
+                        self.preferences.removeObject(forKey: "freesync_previous_mode")
                         DispatchQueue.main.async {
                             self.log("FreeSync 模式记忆: 当前是 \(RegisterMap.sceneNames[mode] ?? "未知模式")，非标准模式不记录")
                         }
                     }
                 } else if !on && wasOn {
-                    let saved = UserDefaults.standard.integer(forKey: "freesync_previous_mode")
+                    let saved = self.preferences.integer(forKey: "freesync_previous_mode")
                     restoreMode = RegisterMap.modeNames[saved] != nil ? saved : nil
                 }
             }
@@ -1297,43 +1388,20 @@ final class AppState: ObservableObject {
 
     func toggleLogFile(_ enabled: Bool) {
         logToFileEnabled = enabled
-        if enabled {
-            let dir = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
-                .appendingPathComponent("MimonitorToolbox/logs")
-            try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
-            let url = dir.appendingPathComponent("log_\(Self.fileTimeFormatter.string(from: Date())).txt")
-            logFileURL = url
-            if !FileManager.default.fileExists(atPath: url.path) {
-                FileManager.default.createFile(atPath: url.path, contents: nil)
-            }
-            logFileHandle = try? FileHandle(forWritingTo: url)
-            log("本地日志记录: 开启")
-        } else {
-            try? logFileHandle?.close()
-            logFileHandle = nil
-            log("本地日志记录: 关闭")
-        }
+        if enabled { environment.system.startLog(Self.fileTimeFormatter.string(from: environment.now())) }
+        else { environment.system.stopLog() }
+        log(enabled ? "本地日志记录: 开启" : "本地日志记录: 关闭")
     }
 
     func exportLog(to url: URL) {
-        if let logFileURL, FileManager.default.fileExists(atPath: logFileURL.path) {
-            try? FileManager.default.copyItem(at: logFileURL, to: url)
-        } else {
-            try? logLines.joined(separator: "\n").write(to: url, atomically: true, encoding: .utf8)
-        }
+        environment.system.exportLog(url, logLines.joined(separator: "\n"))
         log("日志已导出: \(url.path)")
     }
-
-    func openLogDir() {
-        if let logFileURL {
-            NSWorkspace.shared.activateFileViewerSelecting([logFileURL])
-        } else {
-            let dir = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
-                .appendingPathComponent("MimonitorToolbox/logs")
-            try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
-            NSWorkspace.shared.open(dir)
-        }
-    }
+    func chooseLogExport() { environment.system.chooseLogExport { [weak self] in self?.exportLog(to: $0) } }
+    func chooseAPK() { environment.system.chooseAPK { [weak self] in self?.installApk($0) } }
+    func copyLog() { environment.system.copyText(logLines.joined(separator: "\n")); log("日志已复制到剪贴板") }
+    func openLogDir() { environment.system.openLogDirectory() }
+    func requestAccessibilityPrompt() { _ = environment.system.promptAccessibility() }
 
     // MARK: - 信号源轮询
 
@@ -1343,8 +1411,9 @@ final class AppState: ObservableObject {
         guard isConnected else { return }
         sourcePollArmed = true
         DispatchQueue.main.async {
+            guard self.sourcePollArmed else { return }
             self.sourcePollTimer?.invalidate()
-            self.sourcePollTimer = Timer.scheduledTimer(withTimeInterval: 2.0, repeats: true) { [weak self] _ in
+            self.sourcePollTimer = self.environment.scheduler.repeating(every: 2, commonModes: false) { [weak self] in
                 self?.pollSourceState()
             }
         }
@@ -1388,13 +1457,12 @@ final class AppState: ObservableObject {
         log("===== 网络诊断 =====")
         runBackground {
             var lines: [String] = []
-            let fm = FileManager.default
 
             lines.append("adb 路径: \(self.adb.adbPath)")
-            lines.append("adb 可执行: \(fm.isExecutableFile(atPath: self.adb.adbPath) ? "✅" : "❌ 找不到 adb")")
+            lines.append("adb 可执行: \(self.environment.system.isExecutable(self.adb.adbPath) ? "✅" : "❌ 找不到 adb")")
             lines.append("adb server 端口: \(self.adb.serverPort)")
 
-            let subnets = NetworkScan.localIPv4Subnets()
+            let subnets = self.environment.system.subnets()
             lines.append("本机网段: \(subnets.isEmpty ? "❌ 未识别" : "✅ " + subnets.joined(separator: ", "))")
 
             let ip = self.ipInput.trimmingCharacters(in: .whitespaces)
@@ -1403,8 +1471,8 @@ final class AppState: ObservableObject {
             } else {
                 let sameSubnet = subnets.contains { ip.hasPrefix($0 + ".") }
                 lines.append("与目标同网段: \(sameSubnet ? "✅" : "❌ 不在同一网段")")
-                lines.append("ping \(ip): \(Self.ping(ip) ? "✅ 通" : "❌ 不通")")
-                let tcp = NetworkScan.isTcpOpen(host: ip, port: 5555, timeout: 2.0)
+                lines.append("ping \(ip): \(self.environment.system.ping(ip) ? "✅ 通" : "❌ 不通")")
+                let tcp = self.environment.system.tcpOpen(ip, 5555, 2.0)
                 lines.append("TCP \(ip):5555: \(tcp ? "✅ 开放" : "❌ 连不上")")
                 if !tcp {
                     lines.append("  → 设备在线但端口不通，通常是显示器的「无线调试」没开")
@@ -1421,17 +1489,6 @@ final class AppState: ObservableObject {
 
             DispatchQueue.main.async { lines.forEach { self.log($0) } }
         }
-    }
-
-    private static func ping(_ host: String) -> Bool {
-        let process = Process()
-        process.executableURL = URL(fileURLWithPath: "/sbin/ping")
-        process.arguments = ["-c", "1", "-W", "1000", host]
-        process.standardOutput = Pipe()
-        process.standardError = Pipe()
-        do { try process.run() } catch { return false }
-        process.waitUntilExit()
-        return process.terminationStatus == 0
     }
 
     // MARK: - APK 安装 / ADB 命令行
@@ -1492,15 +1549,8 @@ final class AppState: ObservableObject {
         end tell
         """
 
-        let task = Process()
-        task.executableURL = URL(fileURLWithPath: "/usr/bin/osascript")
-        task.arguments = ["-e", script]
-        do {
-            try task.run()
-            log("已在终端打开 ADB 会话（\(title)）")
-        } catch {
-            log("打开终端失败: \(error.localizedDescription)")
-        }
+        let ok = environment.system.terminal(script)
+        log(ok ? "已在终端打开 ADB 会话（\(title)）" : "打开终端失败，请检查自动化权限与终端状态")
     }
 
     /// 套进 AppleScript 字符串字面量前的转义
@@ -1565,7 +1615,7 @@ final class AppState: ObservableObject {
 
     func deployGuardian() {
         guard isConnected else { return log("请先连接显示器") }
-        guard let apk = AdbClient.guardianApkPath() else { log("找不到保活 APK（assets/adb_guardian/adbguardian-signed.apk）"); return }
+        guard let apk = adb.resources.guardianAPK() else { log("找不到保活 APK（assets/adb_guardian/adbguardian-signed.apk）"); return }
         guardianStatus = "状态：正在部署/修复..."
         log("正在部署 ADB 保活守护...")
         runBackground {
@@ -1665,7 +1715,7 @@ final class AppState: ObservableObject {
     func toggleHdrMemory(_ enabled: Bool) {
         guard let enabled = presetControlPolicy.memoryPreferenceChange(requested: enabled) else { return }
         hdrMemoryEnabled = enabled
-        UserDefaults.standard.set(enabled, forKey: "hdr_sdr_local_dimming_enabled")
+        preferences.set(enabled, forKey: "hdr_sdr_local_dimming_enabled")
         hdrLastState = nil
         log("HDR/SDR 分区控光记忆: \(enabled ? "开启" : "关闭")")
         updateHdrMemoryStatus()
@@ -1676,8 +1726,8 @@ final class AppState: ObservableObject {
     private(set) var hdrStateSource = ""
 
     func pollHdrState(force: Bool = false) {
-        let host = HDRDetector.hostSideHDR()
-        let monitor = HDRDetector.monitorSideHDR(pictureMode: currentValues["picture_mode"])
+        let host = environment.system.hostHDR()
+        let monitor = RegisterMap.isHDRPictureMode(currentValues["picture_mode"])
         let state = host || monitor
         hdrStateSource = host && monitor ? "主机+显示器"
             : (host ? "主机 EDR" : (monitor ? "显示器模式" : ""))
@@ -1724,21 +1774,21 @@ final class AppState: ObservableObject {
                 let valueName = ["关", "低", "中", "高"][value]
                 self.log("\(state ? "HDR" : "SDR") 精密控光记忆: \(valueName)")
                 // 原版这里也会弹悬浮提示（_apply_hdr_memory_for_current_state）
-                HUDWindow.shared.show(title: "\(state ? "HDR" : "SDR") 精密控光", value: valueName)
+                self.environment.feedback.show(title: "\(state ? "HDR" : "SDR") 精密控光", value: valueName)
                 self.setLocalDimming(value)
             }
         }
     }
 
     private func localDimmingMemory() -> [String: Int] {
-        guard let data = UserDefaults.standard.data(forKey: "local_dimming_memory"),
+        guard let data = preferences.data(forKey: "local_dimming_memory"),
               let m = try? JSONDecoder().decode([String: Int].self, from: data) else { return [:] }
         return m
     }
 
     private func saveLocalDimmingMemory(_ m: [String: Int]) {
         if let data = try? JSONEncoder().encode(m) {
-            UserDefaults.standard.set(data, forKey: "local_dimming_memory")
+            preferences.set(data, forKey: "local_dimming_memory")
         }
         updateHdrMemoryStatus()
     }
@@ -1761,13 +1811,13 @@ final class AppState: ObservableObject {
     func toggleFreesyncMemory(_ enabled: Bool) {
         guard let enabled = presetControlPolicy.memoryPreferenceChange(requested: enabled) else { return }
         freesyncMemoryEnabled = enabled
-        UserDefaults.standard.set(enabled, forKey: "freesync_mode_memory_enabled")
+        preferences.set(enabled, forKey: "freesync_mode_memory_enabled")
         log("FreeSync Pro 模式记忆: \(enabled ? "开启" : "关闭")")
         updateFreesyncMemoryStatus()
     }
 
     func updateFreesyncMemoryStatus() {
-        let saved = UserDefaults.standard.integer(forKey: "freesync_previous_mode")
+        let saved = preferences.integer(forKey: "freesync_previous_mode")
         let savedText = saved == 0 ? "--" : (RegisterMap.sceneNames[saved] ?? "\(saved)")
         let status = memoriesSuspendedByPreset ? "已锁定（预设生效或切换中）" : (freesyncMemoryEnabled ? "已开启" : "已关闭")
         let text = "模式记忆：\(status)，记录模式：\(savedText)"
@@ -1781,23 +1831,23 @@ final class AppState: ObservableObject {
     // 回到游戏模式时还原。
 
     private var crosshairMemory: Int? {
-        guard UserDefaults.standard.object(forKey: "crosshair_memory") != nil else { return nil }
-        return UserDefaults.standard.integer(forKey: "crosshair_memory")
+        guard preferences.object(forKey: "crosshair_memory") != nil else { return nil }
+        return preferences.integer(forKey: "crosshair_memory")
     }
 
     private func saveCrosshairMemory(_ value: Int) {
-        UserDefaults.standard.set(value, forKey: "crosshair_memory")
+        preferences.set(value, forKey: "crosshair_memory")
         updateCrosshairModeStatus()
     }
 
     private func clearCrosshairMemory() {
-        UserDefaults.standard.removeObject(forKey: "crosshair_memory")
+        preferences.removeObject(forKey: "crosshair_memory")
         updateCrosshairModeStatus()
     }
 
     func toggleCrosshairGameModeOnly(_ enabled: Bool) {
         crosshairGameModeOnly = enabled
-        UserDefaults.standard.set(enabled, forKey: "crosshair_game_mode_only")
+        preferences.set(enabled, forKey: "crosshair_game_mode_only")
         log("准星仅在游戏模式下生效: \(enabled ? "开启" : "关闭")")
         updateCrosshairModeStatus()
         if enabled { reconcileCrosshairModeState() }
@@ -1864,22 +1914,22 @@ final class AppState: ObservableObject {
     // MARK: - 开机自启动
 
     func setAutostart(_ enabled: Bool) {
-        let exe = Bundle.main.executablePath ?? CommandLine.arguments.first ?? ""
-        Autostart.setEnabled(enabled, executablePath: exe)
+        environment.system.setAutostart(enabled)
+        autostartEnabled = environment.system.autostartEnabled()
         log(enabled ? "已设置开机自启动（下次登录生效）" : "已取消开机自启动")
     }
 
     // MARK: - 菜单栏快捷项
 
     /// 已加入菜单栏的条目 id，顺序即菜单显示顺序。持久化到 UserDefaults。
-    @Published var menuBarItems: [String] = AppState.loadMenuBarItems() {
-        didSet { UserDefaults.standard.set(menuBarItems, forKey: Self.menuBarKey) }
+    @Published var menuBarItems: [String] = [] {
+        didSet { guard !isConfiguring else { return }; preferences.set(menuBarItems, forKey: Self.menuBarKey) }
     }
 
     private static let menuBarKey = "menubar_items"
 
-    private static func loadMenuBarItems() -> [String] {
-        guard let saved = UserDefaults.standard.array(forKey: menuBarKey) as? [String] else {
+    private static func loadMenuBarItems(_ preferences: any PreferencesStore) -> [String] {
+        guard let saved = preferences.array(forKey: menuBarKey) as? [String] else {
             return MenuBarCatalog.defaultEnabled
         }
         // 过滤掉清单里已经不存在的 id（版本升级后清理）
@@ -1950,7 +2000,7 @@ final class AppState: ObservableObject {
 
     /// app 回到前台时重新查一次：用户去系统设置勾选后切回来，警告应该自动消失
     func refreshAccessibilityStatus() {
-        let trusted = HotkeyManager.isTrusted
+        let trusted = environment.system.isTrusted()
         guard accessibilityTrusted != trusted else { return }
         accessibilityTrusted = trusted
         if trusted {
@@ -1963,38 +2013,39 @@ final class AppState: ObservableObject {
 
     /// 引导授权：先弹系统框（只能弹一次），同时把设置页打开
     func requestAccessibilityPermission() {
-        _ = HotkeyManager.promptForAccessibility()
-        HotkeyManager.openAccessibilitySettings()
+        _ = environment.system.promptAccessibility()
+        environment.system.openAccessibility()
         log("请在「系统设置 → 隐私与安全性 → 辅助功能」中勾选本应用，然后回到这里")
     }
 
     // MARK: - 全局快捷键
 
-    private static func loadHotkeys() -> [String: HotkeyConfig] {
-        guard let data = UserDefaults.standard.data(forKey: "hotkeys"),
+    private static func loadHotkeys(_ preferences: any PreferencesStore) -> [String: HotkeyConfig] {
+        guard let data = preferences.data(forKey: "hotkeys"),
               let v = try? JSONDecoder().decode([String: HotkeyConfig].self, from: data) else { return [:] }
         return v
     }
 
-    private static func loadAdjustHotkeys() -> [AdjustHotkeyConfig] {
-        guard let data = UserDefaults.standard.data(forKey: "adjust_hotkeys"),
+    private static func loadAdjustHotkeys(_ preferences: any PreferencesStore) -> [AdjustHotkeyConfig] {
+        guard let data = preferences.data(forKey: "adjust_hotkeys"),
               let v = try? JSONDecoder().decode([AdjustHotkeyConfig].self, from: data) else { return [] }
         return v
     }
 
     func saveHotkeys() {
         if let data = try? JSONEncoder().encode(hotkeys) {
-            UserDefaults.standard.set(data, forKey: "hotkeys")
+            preferences.set(data, forKey: "hotkeys")
         }
         if let data = try? JSONEncoder().encode(adjustHotkeys) {
-            UserDefaults.standard.set(data, forKey: "adjust_hotkeys")
+            preferences.set(data, forKey: "adjust_hotkeys")
         }
         applyHotkeys()
-        HotkeyManager.requestAccessibility()
+        requestAccessibilityPrompt()
         log("全局快捷键已保存并重新注册（如未生效请在系统设置→隐私与安全性→辅助功能中勾选本应用）")
     }
 
     private func applyHotkeys() {
+        guard isRunning else { return }
         hotkeyManager.clear()
         for (action, cfg) in hotkeys where cfg.isEnabled {
             hotkeyManager.register(id: action, modifierName: cfg.modifier, keyName: cfg.key)
@@ -2032,7 +2083,7 @@ final class AppState: ObservableObject {
         log("全局快捷键: 注册 \(hotkeyManager.bindingCount) 个"
             + (hotkeyManager.mediaBindingCount > 0 ? " + 媒体键 \(hotkeyManager.mediaBindingCount) 个" : "")
             + "，监听\(started ? "已启动" : "启动失败")"
-            + "（辅助功能权限：\(HotkeyManager.isTrusted ? "已授予" : "未授予")）")
+            + "（辅助功能权限：\(environment.system.isTrusted() ? "已授予" : "未授予")）")
     }
 
     private func handleHotkeyTrigger(_ id: String) {
@@ -2090,13 +2141,13 @@ final class AppState: ObservableObject {
 
     /// 是否启用「松手后生效」的倒计时。
     /// 关掉之后每次按键立即下发 —— 更跟手，但连按会把 ADB 命令堆起来。
-    @Published var hotkeyCountdownEnabled = UserDefaults.standard.object(forKey: "hotkey_countdown_enabled") as? Bool ?? true {
-        didSet { UserDefaults.standard.set(hotkeyCountdownEnabled, forKey: "hotkey_countdown_enabled") }
+    @Published var hotkeyCountdownEnabled = true {
+        didSet { guard !isConfiguring else { return }; preferences.set(hotkeyCountdownEnabled, forKey: "hotkey_countdown_enabled") }
     }
 
     /// 倒计时时长（秒）。HUD 的进度条就是这个时长，两边一起变。
-    @Published var hotkeyCountdownSeconds = UserDefaults.standard.object(forKey: "hotkey_countdown_seconds") as? Double ?? 0.8 {
-        didSet { UserDefaults.standard.set(hotkeyCountdownSeconds, forKey: "hotkey_countdown_seconds") }
+    @Published var hotkeyCountdownSeconds = 0.8 {
+        didSet { guard !isConfiguring else { return }; preferences.set(hotkeyCountdownSeconds, forKey: "hotkey_countdown_seconds") }
     }
 
     /// 实际生效前等待多久。0 表示不等待。下限 0.1s 是为了避免设成 0 之后
@@ -2134,20 +2185,20 @@ final class AppState: ObservableObject {
 
         // 关掉倒计时：立即下发，HUD 也不显示进度条
         guard delay > 0 else {
-            HUDWindow.shared.show(title: label, value: nameFor(next))
+            environment.feedback.show(title: label, value: nameFor(next))
             apply(next)
             return
         }
 
-        HUDWindow.shared.show(title: label, value: nameFor(next), countdown: delay)
+        environment.feedback.show(title: label, value: nameFor(next), countdown: delay)
         let work = DispatchWorkItem { [weak self] in
             guard let self else { return }
             self.cyclePending[actionId] = nil
             apply(next)
-            HUDWindow.shared.endCountdown()
+            environment.feedback.endCountdown()
         }
         cyclePending[actionId] = (next, work)
-        DispatchQueue.main.asyncAfter(deadline: .now() + delay, execute: work)
+        environment.scheduler.after(delay, work: work)
     }
 
     private func cyclePictureMode() {
@@ -2171,7 +2222,7 @@ final class AppState: ObservableObject {
         guard isConnected else { return log("未连接") }
         let names = ["关", "低", "中", "高"]
         let next = intValue("picture_local_dimming", default: 3) == 0 ? 3 : 0
-        HUDWindow.shared.show(title: "精密控光", value: names[next])
+        environment.feedback.show(title: "精密控光", value: names[next])
         setLocalDimming(next)
     }
 
@@ -2257,7 +2308,7 @@ final class AppState: ObservableObject {
         if mediaBrightnessNativeOSD {
             // 系统 OSD 固定 16 格，按用户步长（如 10）会出现「一格 / 两格」乱跳，
             // 所以开原生 OSD 时固定每按一次移动一格。
-            let chiclets = NativeOSD.chicletCount
+            let chiclets = 16
             let chiclet = Int((Double(current) / 100 * Double(chiclets)).rounded())
             let target = min(max(chiclet + (increase ? 1 : -1), 0), chiclets)
             next = clamp(Int((Double(target) / Double(chiclets) * 100).rounded()), 1, 100)
@@ -2269,10 +2320,10 @@ final class AppState: ObservableObject {
         currentValues["picture_backlight"] = String(next)
 
         // 视觉反馈立刻跟上手（OSD/HUD 显示到目标值）
-        if mediaBrightnessNativeOSD, NativeOSD.shared.showBrightness(value: next) {
+        if mediaBrightnessNativeOSD, environment.feedback.brightness(next) {
             // 原生 OSD 自带淡出，不需要收尾
         } else {
-            HUDWindow.shared.show(title: "背光", value: "\(next)")
+            environment.feedback.show(title: "背光", value: "\(next)")
         }
 
         // 首次按下立即下发：按键即响应，不等去抖。
@@ -2298,7 +2349,7 @@ final class AppState: ObservableObject {
             self.commitMediaBrightness()
         }
         mediaBrightnessCommit = work
-        DispatchQueue.main.asyncAfter(deadline: .now() + mediaBrightnessCommitDelay, execute: work)
+        environment.scheduler.after(mediaBrightnessCommitDelay, work: work)
     }
 
     /// 把当前预览值下发到显示器（渐变）。目标值和已下发值相同时跳过，避免空跑一次。
@@ -2345,7 +2396,7 @@ final class AppState: ObservableObject {
         AudioOutputMonitor.shouldHandleVolumeKeys(enabled: mediaVolumeKeysEnabled,
             adbConnected: isConnected, gateEnabled: mediaVolumeOutputGateEnabled,
             configuredOutputName: mediaVolumeOutputName,
-            outputName: AudioOutputMonitor.defaultOutputDeviceName())
+            outputName: environment.system.defaultOutput())
     }
 
     /// 空闲时回读一次音量/静音状态（连接后 + 每 5 秒）。
@@ -2376,7 +2427,7 @@ final class AppState: ObservableObject {
         let next: Int
         if mediaVolumeNativeOSD {
             // 系统 OSD 固定 16 格；开原生 OSD 时每按一次移动一格（和系统音量键一致）
-            let chiclets = NativeOSD.chicletCount
+            let chiclets = 16
             let chiclet = Int((Double(base) / 100 * Double(chiclets)).rounded())
             let target = min(max(chiclet + (increase ? 1 : -1), 0), chiclets)
             next = clamp(Int((Double(target) / Double(chiclets) * 100).rounded()), 0, 100)
@@ -2393,10 +2444,10 @@ final class AppState: ObservableObject {
         dashboardMuted = false
         currentValues["volume_music_speaker"] = String(next)
 
-        if mediaVolumeNativeOSD, NativeOSD.shared.showVolume(value: next) {
+        if mediaVolumeNativeOSD, environment.feedback.volume(next) {
             // 原生 OSD 自带淡出，不需要收尾
         } else {
-            HUDWindow.shared.show(title: "音量", value: "\(next)")
+            environment.feedback.show(title: "音量", value: "\(next)")
         }
 
         // 首次按下立即下发；之后连按只更新预览，由收尾任务合并成最后一次
@@ -2419,7 +2470,7 @@ final class AppState: ObservableObject {
             self.commitMediaVolume()
         }
         mediaVolumeCommit = work
-        DispatchQueue.main.asyncAfter(deadline: .now() + mediaVolumeCommitDelay, execute: work)
+        environment.scheduler.after(mediaVolumeCommitDelay, work: work)
     }
 
     /// 把当前预览值绝对写到设备。目标值和已下发值相同时跳过，避免空跑一次。
@@ -2461,10 +2512,10 @@ final class AppState: ObservableObject {
         dashboardMuted = muted
         // 更新的静音动作覆盖掉「按键先解除静音」的意图，避免收尾提交把它又打开
         mediaVolumeNeedsUnmute = false
-        if mediaVolumeNativeOSD, NativeOSD.shared.showMute() {
+        if mediaVolumeNativeOSD, environment.feedback.mute() {
             // 原生静音 OSD
         } else {
-            HUDWindow.shared.show(title: "静音", value: muted ? "开" : "关")
+            environment.feedback.show(title: "静音", value: muted ? "开" : "关")
         }
         guard writeToDevice else { return }
         runBackground {
@@ -2534,29 +2585,9 @@ final class AppState: ObservableObject {
 
     /// 目标显示器的 displayID（按系统名称匹配）
     private var targetMonitorDisplayID: CGDirectDisplayID? {
-        let name = mediaBrightnessDisplayName.trimmingCharacters(in: .whitespaces)
-        guard !name.isEmpty else { return nil }
-        for screen in NSScreen.screens {
-            guard screen.localizedName.localizedCaseInsensitiveContains(name),
-                  let number = screen.deviceDescription[NSDeviceDescriptionKey("NSScreenNumber")] as? NSNumber
-            else { continue }
-            return CGDirectDisplayID(number.uint32Value)
-        }
-        return nil
+        environment.system.targetDisplay(mediaBrightnessDisplayName.trimmingCharacters(in: .whitespaces))
     }
-
-    /// 鼠标所在的显示器。多屏时用它当「焦点」判据 —— 比取最前面的窗口更直观。
-    private func focusedDisplayID() -> CGDirectDisplayID? {
-        let mouse = NSEvent.mouseLocation
-        if let screen = NSScreen.screens.first(where: { NSMouseInRect(mouse, $0.frame, false) }),
-           let number = screen.deviceDescription[NSDeviceDescriptionKey("NSScreenNumber")] as? NSNumber {
-            return CGDirectDisplayID(number.uint32Value)
-        }
-        return NSScreen.main.flatMap { screen in
-            (screen.deviceDescription[NSDeviceDescriptionKey("NSScreenNumber")] as? NSNumber)
-                .map { CGDirectDisplayID($0.uint32Value) }
-        }
-    }
+    private func focusedDisplayID() -> CGDirectDisplayID? { environment.system.focusedDisplay() }
 
     /// 多屏焦点门：只有鼠标在目标显示器上才拦截亮度键；找不到目标显示器时不过滤。
     func shouldHandleMediaBrightnessForFocus() -> Bool {
@@ -2598,22 +2629,22 @@ final class AppState: ObservableObject {
             adjustPendingWork[param] = nil
 
             guard delay > 0 else {
-                HUDWindow.shared.show(title: label, value: "\(next)")
+                environment.feedback.show(title: label, value: "\(next)")
                 adjustPendingValues[param] = nil
                 apply(next)
                 return
             }
 
-            HUDWindow.shared.show(title: label, value: "\(next)", countdown: delay)
+            environment.feedback.show(title: label, value: "\(next)", countdown: delay)
             let work = DispatchWorkItem { [weak self] in
                 guard let self else { return }
                 self.adjustPendingWork[param] = nil
                 self.adjustPendingValues[param] = nil
                 apply(next)
-                HUDWindow.shared.endCountdown()
+                environment.feedback.endCountdown()
             }
             adjustPendingWork[param] = work
-            DispatchQueue.main.asyncAfter(deadline: .now() + delay, execute: work)
+            environment.scheduler.after(delay, work: work)
         }
 
         switch param {
@@ -2676,22 +2707,22 @@ final class AppState: ObservableObject {
             adjustPendingWork[param] = nil
 
             guard delay > 0 else {
-                HUDWindow.shared.show(title: "屏幕灯亮度", value: "\(nextUI)")
+                environment.feedback.show(title: "屏幕灯亮度", value: "\(nextUI)")
                 adjustPendingValues[param] = nil
                 setLightIllumination(nextUI)
                 return
             }
 
-            HUDWindow.shared.show(title: "屏幕灯亮度", value: "\(nextUI)", countdown: delay)
+            environment.feedback.show(title: "屏幕灯亮度", value: "\(nextUI)", countdown: delay)
             let work = DispatchWorkItem { [weak self] in
                 guard let self else { return }
                 self.adjustPendingWork[param] = nil
                 self.adjustPendingValues[param] = nil
                 self.setLightIllumination(nextUI)
-                HUDWindow.shared.endCountdown()
+                environment.feedback.endCountdown()
             }
             adjustPendingWork[param] = work
-            DispatchQueue.main.asyncAfter(deadline: .now() + delay, execute: work)
+            environment.scheduler.after(delay, work: work)
         default:
             break
         }

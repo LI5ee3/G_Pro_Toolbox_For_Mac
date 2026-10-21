@@ -96,6 +96,8 @@ final class NativeOSD {
         return proxy
     }
 
+    func stop() { reset() }
+
     private func reset() {
         connection?.invalidationHandler = nil
         connection?.interruptionHandler = nil
