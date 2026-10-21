@@ -52,10 +52,17 @@ fileprivate struct GuardianStatus {
     }
 }
 
-/// 应用状态：连接状态、当前读取值、日志，以及所有显示器控制动作。
+/// Migration action coordinator. Observable state belongs to narrow MainActor models, never this facade.
 /// 对应原版 App 类的职责（不含 UI 控件，UI 由各 View 负责）。
 @MainActor
-package final class AppState: ObservableObject {
+package final class AppState {
+    let connection = ConnectionModel()
+    let picture = PictureModel()
+    let presets = PresetsModel()
+    let navigation = NavigationModel()
+    let volume = VolumeModel()
+    let tools = ToolsModel()
+    let keyboard = HotkeysModel()
     package nonisolated let adb: AdbClient
     package nonisolated let environment: AppEnvironment
     nonisolated let preferences: any PreferencesStore
@@ -65,18 +72,42 @@ package final class AppState: ObservableObject {
     private var runtimeTasks: [RuntimeCancellation] = []
     private var startupWork: [DispatchWorkItem] = []
     let hotkeyManager: HotkeyManager
-    var connectionIntent = ConnectionIntent()
+    var connectionIntent: ConnectionIntent {
+        get { connection.intent }
+        set { connection.intent = newValue }
+    }
     private var pageRefreshIntent = PageRefreshIntent()
     private let connectionQueue = DispatchQueue(label: "com.mimonitor.toolbox.connection")
     nonisolated let deviceQueue = DispatchQueue(label: "com.mimonitor.toolbox.device", qos: .userInitiated)
     nonisolated let presetEngine: PresetEngine
-    @Published var presetConfiguration = PresetConfiguration()
-    @Published var isPresetBusy = false
-    @Published var isPresetOperationInFlight = false
-    @Published var presetOperationText = ""
-    @Published var presetError: String?
-    @Published var automaticTaskStatus = ""
-    @Published var requestedPage: Page?
+    var presetConfiguration: PresetConfiguration {
+        get { presets.presetConfiguration }
+        set { presets.presetConfiguration = newValue }
+    }
+    var isPresetBusy: Bool {
+        get { presets.isPresetBusy }
+        set { presets.isPresetBusy = newValue }
+    }
+    var isPresetOperationInFlight: Bool {
+        get { presets.isPresetOperationInFlight }
+        set { presets.isPresetOperationInFlight = newValue }
+    }
+    var presetOperationText: String {
+        get { presets.presetOperationText }
+        set { presets.presetOperationText = newValue }
+    }
+    var presetError: String? {
+        get { presets.presetError }
+        set { presets.presetError = newValue }
+    }
+    var automaticTaskStatus: String {
+        get { presets.automaticTaskStatus }
+        set { presets.automaticTaskStatus = newValue }
+    }
+    var requestedPage: Page? {
+        get { navigation.requestedPage }
+        set { navigation.requestedPage = newValue }
+    }
     var presetTimer: RuntimeCancellation?
     var pendingPresetSave: DispatchWorkItem?
     var pendingPresetSaveID: String?
@@ -86,116 +117,188 @@ package final class AppState: ObservableObject {
     nonisolated let deviceWorkState = DeviceWorkState()
     var lastAutomaticTaskError = ""
 
-    @Published package var connectionStatus: ConnectionStatus = .disconnected
-    @Published package var currentValues: [String: String] = [:]
+    package var connectionStatus: ConnectionStatus {
+        get { connection.connectionStatus }
+        set { connection.connectionStatus = newValue }
+    }
+    package var currentValues: [String: String] {
+        get { picture.currentValues }
+        set { picture.currentValues = newValue }
+    }
     let logs = LogModel()
     var logLines: [String] { get { logs.lines } set { logs.lines = newValue } }
     /// 每写一行日志就自增。界面靠它触发自动滚动 ——
     /// 不能用 logLines.count：日志满 500 行后会 removeFirst，count 恒定不变，
     /// 于是滚动就再也不触发了。
     var logSeq: Int { get { logs.sequence } set { logs.sequence = newValue } }
-    @Published var scannedDevices: [String] = []
-    @Published var scannedDeviceModels: [String: String] = [:]
-    @Published var selectedDevice: String = ""
-    @Published var activeSource: String = "未知"
-    @Published package var loadedPages: Set<String> = []
-    @Published var isBusy: Bool = false
+    var scannedDevices: [String] {
+        get { connection.scannedDevices }
+        set { connection.scannedDevices = newValue }
+    }
+    var scannedDeviceModels: [String: String] {
+        get { connection.scannedDeviceModels }
+        set { connection.scannedDeviceModels = newValue }
+    }
+    var selectedDevice: String {
+        get { connection.selectedDevice }
+        set { connection.selectedDevice = newValue }
+    }
+    var activeSource: String {
+        get { picture.activeSource }
+        set { picture.activeSource = newValue }
+    }
+    package var loadedPages: Set<String> {
+        get { picture.loadedPages }
+        set { picture.loadedPages = newValue }
+    }
+    var isBusy: Bool {
+        get { picture.isBusy }
+        set { picture.isBusy = newValue }
+    }
     /// 正在刷新的页面，用于显示 loading 遮罩
-    @Published var loadingPages: Set<String> = []
+    var loadingPages: Set<String> {
+        get { picture.loadingPages }
+        set { picture.loadingPages = newValue }
+    }
 
-    @Published package var ipInput: String = ""
+    package var ipInput: String {
+        get { connection.ipInput }
+        set { connection.ipInput = newValue }
+    }
 
     // 工具页状态
     var logToFileEnabled: Bool { get { logs.recordsToFile } set { logs.recordsToFile = newValue } }
-    @Published var guardianStatus = "状态：未检测"
-    @Published var hdrMemoryEnabled = false
+    var guardianStatus: String {
+        get { tools.guardianStatus }
+        set { tools.guardianStatus = newValue }
+    }
+    var hdrMemoryEnabled: Bool {
+        get { tools.hdrMemoryEnabled }
+        set { tools.hdrMemoryEnabled = newValue }
+    }
     /// 显示器当前是否处于 4K UI 模式（由 check4KState 检测得到）
-    @Published var is4KUI = false
-    @Published var freesyncMemoryEnabled = false
-    @Published var hdrMemoryStatusText = ""
-    @Published var freesyncMemoryStatusText = ""
+    var is4KUI: Bool {
+        get { tools.is4KUI }
+        set { tools.is4KUI = newValue }
+    }
+    var freesyncMemoryEnabled: Bool {
+        get { tools.freesyncMemoryEnabled }
+        set { tools.freesyncMemoryEnabled = newValue }
+    }
+    var hdrMemoryStatusText: String {
+        get { tools.hdrMemoryStatusText }
+        set { tools.hdrMemoryStatusText = newValue }
+    }
+    var freesyncMemoryStatusText: String {
+        get { tools.freesyncMemoryStatusText }
+        set { tools.freesyncMemoryStatusText = newValue }
+    }
     /// 准星是否只在游戏模式下生效。默认值 true 在 App.init() 里用
     /// register(defaults:) 注册，所以这里可以直接用 bool(forKey:)。
-    @Published var crosshairGameModeOnly = false
-    @Published var crosshairModeStatusText = ""
+    var crosshairGameModeOnly: Bool {
+        get { tools.crosshairGameModeOnly }
+        set { tools.crosshairGameModeOnly = newValue }
+    }
+    var crosshairModeStatusText: String {
+        get { tools.crosshairModeStatusText }
+        set { tools.crosshairModeStatusText = newValue }
+    }
     /// 准星联动写入进行中，挡住重入的 reconcile
     private var crosshairReconcileBusy = false
     /// 上一次对账时的画面模式，用于区分「进入游戏模式」与「一直在游戏模式」
     private var crosshairLastMode: String?
     /// 本 app 是否已获辅助功能权限（和终端是两回事，各算各的）
-    @Published var accessibilityTrusted = false
+    var accessibilityTrusted: Bool {
+        get { keyboard.accessibilityTrusted }
+        set { keyboard.accessibilityTrusted = newValue }
+    }
 
     /// 快捷键诊断日志。默认关闭：正常打字时每按一个不匹配的键都会记一行，很快把日志刷满。
-    @Published var hotkeyDebugEnabled = false {
-        didSet { guard !isConfiguring else { return }; preferences.set(hotkeyDebugEnabled, forKey: "hotkey_debug") }
+    var hotkeyDebugEnabled: Bool {
+        get { keyboard.hotkeyDebugEnabled }
+        set { keyboard.hotkeyDebugEnabled = newValue; guard !isConfiguring else { return }; preferences.set(hotkeyDebugEnabled, forKey: "hotkey_debug") }
     }
-    @Published var hotkeys: [String: HotkeyConfig] = [:]
-    @Published var adjustHotkeys: [AdjustHotkeyConfig] = []
+    var hotkeys: [String: HotkeyConfig] {
+        get { keyboard.hotkeys }
+        set { keyboard.hotkeys = newValue }
+    }
+    var adjustHotkeys: [AdjustHotkeyConfig] {
+        get { keyboard.adjustHotkeys }
+        set { keyboard.adjustHotkeys = newValue }
+    }
 
     /// 是否把系统亮度调节键接管为显示器背光调节。
     /// 开启后 HotkeyManager 会吞掉系统亮度调节键事件，内置屏幕不再跟着变。
-    @Published var mediaBrightnessKeysEnabled = false {
-        didSet { guard !isConfiguring else { return };
+    var mediaBrightnessKeysEnabled: Bool {
+        get { keyboard.mediaBrightnessKeysEnabled }
+        set { keyboard.mediaBrightnessKeysEnabled = newValue; guard !isConfiguring else { return };
             preferences.set(mediaBrightnessKeysEnabled, forKey: "media_brightness_keys_enabled")
             applyHotkeys()
             if mediaBrightnessKeysEnabled, !environment.system.isTrusted() {
                 requestAccessibilityPrompt()
-            }
-        }
+            } }
     }
 
     /// 亮度调节键每按一次的背光步长
-    @Published var mediaBrightnessStep = 5 {
-        didSet { guard !isConfiguring else { return }; preferences.set(mediaBrightnessStep, forKey: "media_brightness_step") }
+    var mediaBrightnessStep: Int {
+        get { keyboard.mediaBrightnessStep }
+        set { keyboard.mediaBrightnessStep = newValue; guard !isConfiguring else { return }; preferences.set(mediaBrightnessStep, forKey: "media_brightness_step") }
     }
 
     /// 亮度调节键是否显示 macOS 原生亮度 OSD（而不是本应用 HUD）。
     /// 走私有 OSDUIHelper，失败会自动回退到 HUD。
-    @Published var mediaBrightnessNativeOSD = true {
-        didSet { guard !isConfiguring else { return }; preferences.set(mediaBrightnessNativeOSD, forKey: "media_brightness_native_osd") }
+    var mediaBrightnessNativeOSD: Bool {
+        get { keyboard.mediaBrightnessNativeOSD }
+        set { keyboard.mediaBrightnessNativeOSD = newValue; guard !isConfiguring else { return }; preferences.set(mediaBrightnessNativeOSD, forKey: "media_brightness_native_osd") }
     }
 
     /// 多屏时是否只在焦点位于目标显示器上才拦截亮度键；焦点不在时就交回系统。
-    @Published var mediaBrightnessFocusOnly = true {
-        didSet { guard !isConfiguring else { return }; preferences.set(mediaBrightnessFocusOnly, forKey: "media_brightness_focus_only") }
+    var mediaBrightnessFocusOnly: Bool {
+        get { keyboard.mediaBrightnessFocusOnly }
+        set { keyboard.mediaBrightnessFocusOnly = newValue; guard !isConfiguring else { return }; preferences.set(mediaBrightnessFocusOnly, forKey: "media_brightness_focus_only") }
     }
 
     /// 目标显示器的系统名称（用于多屏焦点判断），默认按 EDID 名 "Mi Monitor"。
-    @Published var mediaBrightnessDisplayName = "Mi Monitor" {
-        didSet { guard !isConfiguring else { return }; preferences.set(mediaBrightnessDisplayName, forKey: "media_brightness_display_name") }
+    var mediaBrightnessDisplayName: String {
+        get { keyboard.mediaBrightnessDisplayName }
+        set { keyboard.mediaBrightnessDisplayName = newValue; guard !isConfiguring else { return }; preferences.set(mediaBrightnessDisplayName, forKey: "media_brightness_display_name") }
     }
 
     /// 是否把系统音量调节键接管为显示器音量。
     /// 只在「当前默认音频输出匹配目标设备」时生效，否则交回系统去调内置扬声器/AirPods。
-    @Published var mediaVolumeKeysEnabled = false {
-        didSet { guard !isConfiguring else { return };
+    var mediaVolumeKeysEnabled: Bool {
+        get { keyboard.mediaVolumeKeysEnabled }
+        set { keyboard.mediaVolumeKeysEnabled = newValue; guard !isConfiguring else { return };
             preferences.set(mediaVolumeKeysEnabled, forKey: "media_volume_keys_enabled")
             applyHotkeys()
             if mediaVolumeKeysEnabled {
                 if !environment.system.isTrusted() { requestAccessibilityPrompt() }
                 refreshMediaVolumeState()
-            }
-        }
+            } }
     }
 
     /// 关掉原生音量 OSD 时，每按一次的音量步长
-    @Published var mediaVolumeStep = 5 {
-        didSet { guard !isConfiguring else { return }; preferences.set(mediaVolumeStep, forKey: "media_volume_step") }
+    var mediaVolumeStep: Int {
+        get { keyboard.mediaVolumeStep }
+        set { keyboard.mediaVolumeStep = newValue; guard !isConfiguring else { return }; preferences.set(mediaVolumeStep, forKey: "media_volume_step") }
     }
 
     /// 音量键是否显示 macOS 原生音量 OSD（走私有 OSDUIHelper，失败回退本应用 HUD）。
-    @Published var mediaVolumeNativeOSD = true {
-        didSet { guard !isConfiguring else { return }; preferences.set(mediaVolumeNativeOSD, forKey: "media_volume_native_osd") }
+    var mediaVolumeNativeOSD: Bool {
+        get { keyboard.mediaVolumeNativeOSD }
+        set { keyboard.mediaVolumeNativeOSD = newValue; guard !isConfiguring else { return }; preferences.set(mediaVolumeNativeOSD, forKey: "media_volume_native_osd") }
     }
 
     /// 是否只在默认音频输出匹配指定名称时才接管音量键
-    @Published var mediaVolumeOutputGateEnabled = true {
-        didSet { guard !isConfiguring else { return }; preferences.set(mediaVolumeOutputGateEnabled, forKey: "media_volume_output_gate") }
+    var mediaVolumeOutputGateEnabled: Bool {
+        get { keyboard.mediaVolumeOutputGateEnabled }
+        set { keyboard.mediaVolumeOutputGateEnabled = newValue; guard !isConfiguring else { return }; preferences.set(mediaVolumeOutputGateEnabled, forKey: "media_volume_output_gate") }
     }
 
     /// 目标音频输出设备名（CoreAudio 设备名，匹配用「包含」）
-    @Published var mediaVolumeOutputName = "Mi Monitor" {
-        didSet { guard !isConfiguring else { return }; preferences.set(mediaVolumeOutputName, forKey: "media_volume_output_name") }
+    var mediaVolumeOutputName: String {
+        get { keyboard.mediaVolumeOutputName }
+        set { keyboard.mediaVolumeOutputName = newValue; guard !isConfiguring else { return }; preferences.set(mediaVolumeOutputName, forKey: "media_volume_output_name") }
     }
 
     private var hdrLastState: Bool?
@@ -924,7 +1027,7 @@ package final class AppState: ObservableObject {
         }
     }
 
-    /// 合并写入 currentValues。必须整体赋值：逐个键赋值会让 @Published 触发 N 次重绘。
+    /// 合并当前读数后统一发布，避免每个键分别触发观察者。
     private func mergeValues(_ values: [String: String]) {
         guard !values.isEmpty else { return }
         var merged = currentValues
@@ -1798,7 +1901,7 @@ package final class AppState: ObservableObject {
         let sourceText = hdrStateSource.isEmpty ? "" : "（\(hdrStateSource)）"
         let status = memoriesSuspendedByPreset ? "已锁定（预设生效或切换中）" : (hdrMemoryEnabled ? "已开启" : "已关闭")
         let text = "分区控光记忆：\(status)，当前信号：\(stateText)\(sourceText)，记忆模式：SDR=\(sdrText) / HDR=\(hdrText)"
-        // 只在内容真的变了才赋值：@Published 每次赋值都会让整个界面重绘，
+        // 只在内容真的变了才赋值，避免无意义的观察通知，
         // 而 HDR 状态是 3 秒轮询一次，无脑赋值等于每 3 秒全量重绘一次。
         if hdrMemoryStatusText != text { hdrMemoryStatusText = text }
     }
@@ -1919,8 +2022,9 @@ package final class AppState: ObservableObject {
     // MARK: - 菜单栏快捷项
 
     /// 已加入菜单栏的条目 id，顺序即菜单显示顺序。持久化到 UserDefaults。
-    @Published var menuBarItems: [String] = [] {
-        didSet { guard !isConfiguring else { return }; preferences.set(menuBarItems, forKey: Self.menuBarKey) }
+    var menuBarItems: [String] {
+        get { keyboard.menuBarItems }
+        set { keyboard.menuBarItems = newValue; guard !isConfiguring else { return }; preferences.set(menuBarItems, forKey: Self.menuBarKey) }
     }
 
     private static let menuBarKey = "menubar_items"
@@ -2138,13 +2242,15 @@ package final class AppState: ObservableObject {
 
     /// 是否启用「松手后生效」的倒计时。
     /// 关掉之后每次按键立即下发 —— 更跟手，但连按会把 ADB 命令堆起来。
-    @Published var hotkeyCountdownEnabled = true {
-        didSet { guard !isConfiguring else { return }; preferences.set(hotkeyCountdownEnabled, forKey: "hotkey_countdown_enabled") }
+    var hotkeyCountdownEnabled: Bool {
+        get { keyboard.hotkeyCountdownEnabled }
+        set { keyboard.hotkeyCountdownEnabled = newValue; guard !isConfiguring else { return }; preferences.set(hotkeyCountdownEnabled, forKey: "hotkey_countdown_enabled") }
     }
 
     /// 倒计时时长（秒）。HUD 的进度条就是这个时长，两边一起变。
-    @Published var hotkeyCountdownSeconds = 0.8 {
-        didSet { guard !isConfiguring else { return }; preferences.set(hotkeyCountdownSeconds, forKey: "hotkey_countdown_seconds") }
+    var hotkeyCountdownSeconds: Double {
+        get { keyboard.hotkeyCountdownSeconds }
+        set { keyboard.hotkeyCountdownSeconds = newValue; guard !isConfiguring else { return }; preferences.set(hotkeyCountdownSeconds, forKey: "hotkey_countdown_seconds") }
     }
 
     /// 实际生效前等待多久。0 表示不等待。下限 0.1s 是为了避免设成 0 之后
@@ -2367,9 +2473,18 @@ package final class AppState: ObservableObject {
 
     /// 音量预览值：连按/长按时拿它当基准；设备回读只在空闲时刷新，
     /// 不会因为中间某次回读跳变把音量带回旧值。
-    @Published private(set) var dashboardVolume: Int?
-    @Published private(set) var dashboardMuted: Bool?
-    @Published private(set) var dashboardVolumeError: String?
+    var dashboardVolume: Int? {
+        get { volume.dashboardVolume }
+        set { volume.dashboardVolume = newValue }
+    }
+    var dashboardMuted: Bool? {
+        get { volume.dashboardMuted }
+        set { volume.dashboardMuted = newValue }
+    }
+    var dashboardVolumeError: String? {
+        get { volume.dashboardVolumeError }
+        set { volume.dashboardVolumeError = newValue }
+    }
     private var mediaVolumePreview: Int?
     /// 最近一次真正下发到设备的音量
     private var mediaVolumeHardware: Int?

@@ -2,7 +2,7 @@ import SwiftUI
 import UniformTypeIdentifiers
 
 struct ToolsView: View {
-    @EnvironmentObject var state: AppState
+    @ToolboxActions var state
     @Environment(SettingsModel.self) private var settings
     @State private var pending4K = false
     @State private var show4KConfirm = false
@@ -64,7 +64,7 @@ struct ToolsView: View {
         .tint(Theme.accent)
         .onAppear { state.check4KState() }
         .sheet(isPresented: $showHotkeySheet) {
-            HotkeyConfigSheet().environmentObject(state)
+            HotkeyConfigSheet().environment(\.toolboxActions, state)
         }
         .alert("切换 4K UI 会重启显示器，继续？", isPresented: $show4KConfirm) {
             Button("取消", role: .cancel) { }
@@ -271,7 +271,7 @@ struct ToolsView: View {
 /// 独立的配置 sheet。放在 sheet 里而不是内联折叠，是因为内联展开会改变整页高度、
 /// 触发工具页所有卡片的重新布局（实测 850ms）。
 struct HotkeyConfigSheet: View {
-    @EnvironmentObject var state: AppState
+    @ToolboxActions var state
     @Environment(\.dismiss) private var dismiss
 
     var body: some View {
@@ -315,11 +315,11 @@ struct HotkeyConfigSheet: View {
                         // 系统亮度调节键直接接管为显示器背光。
                         // 这类键可能以 NX_SYSDEFINED 或普通 keyDown(144/145) 到达，都要拦。
                         HStack(spacing: 12) {
-                            Toggle("亮度调节键调显示器背光", isOn: $state.mediaBrightnessKeysEnabled)
+                            Toggle("亮度调节键调显示器背光", isOn: Binding(get: { state.mediaBrightnessKeysEnabled }, set: { state.mediaBrightnessKeysEnabled = $0 }))
                                 .toggleStyle(.checkbox)
                             // 开原生 OSD 时步长固定 16 格，整个隐藏，别留一个灰着的「步长 10」
                             if !state.mediaBrightnessNativeOSD {
-                                Stepper("步长 \(state.mediaBrightnessStep)", value: $state.mediaBrightnessStep, in: 1...100)
+                                Stepper("步长 \(state.mediaBrightnessStep)", value: Binding(get: { state.mediaBrightnessStep }, set: { state.mediaBrightnessStep = $0 }), in: 1...100)
                                     .frame(width: 140)
                                     .disabled(!state.mediaBrightnessKeysEnabled)
                             }
@@ -329,7 +329,7 @@ struct HotkeyConfigSheet: View {
                             .font(.system(size: 13))
                             .foregroundStyle(Theme.secondaryText)
 
-                        Toggle("使用 macOS 原生亮度提示（OSD）", isOn: $state.mediaBrightnessNativeOSD)
+                        Toggle("使用 macOS 原生亮度提示（OSD）", isOn: Binding(get: { state.mediaBrightnessNativeOSD }, set: { state.mediaBrightnessNativeOSD = $0 }))
                             .toggleStyle(.checkbox)
                             .disabled(!state.mediaBrightnessKeysEnabled)
                         Text(state.mediaBrightnessNativeOSD
@@ -338,14 +338,14 @@ struct HotkeyConfigSheet: View {
                             .font(.system(size: 13))
                             .foregroundStyle(Theme.secondaryText)
 
-                        Toggle("多屏时仅在鼠标位于「\(state.mediaBrightnessDisplayName)」时拦截", isOn: $state.mediaBrightnessFocusOnly)
+                        Toggle("多屏时仅在鼠标位于「\(state.mediaBrightnessDisplayName)」时拦截", isOn: Binding(get: { state.mediaBrightnessFocusOnly }, set: { state.mediaBrightnessFocusOnly = $0 }))
                             .toggleStyle(.checkbox)
                             .disabled(!state.mediaBrightnessKeysEnabled)
                         HStack(spacing: 8) {
                             Text("显示器名称")
                                 .font(.system(size: 13))
                                 .foregroundStyle(Theme.secondaryText)
-                            TextField("Mi Monitor", text: $state.mediaBrightnessDisplayName)
+                            TextField("Mi Monitor", text: Binding(get: { state.mediaBrightnessDisplayName }, set: { state.mediaBrightnessDisplayName = $0 }))
                                 .textFieldStyle(.roundedBorder)
                                 .frame(width: 200)
                             Spacer()
@@ -362,10 +362,10 @@ struct HotkeyConfigSheet: View {
                     SettingsTaskSection(title: "音量键") {
                         // 系统音量调节键接管为显示器音量。
                         HStack(spacing: 12) {
-                            Toggle("音量调节键调显示器音量", isOn: $state.mediaVolumeKeysEnabled)
+                            Toggle("音量调节键调显示器音量", isOn: Binding(get: { state.mediaVolumeKeysEnabled }, set: { state.mediaVolumeKeysEnabled = $0 }))
                                 .toggleStyle(.checkbox)
                             if !state.mediaVolumeNativeOSD {
-                                Stepper("步长 \(state.mediaVolumeStep)", value: $state.mediaVolumeStep, in: 1...100)
+                                Stepper("步长 \(state.mediaVolumeStep)", value: Binding(get: { state.mediaVolumeStep }, set: { state.mediaVolumeStep = $0 }), in: 1...100)
                                     .frame(width: 140)
                                     .disabled(!state.mediaVolumeKeysEnabled)
                             }
@@ -375,7 +375,7 @@ struct HotkeyConfigSheet: View {
                             .font(.system(size: 13))
                             .foregroundStyle(Theme.secondaryText)
 
-                        Toggle("使用 macOS 原生音量提示（OSD）", isOn: $state.mediaVolumeNativeOSD)
+                        Toggle("使用 macOS 原生音量提示（OSD）", isOn: Binding(get: { state.mediaVolumeNativeOSD }, set: { state.mediaVolumeNativeOSD = $0 }))
                             .toggleStyle(.checkbox)
                             .disabled(!state.mediaVolumeKeysEnabled)
                         Text(state.mediaVolumeNativeOSD
@@ -384,14 +384,14 @@ struct HotkeyConfigSheet: View {
                             .font(.system(size: 13))
                             .foregroundStyle(Theme.secondaryText)
 
-                        Toggle("仅当默认音频输出为指定设备时接管", isOn: $state.mediaVolumeOutputGateEnabled)
+                        Toggle("仅当默认音频输出为指定设备时接管", isOn: Binding(get: { state.mediaVolumeOutputGateEnabled }, set: { state.mediaVolumeOutputGateEnabled = $0 }))
                             .toggleStyle(.checkbox)
                             .disabled(!state.mediaVolumeKeysEnabled)
                         HStack(spacing: 8) {
                             Text("音频输出设备名")
                                 .font(.system(size: 13))
                                 .foregroundStyle(Theme.secondaryText)
-                            TextField("Mi Monitor", text: $state.mediaVolumeOutputName)
+                            TextField("Mi Monitor", text: Binding(get: { state.mediaVolumeOutputName }, set: { state.mediaVolumeOutputName = $0 }))
                                 .textFieldStyle(.roundedBorder)
                                 .frame(width: 200)
                             Spacer()

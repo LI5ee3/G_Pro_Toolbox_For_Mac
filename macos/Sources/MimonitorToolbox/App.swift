@@ -4,7 +4,7 @@ import MimonitorPresetCore
 
 /// 菜单栏下方面板。比系统菜单自由得多 —— 能放滑块、分组、任意布局。
 struct MenuBarPanel: View {
-    @EnvironmentObject var state: AppState
+    @ToolboxActions var state
     @Environment(\.openWindow) private var openWindow
     @State private var contentHeight: CGFloat = 64
 
@@ -101,7 +101,7 @@ private struct MenuBarContentHeightKey: PreferenceKey {
 
 /// Native segmented selection, matching the close-behavior control in ToolsView.
 private struct MenuBarPresetPicker: View {
-    @EnvironmentObject var state: AppState
+    @ToolboxActions var state
 
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
@@ -183,7 +183,7 @@ private struct PresetSegmentedControl: NSViewRepresentable {
 
 /// 面板里的单个快捷项。
 private struct MenuBarPanelRow: View {
-    @EnvironmentObject var state: AppState
+    @ToolboxActions var state
     let entry: MenuBarEntry
 
     /// 滑块拖动中的本地值：松手才下发，避免拖动过程刷出一串 ADB 命令

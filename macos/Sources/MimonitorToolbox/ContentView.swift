@@ -1,7 +1,7 @@
 import SwiftUI
 
 struct ContentView: View {
-    @EnvironmentObject var state: AppState
+    @ToolboxActions var state
     @Environment(SettingsModel.self) private var settings
     @Environment(\.scenePhase) private var scenePhase
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -97,15 +97,15 @@ struct ContentView: View {
         .onAppear {
             withAnimation(reduceMotion ? nil : .easeOut(duration: 0.3)) { appeared = true }
         }
-        .onChange(of: scenePhase) { phase in
+        .onChange(of: scenePhase) { _, phase in
             if phase == .active { state.refreshAccessibilityStatus() }
         }
-        .onChange(of: state.requestedPage) { page in
+        .onChange(of: state.requestedPage) { _, page in
             guard let page else { return }
             selection = page
             state.requestedPage = nil
         }
-        .onChange(of: selection) { page in
+        .onChange(of: selection) { _, page in
             if state.needsConnection(page) && !state.isConnected {
                 state.log("未连接显示器，请先在控制台连接。")
                 selection = .home

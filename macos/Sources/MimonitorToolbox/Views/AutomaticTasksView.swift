@@ -2,7 +2,7 @@ import SwiftUI
 import MimonitorPresetCore
 
 struct AutomaticTasksView: View {
-    @EnvironmentObject var state: AppState
+    @ToolboxActions var state
     @State private var editing: ScheduledPresetTask?
     @State private var deleting: ScheduledPresetTask?
     @State private var showDelete = false

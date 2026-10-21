@@ -2,7 +2,7 @@ import SwiftUI
 import MimonitorPresetCore
 
 struct PresetsView: View {
-    @EnvironmentObject var state: AppState
+    @ToolboxActions var state
     @State private var editor: PresetNameRequest?
     @State private var deleting: PicturePreset?
     @State private var showDelete = false
@@ -187,7 +187,7 @@ private struct PresetNameRequest: Identifiable {
 }
 
 private struct PresetNameSheet: View {
-    @EnvironmentObject private var state: AppState
+    @ToolboxActions private var state
     @Environment(\.dismiss) private var dismiss
     let preset: PicturePreset?
     let save: (String) -> Void
@@ -230,7 +230,7 @@ private struct PresetNameSheet: View {
         .font(.system(size: 14))
         .tint(Theme.accent)
         .interactiveDismissDisabled(saving)
-        .onChange(of: state.isPresetOperationInFlight) { inFlight in
+        .onChange(of: state.isPresetOperationInFlight) { _, inFlight in
             guard saving, !inFlight else { return }
             saving = false
             if let message = state.presetError {

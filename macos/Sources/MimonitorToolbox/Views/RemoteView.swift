@@ -1,7 +1,7 @@
 import SwiftUI
 
 struct RemoteView: View {
-    @EnvironmentObject var state: AppState
+    @ToolboxActions var state
 
     var body: some View {
         ScrollView {

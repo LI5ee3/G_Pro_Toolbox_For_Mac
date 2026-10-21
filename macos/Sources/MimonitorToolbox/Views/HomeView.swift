@@ -3,7 +3,7 @@ import AppKit
 import UniformTypeIdentifiers
 
 struct HomeView: View {
-    @EnvironmentObject var state: AppState
+    @ToolboxActions var state
     @State private var showConnection = false
     @State private var showLogs = false
     @State private var volume = 0.0
@@ -160,10 +160,10 @@ struct HomeView: View {
             syncValues(); state.refreshMediaVolumeState()
             if state.isConnected { state.refreshPage("picture"); state.refreshPage("source") }
         }
-        .onChange(of: state.dashboardVolume) { _ in syncValues() }
-        .onChange(of: state.dashboardVolumeError) { _ in syncValues() }
-        .onChange(of: state.currentValues["picture_backlight"]) { _ in syncValues() }
-        .onChange(of: state.isConnected) { connected in if connected { state.refreshMediaVolumeState() } }
+        .onChange(of: state.dashboardVolume) { syncValues() }
+        .onChange(of: state.dashboardVolumeError) { syncValues() }
+        .onChange(of: state.currentValues["picture_backlight"]) { syncValues() }
+        .onChange(of: state.isConnected) { _, connected in if connected { state.refreshMediaVolumeState() } }
     }
 
     private var statusBar: some View {
@@ -198,7 +198,7 @@ struct HomeView: View {
 }
 
 private struct ConnectionSettingsSheet: View {
-    @EnvironmentObject var state: AppState
+    @ToolboxActions var state
     @Environment(\.dismiss) private var dismiss
     var body: some View {
         VStack(alignment: .leading, spacing: 22) {
@@ -207,7 +207,7 @@ private struct ConnectionSettingsSheet: View {
                 .font(.system(size: 14)).foregroundColor(Theme.secondaryText)
             SectionCard(title: "网络 ADB") {
                 HStack(spacing: 12) {
-                    TextField("显示器 IP 地址", text: $state.ipInput).textFieldStyle(.roundedBorder)
+                    TextField("显示器 IP 地址", text: Binding(get: { state.ipInput }, set: { state.ipInput = $0 })).textFieldStyle(.roundedBorder)
                         .onSubmit { state.connect() }
                     Button("开始连接") { state.connect() }.toolboxAction(prominent: true)
                 }
@@ -232,7 +232,7 @@ private struct ConnectionSettingsSheet: View {
 }
 
 private struct OperationLogSheet: View {
-    @EnvironmentObject var state: AppState
+    @ToolboxActions var state
     @Environment(LogModel.self) private var logs
     @Environment(\.dismiss) private var dismiss
     var body: some View {
@@ -248,7 +248,7 @@ private struct OperationLogSheet: View {
                     }.padding(16)
                 }
                 .frame(height: 330).background(Theme.card, in: RoundedRectangle(cornerRadius: 12))
-                .onChange(of: logs.sequence) { _ in
+                .onChange(of: logs.sequence) {
                     guard let last = logs.lines.indices.last else { return }
                     DispatchQueue.main.async { proxy.scrollTo(last, anchor: .bottom) }
                 }

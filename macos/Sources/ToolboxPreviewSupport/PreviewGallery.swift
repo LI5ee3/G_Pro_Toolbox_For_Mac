@@ -33,16 +33,27 @@ public struct ToolboxPreviewGallery: View {
     }
 }
 
-private struct PreviewSurface: View {
+/// A single State-owned object keeps the fake clock and action session paired across View reconstruction.
+@MainActor
+private final class PreviewFixture {
     let runtime: PreviewRuntime
-    let screen: ToolboxScreen
-    @StateObject private var session: ToolboxSession
-    init(scenario: PreviewRuntime.Scenario, screen: ToolboxScreen) {
+    let session: ToolboxSession
+    init(scenario: PreviewRuntime.Scenario) {
         let runtime = PreviewRuntime()
-        self.runtime = runtime; self.screen = screen
-        _session = StateObject(wrappedValue: ToolboxSession(state: runtime.makeState(scenario)))
+        self.runtime = runtime
+        session = ToolboxSession(state: runtime.makeState(scenario))
+    }
+}
+
+private struct PreviewSurface: View {
+    let screen: ToolboxScreen
+    @State private var fixture: PreviewFixture
+    init(scenario: PreviewRuntime.Scenario, screen: ToolboxScreen) {
+        self.screen = screen
+        _fixture = State(initialValue: PreviewFixture(scenario: scenario))
     }
     var body: some View {
+        let session = fixture.session
         VStack(spacing: 0) {
             if screen == .menuBar { ToolboxMenuBarContent(session: session).frame(maxHeight: .infinity) }
             else { ToolboxWindowContent(session: session, screen: screen) }
@@ -50,8 +61,8 @@ private struct PreviewSurface: View {
             HStack {
                 Text("所有设备、权限、文件与系统动作均为模拟；不会连接真实显示器。")
                 Spacer()
-                Button("推进 0.2 秒") { runtime.scheduler.advance(by: 0.2) }
-                Button("推进 15 秒") { runtime.scheduler.advance(by: 15) }
+                Button("推进 0.2 秒") { fixture.runtime.scheduler.advance(by: 0.2) }
+                Button("推进 15 秒") { fixture.runtime.scheduler.advance(by: 15) }
             }.font(.caption).padding(10)
         }
         .onAppear { session.start() }

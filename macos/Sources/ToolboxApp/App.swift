@@ -98,12 +98,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 @main
 struct MimonitorToolboxApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
-    @StateObject private var session: ToolboxSession
+    @State private var session: ToolboxSession
 
     init() {
         precondition(ProcessInfo.processInfo.environment["XCODE_RUNNING_FOR_PREVIEWS"] != "1",
                      "Select ToolboxPreviewHost for previews; production adapters are disabled")
-        _session = StateObject(wrappedValue: LiveToolboxRuntime.makeSession())
+        _session = State(initialValue: LiveToolboxRuntime.makeSession())
     }
     private func bindLifecycle() { appDelegate.session = session }
 

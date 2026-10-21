@@ -1,7 +1,7 @@
 import SwiftUI
 
 struct SourceView: View {
-    @EnvironmentObject var state: AppState
+    @ToolboxActions var state
 
     private var selectedSource: Int {
         state.intValue("mitv.tvplayer.hdmi.last.source", default: -1)

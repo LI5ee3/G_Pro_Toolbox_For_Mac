@@ -2,7 +2,7 @@ import SwiftUI
 
 /// 菜单栏快捷项与主窗口共用同一份设备状态及操作。
 struct MenuBarSettingsView: View {
-    @EnvironmentObject var state: AppState
+    @ToolboxActions var state
 
     var body: some View {
         ScrollView {

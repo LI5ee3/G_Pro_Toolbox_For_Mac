@@ -1,7 +1,7 @@
 import SwiftUI
 
 struct LightView: View {
-    @EnvironmentObject var state: AppState
+    @ToolboxActions var state
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     private var lightMode: Int {

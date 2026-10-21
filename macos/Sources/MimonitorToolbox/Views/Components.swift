@@ -315,7 +315,7 @@ struct SliderRow: View {
         .padding(.vertical, 12)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(Theme.card.opacity(0.65), in: RoundedRectangle(cornerRadius: 12))
-        .onChange(of: externalValue) { newValue in
+        .onChange(of: externalValue) { _, newValue in
             value = Double(newValue)
         }
     }
