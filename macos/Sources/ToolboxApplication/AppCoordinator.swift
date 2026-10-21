@@ -171,6 +171,7 @@ public final class AppCoordinator {
         guard !isRunning else { return }
         isRunning = true
         executionLifetime.begin()
+        environment.feedback.start()
         environment.system.startOutputMonitoring()
         accessibilityTrusted = environment.system.isTrusted()
         refreshLoginItem(migrateLegacy: true)
@@ -273,7 +274,7 @@ public final class AppCoordinator {
         environment.system.stopLog()
     }
 
-    deinit {
+    isolated deinit {
         adb.cancelSession()
         systemCancellation.cancel()
         runtimeTasks.forEach { $0.invalidate() }

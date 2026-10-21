@@ -47,6 +47,7 @@ package final class RecordingHotkeyDriver: HotkeyDriving {
 }
 
 package final class RecordingFeedback: FeedbackPresenting {
+    package func start() {}
     package private(set) var hints: [String] = []
     package func show(title: String, value: String) { hints.append(title + ":" + value) }
     package func show(title: String, value: String, countdown: TimeInterval) { show(title: title, value: value) }
@@ -55,7 +56,7 @@ package final class RecordingFeedback: FeedbackPresenting {
     package func finishOperation(token: UUID, result: HUDOperationResult, title: String?) { hints.append(String(describing: result)) }
     package func brightness(_ value: Int) -> Bool { false }
     package func volume(_ value: Int) -> Bool { false }
-    package func mute() -> Bool { false }
+    package func mute(_ muted: Bool) -> Bool { false }
     package func stop() {}
 }
 

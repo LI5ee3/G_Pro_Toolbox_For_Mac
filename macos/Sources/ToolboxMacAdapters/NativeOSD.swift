@@ -2,113 +2,75 @@ import ToolboxDomain
 import ToolboxApplication
 import Cocoa
 
-/// OSDUIHelper 暴露的协议。方法签名必须和系统里的一致，
-/// 否则 NSXPCInterface 包装出来的代理调用会失败。
-///
-/// **必须放在文件作用域**：把 `@objc private protocol` 嵌在类里时，
-/// `conn.remoteObjectProxy... as? OSDUIHelperProtocol` 的动态转换会在运行时
-/// 崩（栈是 swift_dynamicCast → tryCast，EXC_BAD_ACCESS）。放在文件作用域就好了。
+// Keep this exact private ObjC wire interface at file scope. There is no success acknowledgment.
 @objc(OSDUIHelperProtocol)
 protocol OSDUIHelperProtocol {
-    func showImage(_ image: Int64,
-                   onDisplayID displayID: UInt32,
-                   priority: UInt32,
-                   msecUntilFade: UInt32,
-                   filledChiclets: UInt32,
-                   totalChiclets: UInt32,
-                   locked: Bool)
+    func showImage(_ image: Int64, onDisplayID displayID: UInt32, priority: UInt32,
+                   msecUntilFade: UInt32, filledChiclets: UInt32, totalChiclets: UInt32, locked: Bool)
 }
 
-/// 调用 macOS 私有的 `OSDUIHelper`（mach service `com.apple.OSDUIHelper`）显示系统
-/// 原生亮度 OSD —— 和按系统亮度键弹出的那个提示条是同一套。
-///
-/// 这是私有 API（BetterDisplay / MonitorControl 都这么做），没有公开文档，
-/// 未来系统版本可能失效，所以调用方要做失败回退（`showBrightness` 返回是否成功）。
-final class NativeOSD {
-    static let shared = NativeOSD()
+package struct NativeOSDMessage: Sendable, Equatable {
+    package let image: Int64
+    package let displayID: UInt32
+    package let filled: UInt32
+}
+@MainActor package protocol NativeOSDTransport: AnyObject {
+    func send(_ message: NativeOSDMessage, failure: @escaping @MainActor () -> Void) -> Bool
+    func reset()
+}
 
-    /// OSDImage.brightness / volume / mute
-    private static let brightnessImage: Int64 = 1
-    private static let volumeImage: Int64 = 3
-    private static let muteImage: Int64 = 4
-    /// 原生亮度 / 音量 OSD 的格子数（系统条就是 16 格）
+/// Private API is optional: a submitted request is not proof the system rendered an OSD. On error
+/// fall back once for the newest request, then skip the private service for a 30-second cooldown.
+@MainActor package final class NativeOSD {
+    static let shared = NativeOSD(transport: LiveOSDTransport())
     static let chicletCount = 16
-
-    private var connection: NSXPCConnection?
-    private var proxy: OSDUIHelperProtocol?
-
-    private init() {}
-
-    /// 显示亮度 OSD。`value` / `maxValue` 决定亮几格。返回是否成功投递。
-    @discardableResult
-    func showBrightness(value: Int, maxValue: Int = 100, displayID: CGDirectDisplayID? = nil) -> Bool {
-        showImage(Self.brightnessImage, value: value, maxValue: maxValue, displayID: displayID)
+    private let transport: any NativeOSDTransport
+    private let now: () -> TimeInterval
+    private let display: @MainActor () -> CGDirectDisplayID
+    private var active = false
+    private var blockedUntil: TimeInterval = 0
+    private var pending: (id: UUID, time: TimeInterval, fallback: @MainActor () -> Void)?
+    package init(transport: any NativeOSDTransport,
+                 now: @escaping () -> TimeInterval = { ProcessInfo.processInfo.systemUptime },
+                 display: (@MainActor () -> CGDirectDisplayID)? = nil) {
+        self.transport = transport; self.now = now; self.display = display ?? Self.preferredDisplayID
     }
-
-    /// 显示音量 OSD。和按系统音量键弹出的是同一条（16 格 + 喇叭图标）；
-    /// 音量为 0 时和系统一样换成静音图标。
-    @discardableResult
-    func showVolume(value: Int, maxValue: Int = 100, displayID: CGDirectDisplayID? = nil) -> Bool {
-        let image = value <= 0 ? Self.muteImage : Self.volumeImage
-        return showImage(image, value: value, maxValue: maxValue, displayID: displayID)
+    package func start() { guard !active else { return }; active = true; blockedUntil = 0 }
+    @discardableResult package func showBrightness(value: Int, maxValue: Int = 100, displayID: CGDirectDisplayID? = nil,
+                                                    failure: @escaping @MainActor () -> Void) -> Bool {
+        show(image: 1, value: value, maximum: maxValue, displayID: displayID, failure: failure)
     }
-
-    /// 显示静音 OSD（喇叭加斜线），对应系统静音键的提示。
-    @discardableResult
-    func showMute(displayID: CGDirectDisplayID? = nil) -> Bool {
-        guard let helper = helper() else { return false }
-        helper.showImage(Self.muteImage,
-                         onDisplayID: UInt32(displayID ?? Self.preferredDisplayID()),
-                         priority: 0x1F4,
-                         msecUntilFade: 1000,
-                         filledChiclets: 0,
-                         totalChiclets: UInt32(Self.chicletCount),
-                         locked: false)
-        return true
+    @discardableResult package func showVolume(value: Int, maxValue: Int = 100, displayID: CGDirectDisplayID? = nil,
+                                                failure: @escaping @MainActor () -> Void) -> Bool {
+        show(image: value <= 0 ? 4 : 3, value: value, maximum: maxValue, displayID: displayID, failure: failure)
     }
-
-    private func showImage(_ image: Int64, value: Int, maxValue: Int,
-                           displayID: CGDirectDisplayID?) -> Bool {
-        guard let helper = helper() else { return false }
-        let clamped = min(max(0, value), maxValue)
-        let filled = UInt32((Double(clamped) / Double(max(1, maxValue)) * Double(Self.chicletCount)).rounded())
-        helper.showImage(image,
-                         onDisplayID: UInt32(displayID ?? Self.preferredDisplayID()),
-                         priority: 0x1F4,
-                         msecUntilFade: 1000,
-                         filledChiclets: filled,
-                         totalChiclets: UInt32(Self.chicletCount),
-                         locked: false)
-        return true
+    @discardableResult package func showMute(displayID: CGDirectDisplayID? = nil,
+                                              failure: @escaping @MainActor () -> Void) -> Bool {
+        show(image: 4, value: 0, maximum: 100, displayID: displayID, failure: failure)
     }
-
-    private func helper() -> OSDUIHelperProtocol? {
-        if let proxy { return proxy }
-        let conn = NSXPCConnection(machServiceName: "com.apple.OSDUIHelper", options: [])
-        conn.remoteObjectInterface = NSXPCInterface(with: OSDUIHelperProtocol.self)
-        conn.invalidationHandler = { [weak self] in
-            DispatchQueue.main.async { self?.reset() }
+    private func show(image: Int64, value: Int, maximum: Int, displayID: CGDirectDisplayID?,
+                      failure: @escaping @MainActor () -> Void) -> Bool {
+        guard active, now() >= blockedUntil else { return false }
+        let id = UUID(), time = now()
+        let clamped = min(max(0, value), max(0, maximum))
+        let filled = UInt32((Double(clamped) / Double(max(1, maximum)) * Double(Self.chicletCount)).rounded())
+        pending = (id, time, failure)
+        let sent = transport.send(NativeOSDMessage(image: image, displayID: displayID ?? display(), filled: filled)) { [weak self] in
+            // Force an async delivery even for a synchronous test transport, so a failed send
+            // can use the caller's immediate HUD fallback without double presentation.
+            DispatchQueue.main.async { self?.failed(id) }
         }
-        conn.interruptionHandler = { [weak self] in
-            DispatchQueue.main.async { self?.reset() }
-        }
-        conn.resume()
-        connection = conn
-        proxy = conn.remoteObjectProxyWithErrorHandler { _ in } as? OSDUIHelperProtocol
-        return proxy
+        if !sent { pending = nil; blockedUntil = now() + 30 }
+        return sent
     }
-
-    func stop() { reset() }
-
-    private func reset() {
-        connection?.invalidationHandler = nil
-        connection?.interruptionHandler = nil
-        connection?.invalidate()
-        connection = nil
-        proxy = nil
+    private func failed(_ id: UUID) {
+        guard active, let pending, pending.id == id else { return }
+        self.pending = nil; blockedUntil = now() + 30
+        if now() - pending.time <= 1.2 { pending.fallback() }
     }
-
-    /// 取鼠标所在屏幕的 displayID（用户正看着的那块），拿不到就退回主屏。
+    package func stop() {
+        active = false; pending = nil; blockedUntil = 0; transport.reset()
+    }
     private static func preferredDisplayID() -> CGDirectDisplayID {
         let mouse = NSEvent.mouseLocation
         if let screen = NSScreen.screens.first(where: { NSMouseInRect(mouse, $0.frame, false) }),
@@ -117,4 +79,46 @@ final class NativeOSD {
         }
         return CGMainDisplayID()
     }
+}
+
+/// The real transport drops callbacks from invalidated connections and routes connection failure
+/// to the newest outstanding presentation. Construction never opens XPC.
+@MainActor private final class LiveOSDTransport: NativeOSDTransport {
+    private var connection: NSXPCConnection?
+    private var proxy: OSDUIHelperProtocol?
+    private var generation: UUID?
+    private var failure: (@MainActor () -> Void)?
+    func send(_ message: NativeOSDMessage, failure: @escaping @MainActor () -> Void) -> Bool {
+        guard let helper = helper() else { return false }
+        self.failure = failure
+        helper.showImage(message.image, onDisplayID: message.displayID, priority: 0x1F4,
+                         msecUntilFade: 1000, filledChiclets: message.filled,
+                         totalChiclets: UInt32(NativeOSD.chicletCount), locked: false)
+        return true
+    }
+    private func helper() -> OSDUIHelperProtocol? {
+        if let proxy { return proxy }
+        reset()
+        let id = UUID(); generation = id
+        let connection = NSXPCConnection(machServiceName: "com.apple.OSDUIHelper", options: [])
+        connection.remoteObjectInterface = NSXPCInterface(with: OSDUIHelperProtocol.self)
+        connection.invalidationHandler = { [weak self] in DispatchQueue.main.async { self?.failed(id) } }
+        connection.interruptionHandler = { [weak self] in DispatchQueue.main.async { self?.failed(id) } }
+        connection.resume(); self.connection = connection
+        proxy = connection.remoteObjectProxyWithErrorHandler { [weak self] _ in
+            DispatchQueue.main.async { self?.failed(id) }
+        } as? OSDUIHelperProtocol
+        if proxy == nil { reset() }
+        return proxy
+    }
+    private func failed(_ id: UUID) {
+        guard generation == id else { return }
+        let failure = failure; reset(); failure?()
+    }
+    func reset() {
+        generation = nil; failure = nil
+        connection?.invalidationHandler = nil; connection?.interruptionHandler = nil
+        connection?.invalidate(); connection = nil; proxy = nil
+    }
+    isolated deinit { reset() }
 }

@@ -161,7 +161,7 @@ extension AppCoordinator {
         dashboardMuted = muted
         // 更新的静音动作覆盖掉「按键先解除静音」的意图，避免收尾提交把它又打开
         mediaVolumeNeedsUnmute = false
-        if mediaVolumeNativeOSD, environment.feedback.mute() {
+        if mediaVolumeNativeOSD, environment.feedback.mute(muted) {
             // 原生静音 OSD
         } else {
             environment.feedback.show(title: "静音", value: muted ? "开" : "关")

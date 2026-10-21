@@ -59,15 +59,26 @@ final class LiveHotkeyDriver: HotkeyDriving {
 }
 
 final class LiveFeedback: FeedbackPresenting {
-    func show(title: String, value: String) { HUDWindow.shared.show(title: title, value: value) }
-    func show(title: String, value: String, countdown: TimeInterval) { HUDWindow.shared.show(title: title, value: value, countdown: countdown) }
-    func endCountdown() { HUDWindow.shared.endCountdown() }
-    func beginOperation(title: String) -> UUID { HUDWindow.shared.beginOperation(title: title) }
-    func finishOperation(token: UUID, result: HUDOperationResult, title: String?) { HUDWindow.shared.finishOperation(token: token, result: result, title: title) }
-    func brightness(_ value: Int) -> Bool { NativeOSD.shared.showBrightness(value: value) }
-    func volume(_ value: Int) -> Bool { NativeOSD.shared.showVolume(value: value) }
-    func mute() -> Bool { NativeOSD.shared.showMute() }
-    func stop() { HUDWindow.shared.stop(); NativeOSD.shared.stop() }
+    private var active = false
+    func start() { guard !active else { return }; active = true; NativeOSD.shared.start() }
+    func show(title: String, value: String) { guard active else { return }; HUDWindow.shared.show(title: title, value: value) }
+    func show(title: String, value: String, countdown: TimeInterval) { guard active else { return }; HUDWindow.shared.show(title: title, value: value, countdown: countdown) }
+    func endCountdown() { guard active else { return }; HUDWindow.shared.endCountdown() }
+    func beginOperation(title: String) -> UUID { guard active else { return UUID() }; return HUDWindow.shared.beginOperation(title: title) }
+    func finishOperation(token: UUID, result: HUDOperationResult, title: String?) { guard active else { return }; HUDWindow.shared.finishOperation(token: token, result: result, title: title) }
+    func brightness(_ value: Int) -> Bool {
+        guard active else { return false }
+        return NativeOSD.shared.showBrightness(value: value) { [weak self] in self?.show(title: "背光", value: "\(value)") }
+    }
+    func volume(_ value: Int) -> Bool {
+        guard active else { return false }
+        return NativeOSD.shared.showVolume(value: value) { [weak self] in self?.show(title: "音量", value: "\(value)") }
+    }
+    func mute(_ muted: Bool) -> Bool {
+        guard active else { return false }
+        return NativeOSD.shared.showMute { [weak self] in self?.show(title: "静音", value: muted ? "开" : "关") }
+    }
+    func stop() { guard active else { return }; active = false; HUDWindow.shared.stop(); NativeOSD.shared.stop() }
 }
 
 extension AppEnvironment {

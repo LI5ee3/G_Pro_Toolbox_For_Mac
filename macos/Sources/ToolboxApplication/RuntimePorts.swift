@@ -24,15 +24,16 @@ package protocol HotkeyDriving: AnyObject {
 }
 
 package protocol FeedbackPresenting: AnyObject {
-    func show(title: String, value: String)
-    func show(title: String, value: String, countdown: TimeInterval)
-    func endCountdown()
-    func beginOperation(title: String) -> UUID
-    func finishOperation(token: UUID, result: HUDOperationResult, title: String?)
-    func brightness(_ value: Int) -> Bool
-    func volume(_ value: Int) -> Bool
-    func mute() -> Bool
-    func stop()
+    @MainActor func start()
+    @MainActor func show(title: String, value: String)
+    @MainActor func show(title: String, value: String, countdown: TimeInterval)
+    @MainActor func endCountdown()
+    @MainActor func beginOperation(title: String) -> UUID
+    @MainActor func finishOperation(token: UUID, result: HUDOperationResult, title: String?)
+    @MainActor func brightness(_ value: Int) -> Bool
+    @MainActor func volume(_ value: Int) -> Bool
+    @MainActor func mute(_ muted: Bool) -> Bool
+    @MainActor func stop()
 }
 
 package struct RuntimeResources {
