@@ -66,8 +66,18 @@
 			"files" = (
 			);
 			"inputPaths" = (
+				"$(SRCROOT)/Config/RuntimeAssets.lock.json",
+				"$(SRCROOT)/scripts/runtime_assets.py",
+				"$(SRCROOT)/prepare_runtime.sh",
 			);
 			"outputPaths" = (
+				"$(TARGET_BUILD_DIR)/$(UNLOCALIZED_RESOURCES_FOLDER_PATH)/runtime/adb",
+				"$(TARGET_BUILD_DIR)/$(UNLOCALIZED_RESOURCES_FOLDER_PATH)/runtime/MtkDirectTool.jar",
+				"$(TARGET_BUILD_DIR)/$(UNLOCALIZED_RESOURCES_FOLDER_PATH)/runtime/ColorfulLedTool.jar",
+				"$(TARGET_BUILD_DIR)/$(UNLOCALIZED_RESOURCES_FOLDER_PATH)/runtime/NOTICE-platform-tools.txt",
+				"$(TARGET_BUILD_DIR)/$(UNLOCALIZED_RESOURCES_FOLDER_PATH)/adb_guardian/adbguardian-signed.apk",
+				"$(TARGET_BUILD_DIR)/$(UNLOCALIZED_RESOURCES_FOLDER_PATH)/AppIcon.icns",
+				"$(TARGET_BUILD_DIR)/$(UNLOCALIZED_RESOURCES_FOLDER_PATH)/Acknowledgements.txt",
 			);
 			"runOnlyForDeploymentPostprocessing" = 0;
 			"shellPath" = "/bin/bash";
@@ -97,7 +107,7 @@
 				);
 				"GENERATE_INFOPLIST_FILE" = "NO";
 				"ENABLE_PREVIEWS" = "YES";
-				"ENABLE_HARDENED_RUNTIME" = "YES";
+				"ENABLE_HARDENED_RUNTIME" = "NO";
 				"INFOPLIST_FILE" = "Config/App-Info.plist";
 				"CODE_SIGN_ENTITLEMENTS" = "Config/App.entitlements";
 				"SWIFT_OPTIMIZATION_LEVEL" = "-Onone";

@@ -27,6 +27,10 @@ class ReleaseGateTests(unittest.TestCase):
         release.validate_version('1.2.3','20261022.6')
         for v,b in [('bad','1'),('1.2.3','bad'),('1.2.3','1.2.3.4')]:
             with self.assertRaises(release.GateError): release.validate_version(v,b)
+    def test_all_runtime_outputs_are_declared_for_incremental_signing(self):
+        project = (release.MACOS / 'Toolbox.xcodeproj/project.pbxproj').read_text()
+        for relative in release.assets.inputs():
+            self.assertIn('$(TARGET_BUILD_DIR)/$(UNLOCALIZED_RESOURCES_FOLDER_PATH)/' + relative, project)
     def test_preview_is_never_accepted_as_production(self):
         with tempfile.TemporaryDirectory() as tmp:
             import plistlib

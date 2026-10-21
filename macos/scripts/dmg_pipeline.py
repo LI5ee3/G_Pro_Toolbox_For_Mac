@@ -6,6 +6,7 @@ import json
 import os
 from pathlib import Path
 import shutil
+import signal
 import subprocess
 import sys
 import tempfile
@@ -33,9 +34,13 @@ def mounted(image):
         plistlib.loads(result.stdout)  # Reject malformed success output too.
         yield point
     finally:
-        if attached:
-            # Own explicit mountpoint only. A failed detach fails the pipeline.
-            release.run(['hdiutil','detach',point],capture_output=True)
+        if attached or os.path.ismount(point):
+            # Own explicit mountpoint only. Even successful forced cleanup leaves the
+            # failed normal-detach operation visible to the caller.
+            try: release.run(['hdiutil','detach',point],capture_output=True)
+            except subprocess.CalledProcessError:
+                release.run(['hdiutil','detach','-force',point],capture_output=True)
+                raise
         if point.exists(): point.rmdir()
 
 def verify_image(image, app, mode, team):
@@ -66,6 +71,7 @@ def notarize(path, profile, directory, label, keychain=None):
 
 def package(args):
     release.require(args.mode != 'distribution' or (args.profile and args.team), '正式分发需要 Team ID 和 notarytool Keychain profile；不允许生成假正式包')
+    identity = release.signing_identity(args.mode,args.identity,args.team,args.keychain) if args.mode == 'distribution' else None
     app = args.app.resolve()
     report = release.verify_app(app,args.mode,args.team)
     destination = args.output.resolve()
@@ -96,7 +102,6 @@ def package(args):
             release.run(['hdiutil','create','-volname','红米G Pro ToolBox','-srcfolder',image_stage,'-format','UDZO',image],capture_output=True)
         verify_image(image,staged_app,args.mode,args.team)
         if args.mode == 'distribution':
-            identity = release.signing_identity(args.mode,args.identity,args.team)
             command = ['codesign','--sign',identity,'--timestamp']
             if args.keychain: command += ['--keychain',args.keychain]
             release.run([*command,image])
@@ -141,6 +146,8 @@ def parser():
     return p
 
 if __name__ == '__main__':
+    def terminate(signum, frame): raise SystemExit(128 + signum)
+    signal.signal(signal.SIGTERM, terminate)
     try: package(parser().parse_args())
     except (release.GateError,ValueError,OSError,subprocess.CalledProcessError) as error:
         print(f'ERROR: {error}',file=sys.stderr);sys.exit(1)

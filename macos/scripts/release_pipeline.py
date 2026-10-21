@@ -32,13 +32,14 @@ def output(args):
 def write_json(path, value):
     Path(path).write_text(json.dumps(value, ensure_ascii=False, indent=2) + '\n')
 
-def signing_identity(mode, identity, team):
+def signing_identity(mode, identity, team, keychain=None):
     if mode == 'development':
         require(not identity and not team, 'development 明确使用 ad-hoc；固定身份请用 local 或 distribution')
         return '-'
     require(bool(identity) and identity != '-', '需要显式指定签名身份 SHA1，不允许降级')
     require(re.fullmatch(r'[0-9A-Fa-f]{40}', identity) is not None, '签名身份必须为唯一 SHA1')
-    text = output(['security', 'find-identity', '-v', '-p', 'codesigning'])
+    keychain = keychain or os.environ.get('TOOLBOX_SIGNING_KEYCHAIN')
+    text = output(['security', 'find-identity', '-v', '-p', 'codesigning', *([str(keychain)] if keychain else [])])
     matches = re.findall(r'\b' + re.escape(identity) + r' "([^"]+)"', text, re.I)
     require(len(matches) == 1, '签名身份不可用；请准备有效证书及私钥')
     if mode == 'distribution':
@@ -132,7 +133,13 @@ def build_app(args):
                    f'MARKETING_VERSION={args.version}', f'CURRENT_PROJECT_VERSION={args.build}',
                    f'TOOLBOX_DISTRIBUTION={int(args.mode == "distribution")}', 'build']
         if args.team: command += [f'DEVELOPMENT_TEAM={args.team}']
-        if args.mode == 'distribution': command += ['OTHER_CODE_SIGN_FLAGS=--timestamp']
+        flags = ['--timestamp'] if args.mode == 'distribution' else []
+        if os.environ.get('TOOLBOX_SIGNING_KEYCHAIN'):
+            import shlex
+            flags += ['--keychain', os.environ['TOOLBOX_SIGNING_KEYCHAIN']]
+        if flags:
+            import shlex
+            command += ['OTHER_CODE_SIGN_FLAGS=' + shlex.join(flags)]
         try:
             with (stage/'build.log').open('w') as log: run(command, stdout=log, stderr=subprocess.STDOUT)
         except subprocess.CalledProcessError:
@@ -142,6 +149,13 @@ def build_app(args):
             raise
         source = args.derived_data.resolve()/'Build/Products/Release'/APP_NAME
         run(['ditto', source, stage/APP_NAME])
+        # Final seal is explicit, after all resource assembly. Xcode incremental signing
+        # must never leave new script-copied resources under a previous CodeResources seal.
+        signing = ['codesign', '--force', '--sign', identity, '--options', 'runtime',
+                   '--entitlements', MACOS/'Config/App.entitlements']
+        if args.mode == 'distribution': signing += ['--timestamp']
+        if os.environ.get('TOOLBOX_SIGNING_KEYCHAIN'): signing += ['--keychain', os.environ['TOOLBOX_SIGNING_KEYCHAIN']]
+        run([*signing, stage/APP_NAME], capture_output=True)
         report = verify_app(stage/APP_NAME, args.mode, args.team, args.version, args.build)
         report['toolchain'] = output(['xcodebuild', '-version']).strip()
         report['sdk'] = sdk

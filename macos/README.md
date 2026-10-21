@@ -3,7 +3,7 @@
 Redmi G Pro 27U / 32U 显示器的原生 macOS 控制工具，使用 SwiftUI、AppKit 和 CoreAudio。
 仅支持 macOS 27 及以上的 Apple Silicon Mac（M 系列芯片）。本仓库仅维护 Mac 应用；设备端协议与实现源自 [原项目](https://github.com/YiHoooong/Mimonitor_Toolbox)，在此基础上继续开发。
 
-## Xcode 开发与安全 Preview（R0–R5）
+## Xcode 开发与安全 Preview（R0–R6）
 
 开发与运行均要求 macOS 27 或更新的 Apple Silicon Mac，使用本机已验证的 Xcode 27.1 工具链。
 
@@ -22,7 +22,7 @@ xcodebuild -project Toolbox.xcodeproj -scheme ToolboxPreviews -configuration Deb
 xcodebuild -project Toolbox.xcodeproj -scheme ToolboxApp -configuration Release -destination 'platform=macOS,arch=arm64' build
 ```
 
-生产 App 的 Xcode 资源复制阶段只使用已有 `assets/runtime/adb` 或 `.cache/platform-tools/adb`，不在 Preview 或编译期间下载程序。首次准备运行资源可沿用下方 `build_app.sh` 的官方 platform-tools 缓存流程；必需的 JAR/APK、图标及 NOTICE 缺失时 Xcode 构建失败。CLI `swift build --product MimonitorToolbox` 入口继续保留，应用实现与 Xcode 宿主共享同一库。
+生产 App 的 Xcode 资源复制阶段只使用已有 `assets/runtime/adb` 或 `.cache/platform-tools/adb`，不在 Preview 或编译期间下载程序。首次准备运行资源请显式执行 `python3 scripts/runtime_assets.py prepare`，只下载锁定版本并验证摘要；必需的 JAR/APK、图标及 NOTICE 缺失时 Xcode 构建失败。CLI `swift build --product MimonitorToolbox` 入口继续保留，应用实现与 Xcode 宿主共享同一库。
 
 当前模块：`ToolboxDomain`（Swift 6 纯规则）、`MimonitorPresetCore`（预设引擎）、`ToolboxApplication`（九个 MainActor Observation 模型与动作协调）、`MimonitorToolbox`（共享 UI）、`ToolboxMacAdapters`（真实平台实现）、`ToolboxPreviewSupport`（内存模拟）。旧 AppState 已移除；架构、阶段验证和回滚见 [R3-ARCHITECTURE.md](R3-ARCHITECTURE.md)。R4 已加入 `ToolboxConcurrency`、`ToolboxProcessExecution` 和预设核心 Swift 6；会话、取消、异步所有权与过渡边界见 [R4-CONCURRENCY.md](R4-CONCURRENCY.md)。
 
@@ -30,7 +30,7 @@ R5 已迁移到 `SMAppService.mainApp`，按系统读回显示登录项状态，
 
 CI 已显式要求带 `toolbox-macos27` 标签的专用 macOS 27 ARM64 runner；未注册该 runner 时任务会排队。本批未配置远端 runner 或触发远端 CI。同仓库受信任分支可运行，外部 fork PR 不自动在该自托管 runner 上执行。
 
-构建产物不自动替换已安装/正在运行的应用；先检查签名和资源，再由用户选择安装。正式 Developer ID、公证和发布治理属于 R6。
+构建产物不自动替换已安装/正在运行的应用。R6 已加入严格构建/签名/DMG/ZIP 门禁及正式公证流程；当前仍需正式凭据和签名安装验收，详见 [R6-RELEASE.md](R6-RELEASE.md)。
 
 ## ADB 音量控制
 
@@ -102,8 +102,7 @@ CI 已显式要求带 `toolbox-macos27` 标签的专用 macOS 27 ARM64 runner；
 
 ## 运行前提
 
-最终用户双击 .app 即可，**不需要装任何东西**。从源码构建只需要 **Xcode 命令行工具**
-（`xcode-select -p` 能返回路径）。adb 在打包时自动下载并内嵌。显示器需已开启无线 ADB（端口 5555）。
+最终用户双击 .app 即可，**不需要装任何东西**。发行构建需要 **完整 Xcode 27.1 或更新工具链及 macOS 27 SDK**。adb 通过显式 prepare 命令下载锁定版本后内嵌；构建阶段不联网下载。显示器需已开启无线 ADB（端口 5555）。
 
 ## 应用图标
 
@@ -122,38 +121,14 @@ swift run MimonitorToolbox     # 开发调试
 
 ```bash
 ./build_app.sh
-open "红米G Pro ToolBox.app"
+open ".build/artifacts/development/红米G Pro ToolBox.app"
 ```
 
-产物：`红米G Pro ToolBox.app`（约 20MB，自包含、零外部依赖）+ `MimonitorToolbox-macos-arm64.dmg`。
+产物默认位于 `.build/artifacts/development/红米G Pro ToolBox.app`，明确使用开发 ad-hoc 签名。原 `macos/` 下现用 App 和旧 DMG 不覆盖。打包独立执行 `./make_dmg.sh`，开发 DMG/ZIP 输出 `.build/artifacts/packages-development/`，名称带 `-development`；已有目录拒绝覆盖，可用 `--output` 指定新目录。
 
-构建固定使用 `--arch arm64`，不提供其他架构或通用包。主程序和内嵌 adb 都只包含 arm64；从官方 platform-tools 获取的多架构 adb 在打包时提取 arm64，原始缓存保持不变。
+构建使用原生 Xcode Release App Target，统一权限用途声明和 entitlements。运行时资源版本/摘要固定，缺失或签名失败非零退出。正式分发要求 Developer ID、timestamp、公证、staple 和 Gatekeeper 验证；没有凭据不会降级为成功。完整参数、CI 和回滚见 [R6-RELEASE.md](R6-RELEASE.md)。
 
-脚本会内嵌 adb（仓库里没有就从 Google 官方下载，缓存在 `macos/.cache/`）、两个 jar、
-保活 apk，生成 `Info.plist`，签名，最后打 DMG。想固定 adb 版本就把 macOS 版 adb
-放到仓库根的 `assets/runtime/adb`。
-
-```bash
-./reinstall.sh --no-build      # 本机安装到 /Applications 并重启
-```
-
-### 签名与分发
-
-用 `setup_signing_cert.sh` 创建的自签名证书签名。**不能用 ad-hoc**：macOS 15 起
-「本地网络」权限要靠稳定的代码身份才能记住授权，而 ad-hoc 的身份是内容哈希、每次编译
-都变，系统认不出会**静默拒绝**（连弹窗都不给）—— 表现就是「连不上、也搜不到显示器」，
-界面上没有任何提示。固定证书的身份是「bundle id + 证书指纹」，跨编译稳定。
-
-```bash
-./setup_signing_cert.sh            # 本机：创建固定证书
-./export_signing_cert.sh --write   # CI：导出并写进 GitHub Secrets（需 gh 已登录）
-```
-
-CI 用 `MACOS_CERT_P12` / `MACOS_CERT_PASSWORD` 两个 Secret。没配时回退 ad-hoc
-（fork 提的 PR 走这条路），但校验步骤会在「配了证书却仍打出 ad-hoc 包」时**直接失败**。
-
-别人拿到 DMG 后首次打开会被 Gatekeeper 拦一次，需到 **系统设置 → 隐私与安全性**
-点「仍要打开」。要彻底消除提示需要 Apple Developer ID（$99/年）+ 公证。
+`reinstall.sh` 是显式安装/重启操作，本轮没有执行。旧自签名只可作为可选 local 开发身份，不承诺权限连续性；整登录钥匙串导出脚本已停用。
 
 ## 首次使用注意
 
@@ -269,13 +244,4 @@ EDID / FreeSync 这类会改变显示器输入信号格式（可能黑屏或改�
 
 ## CI
 
-`.github/workflows/macos.yml` 是本项目唯一的应用构建与发布流程：
-
-- **触发**：主分支的 push / PR（包含共享资源的变动）、`v*` 标签，以及手动运行
-- **runner**：需要专用的 macOS 27、Apple Silicon、Xcode 27.1 自托管 runner，标签为 `toolbox-macos27`；未配置时任务会排队。本轮没有注册 runner 或运行远程 CI。外部 fork PR 不运行自托管构建。
-- **build**：平台检查 → debug 编译与单元测试 → Preview 边界及原生 Target 构建 → 原有签名打包与产物校验 → 上传 artifact
-- **release**：仅标签触发，把 DMG 和 zip 附到 GitHub Release
-
-校验步骤逐项确认：可执行文件存在、内嵌 adb / 两个 jar / 保活 apk 齐全、**确实是
-仅含 arm64 的主程序与内嵌 adb**、签名有效且**不是 ad-hoc**、`LSUIElement` 未被设置、
-分发包文件名只含 `[A-Za-z0-9._-]`、内嵌的 adb 真的能跑起来。
+`.github/workflows/macos.yml` 默认仅验证并上传 development artifact，不注入签名秘密。外部 fork PR 不在自托管 runner 执行。正式签名、公证及草稿 Release 需显式从版本标签触发，并配置受保护的 `macos-release` environment 与隔离 release runner；本机未触发远端 CI 或发布。配置、凭据与尚未解决的版权来源见 [R6-RELEASE.md](R6-RELEASE.md)。

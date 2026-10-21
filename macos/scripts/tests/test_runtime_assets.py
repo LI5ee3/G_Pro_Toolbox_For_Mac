@@ -9,7 +9,7 @@ import runtime_assets as assets
 
 class RuntimeAssetsTests(unittest.TestCase):
     def test_repository_inputs_match_all_pins(self):
-        self.assertEqual(len(assets.inputs()), 6)
+        self.assertEqual(len(assets.inputs()), 7)
     def test_missing_and_modified_input_fail(self):
         with tempfile.TemporaryDirectory() as tmp:
             p = Path(tmp) / 'input'

@@ -4,14 +4,14 @@
 # 用法： ./reinstall.sh [--no-build]
 #   --no-build   跳过构建，直接把当前产物装过去（改了配置想快速重启时用）
 #
-# 注意：会先退出正在运行的实例。应用是菜单栏常驻（LSUIElement），
+# 注意：会先退出正在运行的实例。应用可在菜单栏驻留，
 # 退出后菜单栏图标会消失，重启脚本末尾会自动拉起来。
 set -euo pipefail
 cd "$(dirname "$0")"
 
 # 和 build_app.sh 保持一致
 APP_NAME="红米G Pro ToolBox"
-SRC_APP="$APP_NAME.app"
+SRC_APP="${TOOLBOX_APP_PATH:-.build/artifacts/development/$APP_NAME.app}"
 DEST_APP="/Applications/$APP_NAME.app"
 # 改名前的旧包名，装完顺手清掉，免得启动台里并排两个图标
 LEGACY_APP="/Applications/MimonitorToolbox.app"

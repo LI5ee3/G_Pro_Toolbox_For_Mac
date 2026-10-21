@@ -105,6 +105,7 @@ def copy_resources(destination):
         else: shutil.copyfile(source, target)
     identity = os.environ.get('EXPANDED_CODE_SIGN_IDENTITY') or '-'
     args = ['codesign', '--force', '--sign', identity]
+    if os.environ.get('TOOLBOX_SIGNING_KEYCHAIN'): args += ['--keychain', os.environ['TOOLBOX_SIGNING_KEYCHAIN']]
     if os.environ.get('ENABLE_HARDENED_RUNTIME') == 'YES': args += ['--options', 'runtime']
     if os.environ.get('TOOLBOX_DISTRIBUTION') == '1': args += ['--timestamp']
     subprocess.run([*args, str(destination / 'runtime/adb')], check=True)

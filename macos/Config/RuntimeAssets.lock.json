@@ -32,6 +32,12 @@
       "destination": "AppIcon.icns",
       "sha256": "05664d98d0f11db2c72a71e8f79ab1f471d9f15ddaa5f0a0ca82c8580c6dab0b",
       "source_reference": "macos/assets/AppIcon.png"
+    },
+    {
+      "path": "macos/assets/Acknowledgements.txt",
+      "destination": "Acknowledgements.txt",
+      "sha256": "3fb3ce52993ad9b03af67f292ea271a29f692bc1f95ffc2ab374999445e0d17b",
+      "source_reference": "upstream README and runtime READMEs; unresolved rights explicitly recorded"
     }
   ],
   "provenance_notes": [
