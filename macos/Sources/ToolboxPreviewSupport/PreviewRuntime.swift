@@ -151,7 +151,7 @@ package final class PreviewDisplay: PresetDevice {
 }
 
 package final class PreviewRuntime {
-    package enum Scenario: String, CaseIterable { case connected = "已连接", disconnected = "未连接", failure = "写入失败", unknown = "未知读数" }
+    package enum Scenario: String, CaseIterable { case connected = "已连接", disconnected = "未连接", failure = "写入失败", unknown = "未知读数", permissionDenied = "权限拒绝", loginApproval = "登录待批准" }
     package let preferences = MemoryPreferences()
     package let scheduler = ManualScheduler()
     package let display = PreviewDisplay()
@@ -160,7 +160,8 @@ package final class PreviewRuntime {
     private let effectLock = NSLock(), loginLock = NSLock()
     private var recordedEffects: [String] = []
     package var effects: [String] { effectLock.lock(); defer { effectLock.unlock() }; return recordedEffects }
-    private var loginEnabled = false
+    private var loginState = LoginItemStatus.notRegistered
+    private var automationDenied = false
     package func environment(mode: AppEnvironment.Mode = .simulation) -> AppEnvironment {
         let resources = RuntimeResources(adbPath: "/mock/adb", serverPort: "0", runtime: { _ in nil }, guardianAPK: { "/mock/guardian.apk" })
         var system = SystemActions()
@@ -174,13 +175,16 @@ package final class PreviewRuntime {
         system.scan = { [self.display.identity] }; system.subnets = { ["192.0.2"] }
         func loginSnapshot() -> LoginItemSnapshot {
             self.loginLock.lock(); defer { self.loginLock.unlock() }
-            return LoginItemSnapshot(status: self.loginEnabled ? .enabled : .notRegistered)
+            return LoginItemSnapshot(status: self.loginState)
         }
         system.loginStatus = loginSnapshot
         system.reconcileLogin = { _ in loginSnapshot() }
         system.updateLogin = { enabled, token in
             if !token.isCancelled {
-                self.loginLock.lock(); self.loginEnabled = enabled; self.loginLock.unlock()
+                self.loginLock.lock()
+                if !enabled { self.loginState = .notRegistered }
+                else if self.loginState != .requiresApproval { self.loginState = .enabled }
+                self.loginLock.unlock()
                 record("login.write")
             }
             return loginSnapshot()
@@ -196,7 +200,9 @@ package final class PreviewRuntime {
         system.stopLog = { record("log.stop") }; system.exportLog = { _, _, completed in record("log.export"); completed(.success) }
         system.openLogDirectory = { record("log.open") }; system.terminal = { _, token in
             if token.isCancelled { return TerminalResult(outcome: .failed, detail: "模拟任务已取消") }
-            record("terminal"); return TerminalResult(outcome: .opened)
+            record("terminal")
+            self.loginLock.lock(); let denied = self.automationDenied; self.loginLock.unlock()
+            return TerminalResult(outcome: denied ? .denied : .opened, detail: denied ? "模拟自动化拒绝 (-1743)" : "")
         }
         return AppEnvironment(mode: mode, preferences: preferences,
             adb: AdbClient(resources: resources, execute: display.execute),
@@ -205,7 +211,16 @@ package final class PreviewRuntime {
             calendar: Calendar(identifier: .gregorian), presetDevice: { _, _ in self.display })
     }
     @MainActor package func makeState(_ scenario: Scenario = .connected) -> AppCoordinator {
+        loginLock.lock()
+        loginState = scenario == .loginApproval ? .requiresApproval : .notRegistered
+        automationDenied = scenario == .permissionDenied
+        loginLock.unlock()
         let state = AppCoordinator(environment: environment())
+        state.settings.loginItem = LoginItemSnapshot(status: scenario == .loginApproval ? .requiresApproval : .notRegistered)
+        if scenario == .permissionDenied {
+            state.settings.terminalResult = TerminalResult(outcome: .denied, detail: "模拟自动化拒绝 (-1743)")
+            state.keyboard.listenerStatus = .permissionRequired
+        }
         state.ipInput = display.identity
         display.failWrites = scenario == .failure
         display.unknownReadings = scenario == .unknown

@@ -33,7 +33,7 @@ for module in ['ToolboxConcurrency', 'ToolboxDomain', 'ToolboxApplication', 'Mim
         text = source.read_text()
         for forbidden in ['Process()', 'CGEvent.tapCreate(', 'AudioObjectSetPropertyData(',
                           'NSWorkspace.shared', 'UserDefaults.standard', 'NSApp.terminate(',
-                          'FileManager.default', 'NSSavePanel()', 'NSOpenPanel()', 'PresetStore()', 'posix_spawn(', 'Darwin.kill(', 'import ServiceManagement', 'SMAppService.']:
+                          'FileManager.default', 'NSSavePanel()', 'NSOpenPanel()', 'PresetStore()', 'posix_spawn(', 'Darwin.kill(', 'import ServiceManagement', 'SMAppService.', 'NSXPCConnection(', 'AXIsProcessTrusted(']:
             # Comments are not executable boundaries.
             executable_lines = '\n'.join(line for line in text.splitlines() if not line.lstrip().startswith('//'))
             assert forbidden not in executable_lines, (source, forbidden)
@@ -43,7 +43,7 @@ if len(sys.argv) > 1:
         if not binary.is_file():
             continue
         symbols = subprocess.check_output(['nm', '-gjU', str(binary)], text=True, stderr=subprocess.DEVNULL)
-        for forbidden in ['SystemProcessRunner', 'LiveHotkeyDriver', 'LiveToolboxRuntime', 'NetworkScan', 'ToolboxMacAdapters', 'ToolboxProcessExecution', 'LiveLoginItems', 'LegacyLoginItemFiles', 'SMAppService']:
+        for forbidden in ['SystemProcessRunner', 'LiveHotkeyDriver', 'LiveToolboxRuntime', 'NetworkScan', 'ToolboxMacAdapters', 'ToolboxProcessExecution', 'LiveLoginItems', 'LegacyLoginItemFiles', 'SMAppService', 'DefaultOutputCache', 'LiveLogFile', 'LiveOSDTransport']:
             assert forbidden not in symbols, (binary, forbidden)
     resources = app / 'Contents' / 'Resources'
     assert not (resources / 'runtime').exists()

@@ -56,14 +56,14 @@ extension AppCoordinator {
                 let tcp = self.environment.system.tcpOpen(ip, 5555, 2.0)
                 lines.append("TCP \(ip):5555: \(tcp ? "✅ 开放" : "❌ 连不上")")
                 if !tcp {
-                    lines.append("  → 设备在线但端口不通，通常是显示器的「无线调试」没开")
+                    lines.append("  → 端口不可达；请检查设备无线调试、网络隔离和系统局域网权限")
                 }
                 if connected {
                     lines.append("adb 设备状态: \(self.adb.deviceState())")
                 }
             }
 
-            lines.append("提示: 三者全 ❌ 且同网段 → 多半是本 app 缺「本地网络」权限")
+            lines.append("提示: 连接失败不能确定局域网授权状态；设备离线或网络隔离也会导致失败")
             lines.append("      到 系统设置 → 隐私与安全性 → 本地网络，打开本应用开关")
             lines.append("提示: 不同网段 → 显示器与 Mac 不在同一 Wi-Fi/VLAN")
             lines.append("===== 诊断结束 =====")

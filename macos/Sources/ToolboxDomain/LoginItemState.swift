@@ -18,6 +18,7 @@ package struct LoginItemSnapshot: Sendable, Equatable {
     package var detail: String {
         if let error { return error }
         if let note { return note }
+        if legacy == .unrecognized { return "旧登录项归属无法确认，未修改；请在登录项设置中检查。" }
         switch status {
         case .enabled: return "登录项已启用，状态由系统回读。"
         case .requiresApproval: return "需要在系统的登录项设置中允许本应用。"

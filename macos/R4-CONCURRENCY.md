@@ -1,5 +1,7 @@
 # R4：ADB 会话、进程边界与渐进并发迁移
 
+这是 R4 完成时的阶段记录；后续登录项、Terminal、日志和生命周期改进见 [R5-SYSTEM-SERVICES.md](R5-SYSTEM-SERVICES.md)。
+
 2026-10-21。macOS 27+ / Apple Silicon。保留现有 UI、设备端命令、音量 Binder/keyevent 回退、预设存储格式、资源与上游贡献说明。本阶段未部署到真实显示器，未替换已安装应用；R5 登录项与 R6 正式发布不在本批范围。
 
 ## 执行与隔离契约

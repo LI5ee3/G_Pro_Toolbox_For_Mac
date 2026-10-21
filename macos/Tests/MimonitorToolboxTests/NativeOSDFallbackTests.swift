@@ -51,8 +51,7 @@ import Foundation
         osd.stop()
     }
     func testOlderRequestAndStoppedLifecycleCannotShowStaleHUD() async {
-        let transport = Transport(), osd = NativeOSD(transport: Transport(), display: { 27 })
-        osd.stop() // independent inert lifecycle
+        let transport = Transport()
         var values: [Int] = []
         let active = NativeOSD(transport: transport, display: { 27 }); active.start()
         _ = active.showVolume(value: 10) { values.append(10) }
