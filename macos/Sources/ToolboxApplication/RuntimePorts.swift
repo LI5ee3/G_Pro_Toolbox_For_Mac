@@ -1,3 +1,4 @@
+import ToolboxDomain
 import AppKit
 import Foundation
 import MimonitorPresetCore

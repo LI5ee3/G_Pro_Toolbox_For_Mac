@@ -13,13 +13,15 @@ let package = Package(
     ],
     targets: [
         .target(name: "MimonitorPresetCore"),
-        .target(name: "MimonitorToolbox", dependencies: ["MimonitorPresetCore"]),
-        .target(name: "ToolboxMacAdapters", dependencies: ["MimonitorToolbox", "MimonitorPresetCore"]),
-        .target(name: "ToolboxPreviewSupport", dependencies: ["MimonitorToolbox", "MimonitorPresetCore"]),
+        .target(name: "ToolboxDomain", dependencies: ["MimonitorPresetCore"]),
+        .target(name: "ToolboxApplication", dependencies: ["ToolboxDomain", "MimonitorPresetCore"]),
+        .target(name: "MimonitorToolbox", dependencies: ["ToolboxApplication", "ToolboxDomain", "MimonitorPresetCore"]),
+        .target(name: "ToolboxMacAdapters", dependencies: ["ToolboxApplication", "ToolboxDomain", "MimonitorPresetCore"]),
+        .target(name: "ToolboxPreviewSupport", dependencies: ["MimonitorToolbox", "ToolboxApplication", "ToolboxDomain", "MimonitorPresetCore"]),
         .executableTarget(name: "ToolboxApp", dependencies: ["MimonitorToolbox", "ToolboxMacAdapters"]),
         .executableTarget(name: "ToolboxPreviewHost", dependencies: ["ToolboxPreviewSupport"]),
         .testTarget(name: "MimonitorPresetCoreTests", dependencies: ["MimonitorPresetCore"]),
-        .testTarget(name: "MimonitorToolboxTests", dependencies: ["MimonitorToolbox", "MimonitorPresetCore", "ToolboxMacAdapters", "ToolboxPreviewSupport"]),
+        .testTarget(name: "MimonitorToolboxTests", dependencies: ["MimonitorToolbox", "ToolboxApplication", "ToolboxDomain", "MimonitorPresetCore", "ToolboxMacAdapters", "ToolboxPreviewSupport"]),
     ],
     swiftLanguageModes: [.v5]
 )

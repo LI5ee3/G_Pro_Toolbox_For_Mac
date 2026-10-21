@@ -1,3 +1,5 @@
+import ToolboxDomain
+import ToolboxApplication
 import MimonitorToolbox
 import AppKit
 import Foundation
@@ -180,8 +182,8 @@ package final class PreviewRuntime {
             system: system, now: { Date(timeIntervalSince1970: 1_800_000_000 + self.scheduler.time) },
             calendar: Calendar(identifier: .gregorian), presetDevice: { _, _ in self.display })
     }
-    @MainActor package func makeState(_ scenario: Scenario = .connected) -> AppState {
-        let state = AppState(environment: environment())
+    @MainActor package func makeState(_ scenario: Scenario = .connected) -> AppCoordinator {
+        let state = AppCoordinator(environment: environment())
         state.ipInput = display.identity
         display.failWrites = scenario == .failure
         display.unknownReadings = scenario == .unknown
@@ -189,7 +191,7 @@ package final class PreviewRuntime {
             state.adb.ip = display.identity
             state.connectionStatus = .connected("MiTV Preview · \(display.identity)")
             state.currentValues = (try? display.capture()) ?? [:]
-            state.loadedPages = AppState.refreshablePages
+            state.loadedPages = AppCoordinator.refreshablePages
             state.seedSimulationReadings(volume: scenario == .unknown ? nil : 10, muted: scenario == .unknown ? nil : false)
         }
         return state

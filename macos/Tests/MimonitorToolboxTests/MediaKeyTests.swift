@@ -1,3 +1,5 @@
+import ToolboxDomain
+import ToolboxApplication
 #if canImport(Cocoa)
 import XCTest
 @testable import MimonitorToolbox

@@ -1,3 +1,5 @@
+import ToolboxDomain
+import ToolboxApplication
 import SwiftUI
 
 /// The physical monitor, with caller-supplied content clipped to its 16:9 panel.

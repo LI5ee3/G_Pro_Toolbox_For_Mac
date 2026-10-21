@@ -9,8 +9,8 @@ import Foundation
 ///   - DisplayPort/HDMI 直连：`Mi Monitor`
 ///   - 经过 eqMac 等虚拟声卡转发：`Mi Monitor (eqMac)`
 /// 所以匹配用「包含」而不是全等，默认关键字 `Mi Monitor` 两种都能命中。
-enum AudioOutputMonitor {
-    static func shouldHandleVolumeKeys(enabled: Bool, adbConnected: Bool,
+package enum AudioOutputMonitor {
+    package static func shouldHandleVolumeKeys(enabled: Bool, adbConnected: Bool,
                                        gateEnabled: Bool, configuredOutputName: String,
                                        outputName: String?) -> Bool {
         guard enabled, adbConnected else { return false }
@@ -20,7 +20,7 @@ enum AudioOutputMonitor {
     ///
     /// - 配置为空：视为「不过滤」，返回 true。
     /// - 读不到设备名：返回 false（宁可放行给系统，也不要吞掉按键却没反应）。
-    static func matches(configuredName: String, outputName: String?) -> Bool {
+    package static func matches(configuredName: String, outputName: String?) -> Bool {
         let keyword = configuredName.trimmingCharacters(in: .whitespaces)
         guard !keyword.isEmpty else { return true }
         guard let outputName, !outputName.isEmpty else { return false }

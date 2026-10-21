@@ -1,3 +1,5 @@
+import ToolboxDomain
+import ToolboxApplication
 import SwiftUI
 import AppKit
 import MimonitorPresetCore
@@ -13,7 +15,7 @@ struct MenuBarPanel: View {
             // 状态行
             HStack(spacing: 8) {
                 Circle()
-                    .fill(state.statusColor)
+                    .fill(state.connection.statusColor)
                     .frame(width: 8, height: 8)
                 Text(state.statusText)
                     .font(.system(size: 14, weight: .medium))

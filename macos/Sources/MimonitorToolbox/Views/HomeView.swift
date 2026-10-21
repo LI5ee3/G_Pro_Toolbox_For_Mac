@@ -1,3 +1,5 @@
+import ToolboxDomain
+import ToolboxApplication
 import SwiftUI
 import AppKit
 import UniformTypeIdentifiers
@@ -170,7 +172,7 @@ struct HomeView: View {
         HStack(spacing: 18) {
             Label(state.isConnected ? "ADB 已连接" : state.statusText,
                   systemImage: state.isConnected ? "checkmark.circle.fill" : "wifi.slash")
-                .foregroundColor(state.statusColor)
+                .foregroundColor(state.connection.statusColor)
             Spacer()
             Button { state.requestedPage = .tools } label: { Label(guardian, systemImage: "checkmark.shield") }
                 .help(state.guardianStatus)
@@ -225,7 +227,7 @@ private struct ConnectionSettingsSheet: View {
                 }
             }
             Label(state.statusText, systemImage: state.isConnected ? "checkmark.circle" : "network")
-                .foregroundColor(state.statusColor).font(.system(size: 14))
+                .foregroundColor(state.connection.statusColor).font(.system(size: 14))
         }
         .padding(30).frame(width: 640).background(Theme.canvas).tint(Theme.accent)
     }

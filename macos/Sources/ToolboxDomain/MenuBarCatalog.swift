@@ -6,23 +6,23 @@ import Foundation
 ///   - `options`：一组互斥取值，菜单里以打勾列表呈现（精密控光、色域、画面模式…）
 ///   - `stepper`：连续数值，菜单里给「增大 / 减小」两项（背光、对比度…）
 /// 菜单栏空间有限，所以不把 1~100 这种全量取值铺成列表。
-struct MenuBarEntry: Identifiable, Hashable {
-    enum Kind: Hashable {
+package struct MenuBarEntry: Identifiable, Hashable {
+    package enum Kind: Hashable {
         case options([Option])
         case stepper(min: Int, max: Int, step: Int)
     }
 
-    let id: String
-    let label: String
-    let kind: Kind
+    package let id: String
+    package let label: String
+    package let kind: Kind
 
-    static func == (l: MenuBarEntry, r: MenuBarEntry) -> Bool { l.id == r.id }
-    func hash(into hasher: inout Hasher) { hasher.combine(id) }
+    package static func == (l: MenuBarEntry, r: MenuBarEntry) -> Bool { l.id == r.id }
+    package func hash(into hasher: inout Hasher) { hasher.combine(id) }
 }
 
 /// 可加入菜单栏的条目清单。顺序即为菜单栏里的显示顺序。
-enum MenuBarCatalog {
-    static let all: [MenuBarEntry] = [
+package enum MenuBarCatalog {
+    package static let all: [MenuBarEntry] = [
         MenuBarEntry(id: "picture_mode", label: "画面模式", kind: .options([
             Option(label: "标准", value: 14),
             Option(label: "游戏", value: 10),
@@ -79,10 +79,10 @@ enum MenuBarCatalog {
         ])),
     ]
 
-    static func entry(_ id: String) -> MenuBarEntry? {
+    package static func entry(_ id: String) -> MenuBarEntry? {
         all.first { $0.id == id }
     }
 
     /// 默认放哪几项（用户没配置过时）
-    static let defaultEnabled = ["picture_mode", "local_dimming", "backlight"]
+    package static let defaultEnabled = ["picture_mode", "local_dimming", "backlight"]
 }

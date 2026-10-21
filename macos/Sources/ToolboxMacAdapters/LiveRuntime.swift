@@ -1,4 +1,5 @@
-import MimonitorToolbox
+import ToolboxDomain
+import ToolboxApplication
 import AppKit
 import Foundation
 import MimonitorPresetCore
@@ -173,5 +174,5 @@ extension AppEnvironment {
 
 /// The only public production composition factory. PreviewSupport never imports this module.
 public enum LiveToolboxRuntime {
-    @MainActor public static func makeSession() -> ToolboxSession { ToolboxSession(environment: .live()) }
+    @MainActor public static func makeCoordinator() -> AppCoordinator { AppCoordinator(environment: .live()) }
 }

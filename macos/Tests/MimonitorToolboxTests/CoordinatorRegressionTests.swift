@@ -1,3 +1,5 @@
+import ToolboxDomain
+import ToolboxApplication
 import XCTest
 import MimonitorPresetCore
 @testable import MimonitorToolbox
@@ -5,7 +7,7 @@ import MimonitorPresetCore
 
 @MainActor
 final class CoordinatorRegressionTests: XCTestCase {
-    private func drain(_ state: AppState) async {
+    private func drain(_ state: AppCoordinator) async {
         let done = expectation(description: "device work and main publication complete")
         state.deviceQueue.async { DispatchQueue.main.async { done.fulfill() } }
         await fulfillment(of: [done], timeout: 3)

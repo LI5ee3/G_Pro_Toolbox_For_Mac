@@ -1,3 +1,6 @@
+import ToolboxMacAdapters
+import ToolboxDomain
+import ToolboxApplication
 import Foundation
 import XCTest
 import MimonitorPresetCore

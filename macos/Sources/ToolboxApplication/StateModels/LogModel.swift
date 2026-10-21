@@ -1,3 +1,4 @@
+import ToolboxDomain
 import Observation
 
 /// A log mutation invalidates only views that read these properties.

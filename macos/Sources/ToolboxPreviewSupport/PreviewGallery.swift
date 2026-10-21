@@ -1,3 +1,5 @@
+import ToolboxDomain
+import ToolboxApplication
 import SwiftUI
 import Observation
 import MimonitorToolbox
@@ -41,7 +43,7 @@ private final class PreviewFixture {
     init(scenario: PreviewRuntime.Scenario) {
         let runtime = PreviewRuntime()
         self.runtime = runtime
-        session = ToolboxSession(state: runtime.makeState(scenario))
+        session = ToolboxSession(coordinator: runtime.makeState(scenario))
     }
 }
 

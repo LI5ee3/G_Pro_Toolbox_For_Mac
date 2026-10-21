@@ -1,30 +1,31 @@
+import ToolboxDomain
 import AppKit
 import Foundation
 import MimonitorPresetCore
 
-extension AppState {
-    var activePresetID: String? {
+extension AppCoordinator {
+    package var activePresetID: String? {
         presetConfiguration.activeDeviceIdentity == adb.ip ? presetConfiguration.activePresetID : nil
     }
-    var activePresetName: String {
+    package var activePresetName: String {
         presetConfiguration.presets.first { $0.id == activePresetID }?.name ?? "无预设"
     }
-    var presetControlPolicy: PresetControlPolicy {
+    package var presetControlPolicy: PresetControlPolicy {
         PresetControlPolicy(configuration: presetConfiguration, deviceIdentity: adb.ip, isSwitching: isPresetBusy)
     }
-    var memoriesSuspendedByPreset: Bool { presetControlPolicy.memoriesLocked }
-    var effectiveHdrMemoryEnabled: Bool {
+    package var memoriesSuspendedByPreset: Bool { presetControlPolicy.memoriesLocked }
+    package var effectiveHdrMemoryEnabled: Bool {
         presetControlPolicy.effectiveMemoryEnabled(savedPreference: hdrMemoryEnabled)
     }
-    var effectiveFreesyncMemoryEnabled: Bool {
+    package var effectiveFreesyncMemoryEnabled: Bool {
         presetControlPolicy.effectiveMemoryEnabled(savedPreference: freesyncMemoryEnabled)
     }
-    var canRestoreBaseline: Bool {
+    package var canRestoreBaseline: Bool {
         isConnected && presetConfiguration.baseline?.deviceIdentity == adb.ip
             && !(presetConfiguration.baseline?.values.isEmpty ?? true)
     }
 
-    func startPresetFeatures() {
+    package func startPresetFeatures() {
         presetConfiguration = presetEngine.configuration
         if let error = presetEngine.loadError { presetError = error; log(error) }
         presetTimer = environment.scheduler.repeating(every: 15, commonModes: true) { [weak self] in
@@ -33,12 +34,12 @@ extension AppState {
         updateAutomaticTaskStatus()
     }
 
-    nonisolated private func currentMinute() -> Int {
+    nonisolated internal func currentMinute() -> Int {
         let parts = environment.calendar.dateComponents([.hour, .minute], from: environment.now())
         return (parts.hour ?? 0) * 60 + (parts.minute ?? 0)
     }
 
-    func updateAutomaticTaskStatus() {
+    package func updateAutomaticTaskStatus() {
         let wanted = PresetSchedule.activeTask(presetConfiguration.tasks, minute: currentMinute())
         if let session = presetConfiguration.session, session.deviceIdentity != adb.ip, isConnected {
             automaticTaskStatus = "等待原显示器 \(session.deviceIdentity)，不会向当前设备还原"
@@ -51,7 +52,7 @@ extension AppState {
         } else { automaticTaskStatus = "当前没有任务生效" }
     }
 
-    func checkAutomaticTasks() {
+    package func checkAutomaticTasks() {
         updateAutomaticTaskStatus()
         guard isConnected, !isPresetOperationInFlight, presetEngine.loadError == nil else { return }
         if pendingPresetSave == nil, let id = pendingPresetSaveID, activePresetID == id,
@@ -77,13 +78,13 @@ extension AppState {
         }
     }
 
-    func createPreset(name: String) {
+    package func createPreset(name: String) {
         runPresetOperation("新建预设", navigateToPicture: true) { engine, device in
             guard let device else { throw PresetError("请先连接显示器") }
             try engine.create(name: name, device: device)
         }
     }
-    func applyPreset(id: String, edit: Bool = false) {
+    package func applyPreset(id: String, edit: Bool = false) {
         if edit && activePresetID == id && !isPresetOperationInFlight && !presetConfiguration.applicationIncomplete {
             requestedPage = .picture
             return
@@ -95,7 +96,7 @@ extension AppState {
             try engine.apply(id: id, device: device)
         }
     }
-    func restoreBaseline(edit: Bool = false) {
+    package func restoreBaseline(edit: Bool = false) {
         if edit && isConnected && activePresetID == nil && !isPresetOperationInFlight
             && !presetConfiguration.applicationIncomplete {
             requestedPage = .picture
@@ -107,33 +108,33 @@ extension AppState {
             try engine.restore(device: device)
         }
     }
-    func renamePreset(id: String, name: String) {
+    package func renamePreset(id: String, name: String) {
         runPresetOperation("重命名预设") { engine, _ in try engine.rename(id: id, name: name) }
     }
-    func setPresetMenuBarVisibility(id: String, visible: Bool) {
+    package func setPresetMenuBarVisibility(id: String, visible: Bool) {
         runPresetOperation("更新预设菜单栏显示") { engine, _ in
             try engine.setMenuBarVisibility(id: id, visible: visible)
         }
     }
-    func deletePreset(id: String) {
+    package func deletePreset(id: String) {
         let hudTitle = presetConfiguration.activePresetID == id ? "预设：无预设" : nil
         runPresetOperation("删除预设", refresh: true, switchHUDTitle: hudTitle) { engine, device in
             try engine.delete(id: id, device: device)
         }
     }
-    func saveAutomaticTask(_ task: ScheduledPresetTask) {
+    package func saveAutomaticTask(_ task: ScheduledPresetTask) {
         runPresetOperation("保存自动任务") { engine, _ in try engine.saveTask(task) }
     }
-    func deleteAutomaticTask(id: String) {
+    package func deleteAutomaticTask(id: String) {
         runPresetOperation("删除自动任务") { engine, _ in try engine.deleteTask(id: id) }
     }
-    func moveAutomaticTask(id: String, offset: Int) {
+    package func moveAutomaticTask(id: String, offset: Int) {
         runPresetOperation("调整任务顺序") { engine, _ in try engine.moveTask(id: id, offset: offset) }
     }
 
     /// Every picture write (including hotkeys and menu-bar controls) goes through this path.
     /// Capture the preset identity NOW, not when the delayed readback eventually runs.
-    func runPictureChange(delay: TimeInterval = 1.2, completion: (() -> Void)? = nil, _ work: @escaping @Sendable () -> Void) {
+    package func runPictureChange(delay: TimeInterval = 1.2, completion: (() -> Void)? = nil, _ work: @escaping @Sendable () -> Void) {
         guard isConnected, !isPresetBusy, !presetConfiguration.applicationIncomplete else { completion?(); return }
         let request = connectionIntent.generation
         let identity = adb.ip
@@ -161,7 +162,7 @@ extension AppState {
         }
     }
 
-    private func schedulePresetSave(id: String, request: Int, revision: Int, delay: TimeInterval) {
+    internal func schedulePresetSave(id: String, request: Int, revision: Int, delay: TimeInterval) {
         let save = DispatchWorkItem { [weak self] in
             guard let self else { return }
             self.pendingPresetSave = nil
@@ -181,7 +182,7 @@ extension AppState {
         environment.scheduler.after(delay, work: save)
     }
 
-    private func runPresetOperation(_ label: String, automatic: Bool = false, refresh: Bool = false,
+    internal func runPresetOperation(_ label: String, automatic: Bool = false, refresh: Bool = false,
                                     navigateToPicture: Bool = false, flushAutosave: Bool = true,
                                     switchHUDTitle: String? = nil,
                                     operation: @escaping @Sendable (PresetEngine, (any PresetDevice)?) throws -> Void) {

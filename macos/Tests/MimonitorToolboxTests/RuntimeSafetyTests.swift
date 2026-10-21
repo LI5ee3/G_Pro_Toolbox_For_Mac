@@ -1,3 +1,5 @@
+import ToolboxDomain
+import ToolboxApplication
 @testable import ToolboxPreviewSupport
 import XCTest
 import MimonitorPresetCore
@@ -9,7 +11,7 @@ final class RuntimeSafetyTests: XCTestCase {
         for _ in 0..<20 {
             let runtime = PreviewRuntime()
             autoreleasepool {
-                let state = AppState(environment: runtime.environment())
+                let state = AppCoordinator(environment: runtime.environment())
                 XCTAssertTrue(state.crosshairGameModeOnly)
                 XCTAssertFalse(state.isRunning)
                 XCTAssertEqual(runtime.scheduler.pendingCount, 0)
@@ -32,7 +34,7 @@ final class RuntimeSafetyTests: XCTestCase {
 
     func testLiveLifecycleWithFakeEffectsIsIdempotentAndCancelsStartup() async {
         let runtime = PreviewRuntime()
-        let state = AppState(environment: runtime.environment(mode: .live))
+        let state = AppCoordinator(environment: runtime.environment(mode: .live))
         state.start()
         let count = runtime.scheduler.pendingCount
         let starts = runtime.hotkeyDriver.starts

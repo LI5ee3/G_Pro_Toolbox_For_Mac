@@ -1,3 +1,5 @@
+import ToolboxDomain
+import ToolboxApplication
 @testable import ToolboxMacAdapters
 import Foundation
 @testable import MimonitorToolbox

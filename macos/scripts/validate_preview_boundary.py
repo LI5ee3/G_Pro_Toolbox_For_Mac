@@ -27,7 +27,7 @@ def dependencies(name):
 reachable = dependencies('ToolboxPreviewHost')
 assert 'ToolboxMacAdapters' not in reachable, reachable
 assert 'ToolboxApp' not in reachable, reachable
-for module in ['MimonitorToolbox', 'ToolboxPreviewSupport', 'ToolboxPreviewHost']:
+for module in ['ToolboxDomain', 'ToolboxApplication', 'MimonitorToolbox', 'ToolboxPreviewSupport', 'ToolboxPreviewHost']:
     for source in (root / 'Sources' / module).rglob('*.swift'):
         text = source.read_text()
         for forbidden in ['Process()', 'CGEvent.tapCreate(', 'AudioObjectSetPropertyData(',

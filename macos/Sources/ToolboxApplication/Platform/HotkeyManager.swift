@@ -1,3 +1,4 @@
+import ToolboxDomain
 import Cocoa
 import Carbon.HIToolbox
 import ApplicationServices
@@ -7,59 +8,6 @@ import ApplicationServices
 /// 连 `Self.systemDefinedEventType`（动态自身类型）都会报
 /// "a C function pointer cannot be formed from a closure that captures dynamic Self type"。
 private let nxSystemDefinedEventType: UInt32 = 14
-
-// MARK: - 快捷键配置模型
-
-package struct HotkeyConfig: Codable, Equatable {
-    package var modifier: String = "无"
-    package var key: String = "无"
-    package var isEnabled: Bool { modifier != "无" && key != "无" }
-}
-
-package struct AdjustHotkeyConfig: Codable, Equatable {
-    package var param: String = "backlight"
-    package var direction: String = "increase"
-    package var step: Int = 5
-    package var modifier: String = "无"
-    package var key: String = "无"
-    package var isEnabled: Bool { modifier != "无" && key != "无" }
-}
-
-package enum HotkeyLists {
-    /// 下拉里能选到的修饰键组合。名称必须和 `HotkeyMap.modifierName(for:)`
-    /// 生成的一致，否则录入的快捷键在下拉里显示不出来。
-    package static let modifiers = [
-        "无", "Cmd", "Cmd + Shift", "Cmd + Option", "Cmd + Ctrl",
-        "Ctrl", "Ctrl + Alt", "Ctrl + Shift",
-        "Alt", "Alt + Shift", "Shift",
-    ]
-}
-
-/// 8 个循环切换动作（对应原版 tools 页 actions_list）
-let hotkeyActions: [(id: String, label: String)] = [
-    ("picture_mode_cycle", "画面模式 循环切换"),
-    ("local_dimming_cycle", "精密控光 循环切换"),
-    ("local_dimming_toggle_off", "精密控光 开关切换"),
-    ("color_space_cycle", "色域 循环切换"),
-    ("color_temp_cycle", "色温 循环切换"),
-    ("response_time_cycle", "响应时间 循环切换"),
-    ("freesync_toggle", "FreeSync 开关切换"),
-    ("input_source_cycle", "信号源 循环切换"),
-]
-
-/// 可调参数（对应 core.py ADJUSTABLE_HOTKEY_PARAMS）
-let adjustableParams: [(id: String, label: String, defaultStep: Int)] = [
-    ("backlight", "背光", 5),
-    ("black_level", "黑色级别", 5),
-    ("contrast", "对比度", 5),
-    ("saturation", "饱和度", 5),
-    ("hue", "色调", 5),
-    ("sharpness", "锐度", 1),
-    ("red_gain", "红色增益", 10),
-    ("green_gain", "绿色增益", 10),
-    ("blue_gain", "蓝色增益", 10),
-    ("atmosphere_illumination", "屏幕灯亮度", 1),
-]
 
 // MARK: - 按键 / 修饰键映射
 

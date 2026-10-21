@@ -1,11 +1,12 @@
+import ToolboxDomain
+import ToolboxApplication
 import SwiftUI
 
 /// Public host API. Hardware construction remains in ToolboxMacAdapters.
 @MainActor
 public final class ToolboxSession {
-    package let state: AppState
-    package init(environment: AppEnvironment) { state = AppState(environment: environment) }
-    package init(state: AppState) { self.state = state }
+    package let state: AppCoordinator
+    public init(coordinator: AppCoordinator) { self.state = coordinator }
     public func start() { state.start() }
     public func stop() { state.stop() }
     public var closeBehavior: String { state.closeBehavior }
@@ -20,12 +21,12 @@ public enum ToolboxScreen: String, CaseIterable, Identifiable {
 }
 
 private struct ToolboxActionsKey: EnvironmentKey {
-    static let defaultValue: AppState? = nil
+    static let defaultValue: AppCoordinator? = nil
 }
 
 extension EnvironmentValues {
     // Keep the storage optional: writable key-path projection can read the old value before writing.
-    var toolboxActions: AppState? {
+    var toolboxActions: AppCoordinator? {
         get { self[ToolboxActionsKey.self] }
         set { self[ToolboxActionsKey.self] = newValue }
     }
@@ -35,7 +36,7 @@ extension EnvironmentValues {
 @MainActor @propertyWrapper
 struct ToolboxActions: DynamicProperty {
     @Environment(\.toolboxActions) private var coordinator
-    var wrappedValue: AppState {
+    var wrappedValue: AppCoordinator {
         guard let coordinator else { preconditionFailure("Inject ToolboxSession from the live or safe-preview host") }
         return coordinator
     }

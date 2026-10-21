@@ -1,4 +1,5 @@
-import MimonitorToolbox
+import ToolboxDomain
+import ToolboxApplication
 import AppKit
 import SwiftUI
 

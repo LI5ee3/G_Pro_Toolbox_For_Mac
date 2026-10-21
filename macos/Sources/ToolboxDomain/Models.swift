@@ -131,6 +131,7 @@ package enum PageDataKeys {
 // MARK: - 通用选项
 
 package struct Option: Identifiable, Hashable {
+    package init(label: String, value: Int) { self.label = label; self.value = value }
     package let label: String
     package let value: Int
     package var id: Int { value }

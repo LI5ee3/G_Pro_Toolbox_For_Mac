@@ -1,3 +1,5 @@
+import ToolboxDomain
+import ToolboxApplication
 import SwiftUI
 
 /// 菜单栏快捷项与主窗口共用同一份设备状态及操作。
