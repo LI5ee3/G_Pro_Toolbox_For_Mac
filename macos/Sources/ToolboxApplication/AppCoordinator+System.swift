@@ -2,6 +2,8 @@ import ToolboxDomain
 import Foundation
 
 extension AppCoordinator {
+    package func finishLogs(_ completion: @escaping @MainActor @Sendable () -> Void) { environment.system.finishLogs(completion) }
+
     package func refreshLoginItem(migrateLegacy: Bool = false) {
         guard isRunning || environment.mode == .simulation else { return }
         guard !settings.loginItemBusy else { return }

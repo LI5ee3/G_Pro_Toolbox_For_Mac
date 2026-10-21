@@ -84,7 +84,9 @@ package struct SystemActions {
     package var startLog: (String) -> Void = { _ in }
     package var appendLog: (String) -> Void = { _ in }
     package var stopLog: () -> Void = {}
-    package var exportLog: (URL, String) -> Void = { _, _ in }
+    package var observeLogErrors: @MainActor (@escaping @MainActor @Sendable (String) -> Void) -> RuntimeCancellation = { _ in RuntimeCancellation() }
+    package var finishLogs: @MainActor (@escaping @MainActor @Sendable () -> Void) -> Void = { $0() }
+    package var exportLog: @MainActor (URL, String, @escaping @MainActor @Sendable (FileActionResult) -> Void) -> Void = { _, _, completed in completed(.success) }
     package var openLogDirectory: () -> Void = {}
 }
 

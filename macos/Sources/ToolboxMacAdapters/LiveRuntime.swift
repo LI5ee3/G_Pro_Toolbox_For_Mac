@@ -70,36 +70,6 @@ final class LiveFeedback: FeedbackPresenting {
     func stop() { HUDWindow.shared.stop(); NativeOSD.shared.stop() }
 }
 
-private final class LiveLogFile {
-    var url: URL?
-    var handle: FileHandle?
-    var directory: URL {
-        FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
-            .appendingPathComponent("MimonitorToolbox/logs")
-    }
-    func start(_ stamp: String) {
-        stop()
-        try? FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
-        let target = directory.appendingPathComponent("log_\(stamp).txt")
-        url = target
-        if !FileManager.default.fileExists(atPath: target.path) { FileManager.default.createFile(atPath: target.path, contents: nil) }
-        handle = try? FileHandle(forWritingTo: target)
-    }
-    func stop() { try? handle?.close(); handle = nil }
-    func export(_ target: URL, text: String) {
-        if let url, FileManager.default.fileExists(atPath: url.path) { try? FileManager.default.copyItem(at: url, to: target) }
-        else { try? text.write(to: target, atomically: true, encoding: .utf8) }
-    }
-    func open() {
-        if let url { NSWorkspace.shared.activateFileViewerSelecting([url]) }
-        else {
-            try? FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
-            NSWorkspace.shared.open(directory)
-        }
-    }
-    deinit { stop() }
-}
-
 extension AppEnvironment {
     /// Call only from the production composition root, after choosing the runtime mode.
     @MainActor static func live() -> AppEnvironment {
@@ -110,7 +80,8 @@ extension AppEnvironment {
                 ((try? FileManager.default.attributesOfItem(atPath: path)[.size]) as? NSNumber)?.intValue ?? 0
             })
         let adb = AdbClient(resources: resources, execute: SystemProcessRunner.run)
-        let logFile = LiveLogFile()
+        let logFile = LiveLogFile(directory: FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
+            .appendingPathComponent("MimonitorToolbox/logs"))
         let loginItems = LiveLoginItems()
         let output = DefaultOutputCache.live()
         var system = SystemActions()
@@ -181,8 +152,11 @@ extension AppEnvironment {
             return TerminalExecution.result(SystemProcessRunner.run(request))
         }
         system.startLog = logFile.start; system.stopLog = logFile.stop
-        system.appendLog = { try? logFile.handle?.write(contentsOf: Data($0.utf8)) }
-        system.exportLog = { logFile.export($0, text: $1) }; system.openLogDirectory = logFile.open
+        system.appendLog = logFile.append
+        system.observeLogErrors = logFile.observeErrors
+        system.finishLogs = logFile.finish
+        system.exportLog = { logFile.export($0, text: $1, completion: $2) }
+        system.openLogDirectory = logFile.open
         return AppEnvironment(mode: .live, preferences: UserDefaults.standard, adb: adb,
             hotkeys: HotkeyManager(driver: LiveHotkeyDriver()), feedback: LiveFeedback(),
             scheduler: LiveScheduler(), system: system, now: Date.init, calendar: .current,

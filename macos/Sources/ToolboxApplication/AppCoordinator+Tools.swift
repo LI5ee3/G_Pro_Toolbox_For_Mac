@@ -12,8 +12,14 @@ extension AppCoordinator {
     }
 
     package func exportLog(to url: URL) {
-        environment.system.exportLog(url, logLines.joined(separator: "\n"))
-        log("日志已导出: \(url.path)")
+        let lifetime = executionLifetime.token()
+        environment.system.exportLog(url, logLines.joined(separator: "\n")) { [weak self] result in
+            guard let self, self.executionLifetime.allows(lifetime) else { return }
+            switch result {
+            case .success: self.log("日志已导出: \(url.path)")
+            case .failure(let error): self.log("日志导出失败：\(error)")
+            }
+        }
     }
     package func chooseLogExport() { environment.system.chooseLogExport { [weak self] in self?.exportLog(to: $0) } }
     package func chooseAPK() { environment.system.chooseAPK { [weak self] in self?.installApk($0) } }

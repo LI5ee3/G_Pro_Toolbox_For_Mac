@@ -9,6 +9,9 @@ public final class ToolboxSession {
     public init(coordinator: AppCoordinator) { self.state = coordinator }
     public func start() { state.start() }
     public func stop() { state.stop() }
+    public func finishLogs(_ completion: @escaping @MainActor @Sendable () -> Void) {
+        state.finishLogs(completion)
+    }
     public var closeBehavior: String { state.closeBehavior }
 }
 

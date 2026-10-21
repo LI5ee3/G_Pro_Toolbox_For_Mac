@@ -192,7 +192,7 @@ package final class PreviewRuntime {
         system.chooseAPK = { completion in record("apk.choose"); completion(URL(fileURLWithPath: "/mock/example.apk")) }
         system.chooseLogExport = { completion in record("log.choose"); completion(URL(fileURLWithPath: "/mock/log.txt")) }
         system.startLog = { _ in record("log.start") }; system.appendLog = { _ in record("log.append") }
-        system.stopLog = { record("log.stop") }; system.exportLog = { _, _ in record("log.export") }
+        system.stopLog = { record("log.stop") }; system.exportLog = { _, _, completed in record("log.export"); completed(.success) }
         system.openLogDirectory = { record("log.open") }; system.terminal = { _, token in
             if token.isCancelled { return TerminalResult(outcome: .failed, detail: "模拟任务已取消") }
             record("terminal"); return TerminalResult(outcome: .opened)

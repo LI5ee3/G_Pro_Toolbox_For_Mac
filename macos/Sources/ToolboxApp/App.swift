@@ -106,9 +106,11 @@ private struct ToolboxMenuIcon: View {
     }
 }
 
-final class AppDelegate: NSObject, NSApplicationDelegate {
+@MainActor final class AppDelegate: NSObject, NSApplicationDelegate {
     weak var session: ToolboxSession?
     var launch: AppLaunchState?
+    private var terminationPending = false
+    private var terminationReplied = false
     func applicationDidFinishLaunching(_ notification: Notification) {
         // 启动时先把主题应用上，否则会先闪一下系统外观再切换
         session?.start()
@@ -121,6 +123,22 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         return true
     }
 
+    func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
+        if terminationReplied { return .terminateNow }
+        if terminationPending { return .terminateLater }
+        guard let session else { return .terminateNow }
+        terminationPending = true
+        session.stop()
+        session.finishLogs { [weak self] in DispatchQueue.main.async { self?.finishTermination(sender) } }
+        // A blocked filesystem must not trap the app in termination indefinitely.
+        DispatchQueue.main.asyncAfter(deadline: .now() + 2) { [weak self] in self?.finishTermination(sender) }
+        return .terminateLater
+    }
+    private func finishTermination(_ sender: NSApplication) {
+        guard terminationPending, !terminationReplied else { return }
+        terminationReplied = true
+        sender.reply(toApplicationShouldTerminate: true)
+    }
     func applicationWillTerminate(_ notification: Notification) { session?.stop() }
 
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {

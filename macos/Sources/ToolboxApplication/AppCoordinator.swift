@@ -176,6 +176,12 @@ public final class AppCoordinator {
         refreshLoginItem(migrateLegacy: true)
         environment.system.applyTheme(theme)
 
+        runtimeTasks.append(environment.system.observeLogErrors { [weak self] error in
+            guard let self else { return }
+            self.logToFileEnabled = false
+            self.log("文件日志已停止：\(error)")
+        })
+        if logToFileEnabled { environment.system.startLog(Self.fileTimeFormatter.string(from: environment.now())) }
         startPresetFeatures()
         log("系统就绪，等待连接...")
         hotkeyManager.onTrigger = { [weak self] id in self?.handleHotkeyTrigger(id) }
