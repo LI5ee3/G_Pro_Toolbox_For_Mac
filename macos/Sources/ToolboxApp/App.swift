@@ -1,3 +1,4 @@
+import Observation
 import SwiftUI
 import AppKit
 import MimonitorToolbox
@@ -80,12 +81,44 @@ enum DockVisibility {
 ///   - exit：关掉窗口直接退出
 /// 「隐藏窗口」不会顺带退出 —— 见 DockVisibility：没窗口时应用退回 .accessory
 /// 策略，菜单栏图标还在，所以进程继续活着。
+@MainActor @Observable
+final class AppLaunchState {
+    private(set) var windowRequest = 0
+    @ObservationIgnored private var handledRequest = 0
+    func didFinishLaunching() {
+        if !LiveToolboxRuntime.startsInMenuBar() { requestWindow() }
+    }
+    func requestWindow() { windowRequest &+= 1 }
+    func claimWindowRequest() -> Bool {
+        guard windowRequest > handledRequest else { return false }
+        handledRequest = windowRequest; return true
+    }
+}
+
+private struct ToolboxMenuIcon: View {
+    let launch: AppLaunchState
+    @Environment(\.openWindow) private var openWindow
+    var body: some View {
+        Image(systemName: "display")
+            .onChange(of: launch.windowRequest, initial: true) {
+                if launch.claimWindowRequest() { DockVisibility.showDockIcon(); openWindow(id: "main") }
+            }
+    }
+}
+
 final class AppDelegate: NSObject, NSApplicationDelegate {
     weak var session: ToolboxSession?
+    var launch: AppLaunchState?
     func applicationDidFinishLaunching(_ notification: Notification) {
         // 启动时先把主题应用上，否则会先闪一下系统外观再切换
         session?.start()
         DockVisibility.startMonitoring()
+        launch?.didFinishLaunching()
+    }
+
+    func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
+        if !flag { launch?.requestWindow() }
+        return true
     }
 
     func applicationWillTerminate(_ notification: Notification) { session?.stop() }
@@ -99,13 +132,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 struct MimonitorToolboxApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
     @State private var session: ToolboxSession
+    @State private var launch = AppLaunchState()
 
     init() {
         precondition(ProcessInfo.processInfo.environment["XCODE_RUNNING_FOR_PREVIEWS"] != "1",
                      "Select ToolboxPreviewHost for previews; production adapters are disabled")
         _session = State(initialValue: ToolboxSession(coordinator: LiveToolboxRuntime.makeCoordinator()))
     }
-    private func bindLifecycle() { appDelegate.session = session }
+    private func bindLifecycle() { appDelegate.session = session; appDelegate.launch = launch }
 
     var body: some Scene {
         let _ = bindLifecycle()
@@ -114,13 +148,14 @@ struct MimonitorToolboxApp: App {
                 .frame(minWidth: 1020, minHeight: 740)
                 .onAppear { appDelegate.session = session; session.start() }
         }
+        .defaultLaunchBehavior(.suppressed)
         .defaultSize(width: 1120, height: 820)
         .windowResizability(.contentMinSize)
         .commands { CommandGroup(replacing: .sidebar) {} }
         MenuBarExtra {
             ToolboxMenuBarContent(session: session)
                 .onAppear { appDelegate.session = session; session.start() }
-        } label: { Image(systemName: "display") }
+        } label: { ToolboxMenuIcon(launch: launch) }
         .menuBarExtraStyle(.window)
     }
 }

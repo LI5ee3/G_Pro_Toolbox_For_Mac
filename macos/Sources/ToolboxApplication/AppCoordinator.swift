@@ -64,6 +64,8 @@ public final class AppCoordinator {
     internal var isConfiguring = true
     package private(set) var isRunning = false
     internal let workTasks = OwnedWorkSet()
+    internal let systemQueue = DispatchQueue(label: "com.mimonitor.toolbox.system", qos: .utility)
+    internal var systemCancellation = CommandCancellation()
     internal var runtimeTasks: [RuntimeCancellation] = []
     internal var startupWork: [DispatchWorkItem] = []
     package let hotkeyManager: HotkeyManager
@@ -116,7 +118,7 @@ public final class AppCoordinator {
     package let settings: SettingsModel
     package var theme: String { get { settings.theme } set { settings.theme = newValue } }
     package var closeBehavior: String { get { settings.closeBehavior } set { settings.closeBehavior = newValue } }
-    package var autostartEnabled: Bool { get { settings.autostartEnabled } set { settings.autostartEnabled = newValue } }
+    package var autostartEnabled: Bool { settings.autostartEnabled }
 
     package init(environment: AppEnvironment) {
         self.environment = environment
@@ -164,12 +166,13 @@ public final class AppCoordinator {
     /// The app lifetime owns live services; construction and previews never start them.
     package func start() {
         adb.resumeSession()
+        if systemCancellation.isCancelled { systemCancellation = CommandCancellation() }
         if environment.mode == .simulation { executionLifetime.resumeIfNeeded(); return }
         guard !isRunning else { return }
         isRunning = true
         executionLifetime.begin()
         accessibilityTrusted = environment.system.isTrusted()
-        autostartEnabled = environment.system.autostartEnabled()
+        refreshLoginItem(migrateLegacy: true)
         environment.system.applyTheme(theme)
 
         startPresetFeatures()
@@ -239,7 +242,9 @@ public final class AppCoordinator {
 
     package func stop() {
         adb.cancelSession()
+        systemCancellation.cancel()
         workTasks.cancelAll()
+        settings.loginItemBusy = false
         executionLifetime.end()
         isRunning = false
         connectionIntent.disconnect()
@@ -265,6 +270,7 @@ public final class AppCoordinator {
 
     deinit {
         adb.cancelSession()
+        systemCancellation.cancel()
         runtimeTasks.forEach { $0.invalidate() }
         startupWork.forEach { $0.cancel() }
         presetTimer?.invalidate(); sourcePollTimer?.invalidate()

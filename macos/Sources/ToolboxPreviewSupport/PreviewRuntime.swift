@@ -156,19 +156,33 @@ package final class PreviewRuntime {
     package let display = PreviewDisplay()
     package let hotkeyDriver = RecordingHotkeyDriver()
     package let feedback = RecordingFeedback()
-    package private(set) var effects: [String] = []
+    private let effectLock = NSLock(), loginLock = NSLock()
+    private var recordedEffects: [String] = []
+    package var effects: [String] { effectLock.lock(); defer { effectLock.unlock() }; return recordedEffects }
     private var loginEnabled = false
     package func environment(mode: AppEnvironment.Mode = .simulation) -> AppEnvironment {
         let resources = RuntimeResources(adbPath: "/mock/adb", serverPort: "0", runtime: { _ in nil }, guardianAPK: { "/mock/guardian.apk" })
         var system = SystemActions()
-        func record(_ name: String) { effects.append(name) }
+        func record(_ name: String) { effectLock.lock(); defer { effectLock.unlock() }; recordedEffects.append(name) }
         system.isTrusted = { record("permission.read"); return false }
         system.promptAccessibility = { record("permission.prompt"); return false }
         system.openAccessibility = { record("permission.settings") }
         system.defaultOutput = { "Mi Monitor" }
         system.scan = { [self.display.identity] }; system.subnets = { ["192.0.2"] }
-        system.setAutostart = { self.loginEnabled = $0; record("login.write") }
-        system.autostartEnabled = { self.loginEnabled }
+        func loginSnapshot() -> LoginItemSnapshot {
+            self.loginLock.lock(); defer { self.loginLock.unlock() }
+            return LoginItemSnapshot(status: self.loginEnabled ? .enabled : .notRegistered)
+        }
+        system.loginStatus = loginSnapshot
+        system.reconcileLogin = { _ in loginSnapshot() }
+        system.updateLogin = { enabled, token in
+            if !token.isCancelled {
+                self.loginLock.lock(); self.loginEnabled = enabled; self.loginLock.unlock()
+                record("login.write")
+            }
+            return loginSnapshot()
+        }
+        system.openLoginSettings = { record("login.settings") }
         system.applyTheme = { _ in record("theme") }
         system.copyText = { _ in record("clipboard") }
         system.openURL = { _ in record("url") }

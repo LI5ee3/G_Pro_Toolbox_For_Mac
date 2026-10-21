@@ -163,6 +163,15 @@ struct ToolsView: View {
             }
             Divider().padding(.vertical, 2)
             Toggle("登录后自动启动，仅显示菜单栏图标", isOn: Binding(get: { settings.autostartEnabled }, set: { state.setAutostart($0) }))
+                .disabled(settings.loginItemBusy)
+            HStack(spacing: 12) {
+                Text(settings.loginItemBusy ? "正在读取系统登录项…" : settings.loginItem.detail)
+                    .font(.system(size: 13)).foregroundStyle(settings.loginItem.needsAttention ? Theme.warning : Theme.secondaryText)
+                Spacer()
+                Button("登录项设置") { state.openLoginItemSettings() }.toolboxAction()
+                Button("重新检测") { state.refreshLoginItem() }.toolboxAction()
+                    .disabled(settings.loginItemBusy)
+            }
         }
     }
 

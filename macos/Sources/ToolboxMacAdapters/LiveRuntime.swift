@@ -1,3 +1,4 @@
+import Carbon
 import ToolboxProcessExecution
 import ToolboxConcurrency
 import ToolboxDomain
@@ -107,6 +108,7 @@ extension AppEnvironment {
             })
         let adb = AdbClient(resources: resources, execute: SystemProcessRunner.run)
         let logFile = LiveLogFile()
+        let loginItems = LiveLoginItems()
         var system = SystemActions()
         system.isTrusted = { AXIsProcessTrusted() }
         system.promptAccessibility = {
@@ -138,8 +140,10 @@ extension AppEnvironment {
             let second = center.addObserver(forName: NSWorkspace.screensDidWakeNotification, object: nil, queue: .main) { _ in screenWake() }
             return RuntimeCancellation { center.removeObserver(first); center.removeObserver(second) }
         }
-        system.setAutostart = { Autostart.setEnabled($0, executablePath: Bundle.main.executablePath ?? CommandLine.arguments.first ?? "") }
-        system.autostartEnabled = Autostart.isEnabled
+        system.loginStatus = loginItems.read
+        system.reconcileLogin = loginItems.reconcile
+        system.updateLogin = { loginItems.setEnabled($0, token: $1) }
+        system.openLoginSettings = LiveLoginItems.openSettings
         system.applyTheme = { name in
             NSApp.appearance = name == "dark" ? NSAppearance(named: .darkAqua) : name == "light" ? NSAppearance(named: .aqua) : nil
         }
@@ -174,5 +178,12 @@ extension AppEnvironment {
 
 /// The only public production composition factory. PreviewSupport never imports this module.
 public enum LiveToolboxRuntime {
+    @MainActor public static func startsInMenuBar() -> Bool {
+        let event = NSAppleEventManager.shared().currentAppleEvent
+        let login = event?.eventID == kAEOpenApplication
+            && event?.paramDescriptor(forKeyword: keyAEPropData)?.enumCodeValue == keyAELaunchedAsLogInItem
+        return AppLaunchPolicy.startsInMenuBar(arguments: CommandLine.arguments, loginEvent: login)
+    }
+
     @MainActor public static func makeCoordinator() -> AppCoordinator { AppCoordinator(environment: .live()) }
 }

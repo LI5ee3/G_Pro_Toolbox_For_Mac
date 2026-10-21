@@ -4,13 +4,6 @@ import ToolboxDomain
 import MimonitorPresetCore
 
 extension AppCoordinator {
-    package func setAutostart(_ enabled: Bool) {
-        environment.system.setAutostart(enabled)
-        autostartEnabled = environment.system.autostartEnabled()
-        log(enabled ? "已设置开机自启动（下次登录生效）" : "已取消开机自启动")
-    }
-
-
     /// 已加入菜单栏的条目 id，顺序即菜单显示顺序。持久化到 UserDefaults。
     package var menuBarItems: [String] {
         get { keyboard.menuBarItems }

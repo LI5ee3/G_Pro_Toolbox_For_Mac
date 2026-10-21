@@ -19,7 +19,9 @@ package final class SettingsModel {
     package var closeBehavior = "tray" {
         didSet { guard !isConfiguring else { return }; preferences.set(closeBehavior, forKey: "close_behavior") }
     }
-    package var autostartEnabled = false
+    package var loginItem = LoginItemSnapshot()
+    package var loginItemBusy = false
+    package var autostartEnabled: Bool { loginItem.enabled }
     package init(preferences: any PreferencesStore, applyTheme: @escaping (String) -> Void) {
         self.preferences = preferences; self.applyTheme = applyTheme
         theme = preferences.string(forKey: "theme") ?? "auto"

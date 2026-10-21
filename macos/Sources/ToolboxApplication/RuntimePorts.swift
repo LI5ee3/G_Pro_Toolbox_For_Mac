@@ -63,8 +63,10 @@ package struct SystemActions {
     package var ping: (String) -> Bool = { _ in false }
     package var isExecutable: (String) -> Bool = { _ in false }
     package var observeWake: (@escaping () -> Void, @escaping () -> Void) -> RuntimeCancellation = { _, _ in RuntimeCancellation() }
-    package var setAutostart: (Bool) -> Void = { _ in }
-    package var autostartEnabled: () -> Bool = { false }
+    package var loginStatus: () -> LoginItemSnapshot = { LoginItemSnapshot() }
+    package var reconcileLogin: (CommandCancellation) -> LoginItemSnapshot = { _ in LoginItemSnapshot() }
+    package var updateLogin: (Bool, CommandCancellation) -> LoginItemSnapshot = { _, _ in LoginItemSnapshot() }
+    package var openLoginSettings: () -> Void = {}
     package var applyTheme: (String) -> Void = { _ in }
     package var showMainWindow: () -> Void = {}
     package var quit: () -> Void = {}

@@ -68,6 +68,22 @@ extension AppCoordinator {
         }
     }
 
+    /// System mutations have their own owner; switching ADB targets cannot cancel login changes.
+    internal func submitSystemOperation<Value: Sendable>(
+        work: @escaping @Sendable (CommandCancellation) -> Value,
+        completion: @escaping @MainActor (Value) -> Void) {
+        guard isRunning || environment.mode == .simulation else { return }
+        let lifetime = executionLifetime.token(), token = CommandCancellation(parent: systemCancellation)
+        let job = BlockingExecutor(queue: systemQueue).submit(cancellation: token) { [executionLifetime] in
+            guard executionLifetime.allows(lifetime), !token.isCancelled else { throw CancellationError() }
+            return work(token)
+        }
+        workTasks.observe(job) { [weak self, executionLifetime] result in
+            guard self != nil, executionLifetime.allows(lifetime), !token.isCancelled else { return }
+            if case .success(let value) = result { completion(value) }
+        }
+    }
+
     /// Deterministic test/readiness barrier for typed async completions; never blocks MainActor.
     package func waitForPendingWork() async { await workTasks.waitForAll() }
 
