@@ -221,30 +221,29 @@ extension AppCoordinator {
             let current = !self.adb.operationCancelled
             let device = connected && current ? self.environment.presetDevice(self.adb, identity) : nil
             let (reports, errorText, savedEdits, configuration) = self.presetWorker.withEngine { engine in
-            var reports: [PresetApplyReport] = []
-            engine.onReport = { reports.append($0) }
-            var errorText: String?
-            var savedEdits = saveID == nil
-            do {
-                try self.adb.transaction {
-                    if device != nil, Date() < self.deviceWorkState.pictureSettleUntil {
-                        guard self.adb.pause(self.deviceWorkState.pictureSettleUntil.timeIntervalSinceNow) else { throw CancellationError() }
-                    }
-                    if flushAutosave, let saveID, let device {
-                        // Never save mixed values from a failed application into the original preset.
-                        if !engine.configuration.applicationIncomplete {
-                            try engine.synchronize(id: saveID, device: device)
+                var reports: [PresetApplyReport] = []
+                engine.onReport = { reports.append($0) }
+                var errorText: String?
+                var savedEdits = saveID == nil
+                do {
+                    try self.adb.transaction {
+                        if device != nil, Date() < self.deviceWorkState.pictureSettleUntil {
+                            guard self.adb.pause(self.deviceWorkState.pictureSettleUntil.timeIntervalSinceNow) else { throw CancellationError() }
                         }
-                        savedEdits = true
+                        if flushAutosave, let saveID, let device {
+                            // Never save mixed values from a failed application into the original preset.
+                            if !engine.configuration.applicationIncomplete {
+                                try engine.synchronize(id: saveID, device: device)
+                            }
+                            savedEdits = true
+                        }
+                        try self.adb.checkCancellation()
+                        try operation(engine, device)
+                        if !flushAutosave { savedEdits = true }
                     }
-                    try self.adb.checkCancellation()
-                    try operation(engine, device)
-                    if !flushAutosave { savedEdits = true }
-                }
-            } catch { errorText = error.localizedDescription }
-            engine.onReport = nil
-            return (reports, errorText, savedEdits, engine.configuration)
-
+                } catch { errorText = error.localizedDescription }
+                engine.onReport = nil
+                return (reports, errorText, savedEdits, engine.configuration)
             }
 
             self.publishCompletion {

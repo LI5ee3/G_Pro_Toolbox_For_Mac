@@ -1,5 +1,7 @@
 # R3：状态拆分与 Observation
 
+这是 R3 完成时的历史记录；当前并发与进程边界见 [R4-CONCURRENCY.md](R4-CONCURRENCY.md)。
+
 2026-10-21。范围为 v2 的 R3a / R3b，继续保留 macOS 27、arm64、现有 Pro B UI、ADB 协议、预设存储和安全 Preview。未执行 R4–R6。
 
 ## 状态所有权

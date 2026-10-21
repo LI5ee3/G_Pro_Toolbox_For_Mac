@@ -3,14 +3,14 @@
 Redmi G Pro 27U / 32U 显示器的原生 macOS 控制工具，使用 SwiftUI、AppKit 和 CoreAudio。
 仅支持 macOS 27 及以上的 Apple Silicon Mac（M 系列芯片）。本仓库仅维护 Mac 应用；设备端协议与实现源自 [原项目](https://github.com/YiHoooong/Mimonitor_Toolbox)，在此基础上继续开发。
 
-## Xcode 开发与安全 Preview（R0–R3）
+## Xcode 开发与安全 Preview（R0–R4）
 
 开发与运行均要求 macOS 27 或更新的 Apple Silicon Mac，使用本机已验证的 Xcode 27.1 工具链。
 
 打开 `Toolbox.xcodeproj`，两个共享 scheme：
 
 - **ToolboxApp**：真实应用；运行会启动现有网络 ADB、快捷键和后台任务。
-- **ToolboxPreviews**：隔离的 App Target；不链接 `ToolboxMacAdapters`，不包含 adb/JAR/APK。
+- **ToolboxPreviews**：隔离的 App Target；不链接 `ToolboxMacAdapters` / `ToolboxProcessExecution`，不包含 adb/JAR/APK。
 
 选 **ToolboxPreviews**，打开 `Sources/ToolboxPreviewSupport/PreviewGallery.swift`，刷新 Canvas。也可以直接运行该 scheme 得到独立预览窗口。顶部选择页面与场景，底部按钮推进虚拟时间；所有权限、文件、终端、登录项和设备动作均为内存模拟。不要用真实 App scheme 预览：生产组合根会检测并拒绝 Xcode Preview 运行上下文。
 
@@ -24,7 +24,7 @@ xcodebuild -project Toolbox.xcodeproj -scheme ToolboxApp -configuration Release 
 
 生产 App 的 Xcode 资源复制阶段只使用已有 `assets/runtime/adb` 或 `.cache/platform-tools/adb`，不在 Preview 或编译期间下载程序。首次准备运行资源可沿用下方 `build_app.sh` 的官方 platform-tools 缓存流程；必需的 JAR/APK、图标及 NOTICE 缺失时 Xcode 构建失败。CLI `swift build --product MimonitorToolbox` 入口继续保留，应用实现与 Xcode 宿主共享同一库。
 
-当前模块：`ToolboxDomain`（Swift 6 纯规则）、`MimonitorPresetCore`（预设引擎）、`ToolboxApplication`（九个 MainActor Observation 模型与动作协调）、`MimonitorToolbox`（共享 UI）、`ToolboxMacAdapters`（真实平台实现）、`ToolboxPreviewSupport`（内存模拟）。旧 AppState 已移除；架构、阶段验证和回滚见 [R3-ARCHITECTURE.md](R3-ARCHITECTURE.md)。完整并发与进程迁移继续留待 R4。
+当前模块：`ToolboxDomain`（Swift 6 纯规则）、`MimonitorPresetCore`（预设引擎）、`ToolboxApplication`（九个 MainActor Observation 模型与动作协调）、`MimonitorToolbox`（共享 UI）、`ToolboxMacAdapters`（真实平台实现）、`ToolboxPreviewSupport`（内存模拟）。旧 AppState 已移除；架构、阶段验证和回滚见 [R3-ARCHITECTURE.md](R3-ARCHITECTURE.md)。R4 已加入 `ToolboxConcurrency`、`ToolboxProcessExecution` 和预设核心 Swift 6；会话、取消、异步所有权与过渡边界见 [R4-CONCURRENCY.md](R4-CONCURRENCY.md)。
 
 CI 已显式要求带 `toolbox-macos27` 标签的专用 macOS 27 ARM64 runner；未注册该 runner 时任务会排队。本批未配置远端 runner 或触发远端 CI。同仓库受信任分支可运行，外部 fork PR 不自动在该自托管 runner 上执行。
 

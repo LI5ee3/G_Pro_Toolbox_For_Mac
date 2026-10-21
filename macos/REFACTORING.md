@@ -1,6 +1,6 @@
 # R0–R2b 原生架构改造记录
 
-这是首批完成时的历史状态；当前 R3 状态拆分、Observation 与模块依赖见 [R3-ARCHITECTURE.md](R3-ARCHITECTURE.md)。下文 AppState / Swift 5 等描述保留为阶段记录。
+这是首批完成时的历史状态；当前并发与进程边界见 [R4-CONCURRENCY.md](R4-CONCURRENCY.md)，R3 状态拆分、Observation 与模块依赖见 [R3-ARCHITECTURE.md](R3-ARCHITECTURE.md)。下文 AppState / Swift 5 等描述保留为阶段记录。
 
 2026-10-21。范围：Apple Silicon、macOS 27+、ADB-only，优先提供安全 Preview 与可测试构造。当前保留现有 Pro B 界面、ADB 协议、预设格式、菜单栏、快捷键和旧 CLI 打包入口。未继续 R3–R6。
 

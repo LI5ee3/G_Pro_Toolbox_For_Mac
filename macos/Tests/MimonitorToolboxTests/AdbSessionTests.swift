@@ -59,6 +59,18 @@ final class AdbSessionTests: XCTestCase {
         XCTAssertFalse(adb.transportWorks())
         XCTAssertThrowsError(try adb.checkedShell("echo ok", target: adb.serial))
     }
+    func testAPKPartialSuccessCannotHideTimeoutOrNonzeroExit() {
+        for result in [ProcessResult(standardOutput: "Success", exitCode: -1, outcome: .timedOut),
+                       ProcessResult(output: "Success", exitCode: 1)] {
+            let adb = client { request in
+                XCTAssertEqual(request.arguments, ["-s", "192.0.2.1:5555", "install", "-r", "-d", "/fake/example.apk"])
+                XCTAssertEqual(request.timeout, 120)
+                return result
+            }
+            adb.ip = "192.0.2.1"
+            XCTAssertFalse(adb.installApk("/fake/example.apk").succeeded)
+        }
+    }
     func testOperationCancellationInterruptsProtocolSettleSleep() {
         let adb = client { _ in ProcessResult(output: "", exitCode: 0) }
         let session = adb.session()

@@ -70,10 +70,10 @@ extension AppCoordinator {
         runBackground {
             let r = self.adb.installApk(url.path)
             self.publish {
-                if r.contains("Success") {
+                if r.succeeded && r.output.contains("Success") {
                     self.log("APK 安装成功")
                 } else {
-                    self.log("APK 安装失败: \(r.trimmingCharacters(in: .whitespacesAndNewlines))")
+                    self.log("APK 安装失败: \(r.outcome): \(r.output.trimmingCharacters(in: .whitespacesAndNewlines))")
                 }
             }
         }
@@ -189,7 +189,7 @@ extension AppCoordinator {
         log("正在部署 ADB 保活守护...")
         runBackground {
             let r = self.adb.installApk(apk)
-            if r.contains("Success") {
+            if r.succeeded && r.output.contains("Success") {
                 self.adb.shell("pm grant \(Guardian.package) android.permission.WRITE_SECURE_SETTINGS 2>/dev/null || true")
                 self.adb.shell("cmd deviceidle whitelist +\(Guardian.package) 2>/dev/null || true")
                 self.enableGuardianAccessibility()
@@ -204,7 +204,7 @@ extension AppCoordinator {
             } else {
                 self.publish {
                     self.guardianStatus = "状态：部署失败"
-                    self.log("ADB 保活守护部署失败: \(r.trimmingCharacters(in: .whitespacesAndNewlines))")
+                    self.log("ADB 保活守护部署失败: \(r.outcome): \(r.output.trimmingCharacters(in: .whitespacesAndNewlines))")
                 }
             }
         }

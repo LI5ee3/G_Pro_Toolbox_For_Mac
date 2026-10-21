@@ -1,3 +1,5 @@
+import ToolboxConcurrency
+import ToolboxProcessExecution
 import ToolboxDomain
 import ToolboxApplication
 import Foundation
@@ -14,7 +16,9 @@ enum NetworkScan {
     /// ARP 解析超时（可长达 75 秒以上）才返回。扫描一个 /24 网段时绝大多数地址都是
     /// 不存在的主机，用阻塞 connect 会把线程池占满，导致真正在线的设备排不上调度，
     /// 最终「什么都扫不到」。
-    static func isTcpOpen(host: String, port: Int, timeout: Double = 0.4) -> Bool {
+    static func isTcpOpen(host: String, port: Int, timeout: Double = 0.4,
+                          cancellation: CommandCancellation = CommandCancellation()) -> Bool {
+        guard (1...65535).contains(port), timeout.isFinite, timeout > 0, !cancellation.isCancelled else { return false }
         let fd = socket(AF_INET, SOCK_STREAM, 0)
         guard fd >= 0 else { return false }
         defer { close(fd) }
@@ -37,24 +41,33 @@ enum NetworkScan {
         if ret == 0 { return true }                 // 立刻连上（本机/已缓存 ARP）
         guard errno == EINPROGRESS else { return false }
 
-        // 等套接字可写，超时就放弃
-        var pfd = pollfd(fd: fd, events: Int16(POLLOUT), revents: 0)
-        let ready = poll(&pfd, 1, Int32(max(1, timeout * 1000)))
-        guard ready > 0 else { return false }
-
-        // 可写不代表成功，要回读 SO_ERROR 才知道 connect 的真实结果
-        var err: Int32 = 0
-        var errLen = socklen_t(MemoryLayout<Int32>.size)
-        guard getsockopt(fd, SOL_SOCKET, SO_ERROR, &err, &errLen) == 0 else { return false }
-        return err == 0
+        // Poll in short slices so cancellation never waits for the full socket timeout.
+        let end = ContinuousClock.now.advanced(by: .seconds(timeout))
+        while !cancellation.isCancelled, ContinuousClock.now < end {
+            var pfd = pollfd(fd: fd, events: Int16(POLLOUT), revents: 0)
+            let ready = poll(&pfd, 1, 20)
+            if ready < 0 { if errno == EINTR { continue }; return false }
+            guard ready > 0 else { continue }
+            var error: Int32 = 0
+            var length = socklen_t(MemoryLayout<Int32>.size)
+            return getsockopt(fd, SOL_SOCKET, SO_ERROR, &error, &length) == 0 && error == 0
+        }
+        return false
     }
 
     /// 扫描本机所在网段中开放了指定端口的设备。
     /// 用信号量限制并发，避免一次性铺开 254×N 个线程。
-    static func scan(port: Int = 5555, timeout: Double = 0.4, maxConcurrent: Int = 128) -> [String] {
+    static func scan(port: Int = 5555, timeout: Double = 0.4, maxConcurrent: Int = 128,
+                     cancellation: CommandCancellation = CommandCancellation(),
+                     subnets suppliedSubnets: [String]? = nil, budget: TimeInterval = 15,
+                     probe: @escaping (String, Int, Double, CommandCancellation) -> Bool = {
+                         isTcpOpen(host: $0, port: $1, timeout: $2, cancellation: $3)
+                     }) -> [String] {
+        guard maxConcurrent > 0, budget.isFinite, budget > 0, !cancellation.isCancelled else { return [] }
+        let deadline = ContinuousClock.now.advanced(by: .seconds(budget))
         // 不再 `.prefix(2)` 截断：多网卡时显示器可能在第三个网段上。
         // 上限 4 是防御性的 —— 网卡特别多时别把扫描拖太久。
-        let subnets = Array(localIPv4Subnets().prefix(4))
+        let subnets = Array((suppliedSubnets ?? localIPv4Subnets(cancellation: cancellation)).prefix(4))
         var targets: [String] = []
         for subnet in subnets {
             for host in 1...254 {
@@ -63,27 +76,35 @@ enum NetworkScan {
         }
         guard !targets.isEmpty else { return [] }
 
-        var found: [String] = []
-        let lock = NSLock()
+        let found = ScanResults()
+        let token = CommandCancellation(parent: cancellation)
+        defer { token.cancel() }
         let semaphore = DispatchSemaphore(value: maxConcurrent)
         let group = DispatchGroup()
-
-        for ip in targets {
-            semaphore.wait()
+        targetsLoop: for ip in targets {
+            while semaphore.wait(timeout: .now() + .milliseconds(20)) != .success {
+                if token.isCancelled || ContinuousClock.now >= deadline { break targetsLoop }
+            }
+            if token.isCancelled || ContinuousClock.now >= deadline { semaphore.signal(); break }
             group.enter()
             DispatchQueue.global(qos: .userInitiated).async {
                 defer { semaphore.signal(); group.leave() }
-                if isTcpOpen(host: ip, port: port, timeout: timeout) {
-                    lock.lock()
-                    found.append(ip)
-                    lock.unlock()
-                }
+                guard !token.isCancelled else { return }
+                if probe(ip, port, timeout, token), !token.isCancelled { found.append(ip) }
             }
         }
+        while group.wait(timeout: .now() + .milliseconds(20)) != .success {
+            if token.isCancelled || ContinuousClock.now >= deadline { break }
+        }
+        // Lock-protected snapshot remains safe even if a cancelled probe is still returning.
+        return found.snapshot().sorted { $0.compare($1, options: .numeric) == .orderedAscending }
+    }
 
-        // 有硬超时兜底，但正常情况下 254 个地址 / 64 并发 × 0.4s ≈ 1.6s 就该结束
-        _ = group.wait(timeout: .now() + 15)
-        return found.sorted { $0.compare($1, options: .numeric) == .orderedAscending }
+    private final class ScanResults {
+        private let lock = NSLock()
+        private var values: [String] = []
+        func append(_ value: String) { lock.lock(); defer { lock.unlock() }; values.append(value) }
+        func snapshot() -> [String] { lock.lock(); defer { lock.unlock() }; return values }
     }
 
     /// 解析本机**真实局域网**网段（前三段，去重）。
@@ -100,17 +121,20 @@ enum NetworkScan {
     ///
     /// 不处理这些的话，代理环境下会去扫一个根本不存在设备的隧道网段，
     /// 既浪费时间，又可能因为占满并发名额而漏掉真正的那个网段。
-    static func localIPv4Subnets() -> [String] {
-        let process = Process()
-        process.executableURL = URL(fileURLWithPath: "/sbin/ifconfig")
-        let pipe = Pipe()
-        process.standardOutput = pipe
-        process.standardError = Pipe()
-        do { try process.run() } catch { return [] }
-        let data = pipe.fileHandleForReading.readDataToEndOfFile()
-        process.waitUntilExit()
+    static func localIPv4Subnets(cancellation: CommandCancellation = CommandCancellation(),
+                                 execute: (CommandRequest) -> ProcessResult = SystemProcessRunner.run) -> [String] {
+        let result = execute(CommandRequest(executable: "/sbin/ifconfig", arguments: [], serverPort: "0",
+                                           timeout: 3, cancellation: cancellation))
+        return result.succeeded ? parseSubnets(result.standardOutput) : []
+    }
 
-        let text = String(data: data, encoding: .utf8) ?? ""
+    static func ping(host: String, cancellation: CommandCancellation = CommandCancellation(),
+                     execute: (CommandRequest) -> ProcessResult = SystemProcessRunner.run) -> Bool {
+        execute(CommandRequest(executable: "/sbin/ping", arguments: ["-c", "1", "-W", "1000", host],
+                               serverPort: "0", timeout: 2, cancellation: cancellation)).succeeded
+    }
+
+    static func parseSubnets(_ text: String) -> [String] {
         var subnets: [String] = []
         var currentInterface = ""
 

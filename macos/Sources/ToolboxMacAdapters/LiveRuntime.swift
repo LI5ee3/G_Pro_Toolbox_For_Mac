@@ -126,13 +126,11 @@ extension AppEnvironment {
             let screen = NSScreen.screens.first { NSMouseInRect(NSEvent.mouseLocation, $0.frame, false) } ?? NSScreen.main
             return screen.flatMap { ($0.deviceDescription[NSDeviceDescriptionKey("NSScreenNumber")] as? NSNumber).map { CGDirectDisplayID($0.uint32Value) } }
         }
-        system.scan = { NetworkScan.scan() }; system.subnets = NetworkScan.localIPv4Subnets
-        system.tcpOpen = { NetworkScan.isTcpOpen(host: $0, port: $1, timeout: $2) }
-        system.ping = { host in
-            let process = Process(); process.executableURL = URL(fileURLWithPath: "/sbin/ping")
-            process.arguments = ["-c", "1", "-W", "1000", host]; process.standardOutput = Pipe(); process.standardError = Pipe()
-            do { try process.run(); process.waitUntilExit(); return process.terminationStatus == 0 } catch { return false }
-        }
+        system.scan = { NetworkScan.scan(cancellation: AdbOperationContext.current?.cancellation ?? CommandCancellation()) }
+        system.subnets = { NetworkScan.localIPv4Subnets(cancellation: AdbOperationContext.current?.cancellation ?? CommandCancellation()) }
+        system.tcpOpen = { NetworkScan.isTcpOpen(host: $0, port: $1, timeout: $2,
+            cancellation: AdbOperationContext.current?.cancellation ?? CommandCancellation()) }
+        system.ping = { NetworkScan.ping(host: $0, cancellation: AdbOperationContext.current?.cancellation ?? CommandCancellation()) }
         system.isExecutable = { FileManager.default.isExecutableFile(atPath: $0) }
         system.observeWake = { systemWake, screenWake in
             let center = NSWorkspace.shared.notificationCenter

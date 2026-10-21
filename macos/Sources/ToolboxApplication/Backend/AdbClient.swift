@@ -252,10 +252,10 @@ package final class AdbClient {
         return ok ? "connected" : state
     }
 
-    /// 安装 APK（-r 覆盖安装，-d 允许降级），返回 adb 原始输出。
-    package func installApk(_ path: String) -> String {
+    /// 安装 APK（-r 覆盖安装，-d 允许降级），保留进程状态，防止部分 Success 文本被误判。
+    package func installApk(_ path: String) -> ProcessResult {
         return transaction {
-            run(["-s", serial, "install", "-r", "-d", path], timeout: 120).output
+            run(["-s", serial, "install", "-r", "-d", path], timeout: 120)
         }
     }
 
