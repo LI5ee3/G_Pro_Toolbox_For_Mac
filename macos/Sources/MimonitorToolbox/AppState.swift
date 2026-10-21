@@ -190,24 +190,6 @@ final class AppState: ObservableObject {
         didSet { UserDefaults.standard.set(mediaVolumeOutputName, forKey: "media_volume_output_name") }
     }
 
-    @Published var mediaVolumeBluetoothPreferred = UserDefaults.standard.object(forKey: "media_volume_bluetooth_preferred") as? Bool ?? true {
-        didSet {
-            UserDefaults.standard.set(mediaVolumeBluetoothPreferred, forKey: "media_volume_bluetooth_preferred")
-            refreshMediaVolumeState()
-        }
-    }
-    @Published var mediaVolumeBluetoothName = UserDefaults.standard.string(forKey: "media_volume_bluetooth_name") ?? "REDMI G Pro 32U 2026" {
-        didSet {
-            UserDefaults.standard.set(mediaVolumeBluetoothName, forKey: "media_volume_bluetooth_name")
-            refreshMediaVolumeState()
-        }
-    }
-    @Published private(set) var mediaVolumeBluetoothStatus = "蓝牙音量：等待检测"
-    private let bluetoothVolume = BluetoothVolumeController()
-    // Bluetooth must not wait behind a slow/offline ADB command on deviceQueue.
-    private let bluetoothVolumeQueue = DispatchQueue(label: "com.mimonitor.toolbox.bluetooth-volume", qos: .userInitiated)
-    private var bluetoothVolumeRetryAfter = Date.distantPast
-
     private var hdrLastState: Bool?
     private var logFileHandle: FileHandle?
     private var logFileURL: URL?
@@ -2361,84 +2343,21 @@ final class AppState: ObservableObject {
     /// 读不到输出设备时返回 false：宁可交给系统，也不要吞掉按键却没反应。
     func shouldHandleNativeVolume() -> Bool {
         AudioOutputMonitor.shouldHandleVolumeKeys(enabled: mediaVolumeKeysEnabled,
-            bluetoothAvailable: bluetoothVolumeDevice != nil, adbConnected: isConnected,
-            gateEnabled: mediaVolumeOutputGateEnabled, configuredOutputName: mediaVolumeOutputName,
-            bluetoothOutputName: mediaVolumeBluetoothPreferred ? mediaVolumeBluetoothName.trimmingCharacters(in: .whitespacesAndNewlines) : nil,
+            adbConnected: isConnected, gateEnabled: mediaVolumeOutputGateEnabled,
+            configuredOutputName: mediaVolumeOutputName,
             outputName: AudioOutputMonitor.defaultOutputDeviceName())
-    }
-
-    private var bluetoothVolumeDevice: BluetoothVolumeDevice? {
-        guard mediaVolumeBluetoothPreferred, Date() >= bluetoothVolumeRetryAfter else { return nil }
-        return bluetoothVolume.device(named: mediaVolumeBluetoothName)
-    }
-
-    /// Resolve on the main thread; hardware operations run on a queue independent of ADB.
-    private func performBluetoothVolume(_ device: BluetoothVolumeDevice, showHUD: Bool = false,
-                                        muteHUD: Bool = false,
-                                        operation: @escaping (BluetoothVolumeController, BluetoothVolumeDevice) throws -> BluetoothVolumeState,
-                                        fallback: (() -> Void)? = nil) {
-        let name = mediaVolumeBluetoothName
-        mediaVolumeCommit?.cancel()
-        mediaVolumeCommit = nil
-        mediaVolumeNeedsUnmute = false
-        bluetoothVolumeQueue.async {
-            do {
-                let state = try operation(self.bluetoothVolume, device)
-                DispatchQueue.main.async {
-                    guard self.mediaVolumeBluetoothPreferred, self.mediaVolumeBluetoothName == name,
-                          self.bluetoothVolumeDevice?.uid == device.uid else { return }
-                    self.mediaVolumePreview = state.volume
-                    self.mediaVolumeHardware = state.volume
-                    self.mediaVolumeMuted = state.muted
-                    self.dashboardVolume = state.volume
-                    self.dashboardMuted = state.muted
-                    self.dashboardVolumeError = nil
-                    self.currentValues["volume_music_speaker"] = String(state.volume)
-                    self.mediaVolumeBluetoothStatus = "蓝牙音量：已连接 · \(device.name)"
-                    if showHUD {
-                        let shown = self.mediaVolumeNativeOSD && (muteHUD
-                            ? NativeOSD.shared.showMute() : NativeOSD.shared.showVolume(value: state.volume))
-                        if !shown { HUDWindow.shared.show(title: muteHUD ? "静音" : "音量",
-                            value: muteHUD ? (state.muted ? "开" : "关") : "\(state.volume)") }
-                        if self.hotkeyDebugEnabled {
-                            self.log("音量控制 [蓝牙]: 音量 \(state.volume)，静音 \(state.muted ? "开" : "关")")
-                        }
-                    }
-                }
-            } catch {
-                DispatchQueue.main.async {
-                    guard self.mediaVolumeBluetoothName == name else { return }
-                    self.bluetoothVolumeRetryAfter = Date().addingTimeInterval(5)
-                    self.mediaVolumeBluetoothStatus = "蓝牙音量：\(error.localizedDescription)"
-                    if showHUD { self.log("蓝牙音量控制失败：\(error.localizedDescription)") }
-                    // Only an explicit mutation may fall back; polling never writes over ADB.
-                    if fallback != nil {
-                        self.dashboardVolumeError = self.isConnected
-                            ? "蓝牙控制失败，正在尝试网络 ADB。"
-                            : "蓝牙音量控制失败，请检查设备连接后重试。"
-                        self.dashboardVolume = self.mediaVolumeHardware
-                    }
-                    if self.isConnected { fallback?() }
-                }
-            }
-        }
     }
 
     /// 空闲时回读一次音量/静音状态（连接后 + 每 5 秒）。
     /// 连按/待下发期间跳过，避免把预览基准带偏。
     func refreshMediaVolumeState() {
-        if let device = bluetoothVolumeDevice {
-            performBluetoothVolume(device, operation: { try $0.state($1) })
-            return
-        }
-        mediaVolumeBluetoothStatus = mediaVolumeBluetoothPreferred ? "蓝牙音量：未找到指定设备；ADB 已连接时自动回退" : "蓝牙音量：已关闭"
         guard isConnected else { return }
         guard mediaVolumePreview == nil || mediaVolumePreview == mediaVolumeHardware else { return }
         runBackground {
             let volume = self.adb.mediaVolume()
             let muted = self.adb.mediaMuted()
             DispatchQueue.main.async {
-                guard self.isConnected, self.bluetoothVolumeDevice == nil else { return }
+                guard self.isConnected else { return }
                 if let volume {
                     self.mediaVolumePreview = volume
                     self.mediaVolumeHardware = volume
@@ -2449,15 +2368,8 @@ final class AppState: ObservableObject {
         }
     }
 
-    private func adjustMediaVolume(increase: Bool, useBluetooth: Bool = true) {
+    private func adjustMediaVolume(increase: Bool) {
         guard shouldHandleNativeVolume() else { return }
-        if useBluetooth, let device = bluetoothVolumeDevice {
-            let native = mediaVolumeNativeOSD, step = mediaVolumeStep
-            performBluetoothVolume(device, showHUD: true,
-                operation: { try $0.adjust(increase: increase, nativeSteps: native, step: step, on: $1) },
-                fallback: { [weak self] in self?.adjustMediaVolume(increase: increase, useBluetooth: false) })
-            return
-        }
         guard isConnected else { return }
 
         let base = mediaVolumePreview ?? mediaVolumeHardware ?? 50
@@ -2513,7 +2425,6 @@ final class AppState: ObservableObject {
     /// 把当前预览值绝对写到设备。目标值和已下发值相同时跳过，避免空跑一次。
     private func commitMediaVolume() {
         guard isConnected, let value = mediaVolumePreview else { return }
-        guard bluetoothVolumeDevice == nil else { return }
         let unmute = mediaVolumeNeedsUnmute
         guard mediaVolumeHardware != value || unmute else { return }
         mediaVolumeNeedsUnmute = false
@@ -2522,7 +2433,6 @@ final class AppState: ObservableObject {
             let usedBinder = self.adb.setMediaVolume(value, unmuteFirst: unmute)
             DispatchQueue.main.async {
                 self.mediaVolumeCommitInFlight = false
-                guard self.bluetoothVolumeDevice == nil else { return }
                 self.mediaVolumeHardware = value
                 if !usedBinder, !self.mediaVolumeFallbackLogged {
                     self.mediaVolumeFallbackLogged = true
@@ -2532,14 +2442,8 @@ final class AppState: ObservableObject {
         }
     }
 
-    private func toggleMediaMute(useBluetooth: Bool = true) {
+    private func toggleMediaMute() {
         guard shouldHandleNativeVolume() else { return }
-        if useBluetooth, let device = bluetoothVolumeDevice {
-            performBluetoothVolume(device, showHUD: true, muteHUD: true,
-                operation: { try $0.toggleMute(on: $1) },
-                fallback: { [weak self] in self?.toggleMediaMute(useBluetooth: false) })
-            return
-        }
         guard isConnected else { return }
         if let known = mediaVolumeMuted {
             applyMediaMute(!known)
@@ -2575,28 +2479,11 @@ final class AppState: ObservableObject {
     }
 
     /// Explicit on-screen controls target the display regardless of Mac's audio output.
-    var dashboardVolumeAvailable: Bool { bluetoothVolumeDevice != nil || isConnected }
-    var dashboardVolumeTransport: String { bluetoothVolumeDevice != nil ? "蓝牙" : "网络 ADB" }
+    var dashboardVolumeAvailable: Bool { isConnected }
+    var dashboardVolumeTransport: String { "网络 ADB" }
 
-    func setDashboardVolume(_ value: Int, useBluetooth: Bool = true) {
-        if useBluetooth, let device = bluetoothVolumeDevice {
-            let request = connectionIntent.generation
-            let target = adb.ip
-            performBluetoothVolume(device, operation: { try $0.setVolume(value, on: $1) },
-                                   fallback: { [weak self] in
-                guard let self, self.isConnected, self.connectionIntent.isCurrent(request),
-                      self.adb.ip == target else { return }
-                self.setDashboardVolume(value, useBluetooth: false)
-            })
-            return
-        }
+    func setDashboardVolume(_ value: Int) {
         guard isConnected else { return }
-        // Bluetooth readback cannot establish the ADB endpoint's volume or mute state.
-        if !useBluetooth {
-            mediaVolumeHardware = nil
-            mediaVolumeMuted = nil
-            mediaVolumeNeedsUnmute = true
-        }
         let value = clamp(value, 0, 100)
         if mediaVolumeMuted == true { mediaVolumeNeedsUnmute = true }
         dashboardVolumeError = nil
@@ -2609,18 +2496,7 @@ final class AppState: ObservableObject {
         scheduleMediaVolumeTrailing()
     }
 
-    func toggleDashboardMute(useBluetooth: Bool = true) {
-        if useBluetooth, let device = bluetoothVolumeDevice {
-            let request = connectionIntent.generation
-            let target = adb.ip
-            performBluetoothVolume(device, muteHUD: true, operation: { try $0.toggleMute(on: $1) },
-                                   fallback: { [weak self] in
-                guard let self, self.isConnected, self.connectionIntent.isCurrent(request),
-                      self.adb.ip == target else { return }
-                self.toggleDashboardMute(useBluetooth: false)
-            })
-            return
-        }
+    func toggleDashboardMute() {
         guard isConnected else { return }
         let request = connectionIntent.generation
         let target = adb.ip

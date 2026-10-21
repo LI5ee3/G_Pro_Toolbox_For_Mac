@@ -165,7 +165,7 @@ cat > "$CONTENTS/Info.plist" <<'PLIST'
     <key>CFBundleVersion</key>
     <string>1</string>
     <key>LSMinimumSystemVersion</key>
-    <string>13.0</string>
+    <string>27.0</string>
     <!-- 这里**故意不设** LSUIElement。
          设成 true 会把 app 注册成「后台型」，启动台 / Dock / Cmd+Tab / 强制退出
          全都看不到它 —— 用户从 DMG 拖进 Applications 后在启动台里找不到入口。

@@ -117,8 +117,6 @@ struct ToolsView: View {
                         .font(.system(size: 13)).foregroundStyle(Theme.secondaryText)
                 }
             }
-            Label(state.mediaVolumeBluetoothStatus, systemImage: "speaker.wave.2")
-                .font(.system(size: 13)).foregroundStyle(Theme.secondaryText)
             Divider().padding(.vertical, 2)
             Toggle("快捷键松手后生效", isOn: Binding(
                 get: { state.hotkeyCountdownEnabled },
@@ -380,26 +378,9 @@ struct HotkeyConfigSheet: View {
                             }
                             Spacer()
                         }
-                        Text("音量加减、静音键控制此显示器。优先使用蓝牙，无需网络 ADB；蓝牙不可用时回退到已连接的 ADB。需要辅助功能权限。")
+                        Text("音量加减、静音键通过已连接的网络 ADB 控制此显示器。需要辅助功能权限。")
                             .font(.system(size: 13))
                             .foregroundStyle(Theme.secondaryText)
-
-                        Toggle("优先通过蓝牙控制音量", isOn: $state.mediaVolumeBluetoothPreferred)
-                            .toggleStyle(.checkbox)
-                            .disabled(!state.mediaVolumeKeysEnabled)
-                        HStack(spacing: 8) {
-                            Text("蓝牙设备名")
-                                .font(.system(size: 13)).foregroundStyle(Theme.secondaryText)
-                            TextField("REDMI G Pro 32U 2026", text: $state.mediaVolumeBluetoothName)
-                                .textFieldStyle(.roundedBorder).frame(width: 240)
-                            Spacer(minLength: 0)
-                        }
-                        .disabled(!state.mediaVolumeKeysEnabled || !state.mediaVolumeBluetoothPreferred)
-                        Text(state.mediaVolumeBluetoothStatus)
-                            .font(.system(size: 13)).foregroundStyle(Theme.secondaryText)
-                            .textSelection(.enabled)
-                        Text("设备名需与 macOS 蓝牙音频设备名称一致。声音可以继续通过 DP/HDMI 输出；静音通过音量归零实现，再按可恢复原音量。")
-                            .font(.system(size: 13)).foregroundStyle(Theme.secondaryText)
 
                         Toggle("使用 macOS 原生音量提示（OSD）", isOn: $state.mediaVolumeNativeOSD)
                             .toggleStyle(.checkbox)

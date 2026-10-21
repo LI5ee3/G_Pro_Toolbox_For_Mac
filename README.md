@@ -1,6 +1,6 @@
 # 红米G Pro ToolBox for Mac
 
-Redmi G Pro 27U / 32U 显示器的原生 macOS 控制应用，使用 SwiftUI、AppKit 和 CoreAudio。仅支持运行 macOS 13 及以上的 Apple Silicon Mac（M 系列芯片）。
+Redmi G Pro 27U / 32U 显示器的原生 macOS 控制应用，使用 SwiftUI、AppKit 和 CoreAudio。仅支持运行 macOS 27 及以上的 Apple Silicon Mac（M 系列芯片）。
 
 本项目基于 [YiHoooong/Mimonitor_Toolbox](https://github.com/YiHoooong/Mimonitor_Toolbox) 的设备协议与 macOS 实现继续开发，保留原作者贡献。当前仓库仅维护 Mac 应用。
 
@@ -8,7 +8,7 @@ Redmi G Pro 27U / 32U 显示器的原生 macOS 控制应用，使用 SwiftUI、A
 
 ## 功能
 
-- **蓝牙优先的键盘音量控制**：无需网络 ADB，声音仍可走 DP/HDMI；步长设为 1 并关闭原生音量 OSD 后，每次短按按显示器整数音量加减 1。蓝牙不可用时回退至已连接的网络 ADB。
+- **ADB 键盘音量控制**：音量加减与静音通过网络 ADB 操作显示器，保留步长、原生 OSD 及默认音频输出限制。
 - **画面与游戏设置**：画面模式、背光、色温、色域、精密控光、FreeSync、准星等；具体选项取决于显示器型号与固件。
 - **信号源、屏幕灯与遥控器**：切换输入源、调节灯效，并使用虚拟遥控器。
 - **Mac 集成**：菜单栏快捷控制、全局快捷键、自定义悬浮提示、亮度键控制背光、登录后自动启动、深浅色主题。
@@ -22,12 +22,11 @@ Redmi G Pro 27U / 32U 显示器的原生 macOS 控制应用，使用 SwiftUI、A
 
 ## 使用条件
 
-- Apple Silicon Mac（M1 或更新的 M 系列芯片），运行 macOS 13 或更高版本。
+- Apple Silicon Mac（M1 或更新的 M 系列芯片），运行 macOS 27 或更高版本。
 - 网络 ADB 功能需要显示器开启 ADB，且 Mac 与显示器可通过网络互通（TCP 5555）。视频线本身不提供网络连接。
-- 蓝牙音量控制需要先在 macOS 中配对并连接显示器的蓝牙音频设备；无需网络 ADB。其他显示器设置仍通过 ADB 完成。
 - 全局键盘控制需要 macOS 辅助功能授权。
 
-已在 Mac mini M4 + Redmi G Pro 32U 2026（P32UEA-RGP）上验证蓝牙音量、网络 ADB 与唤醒恢复。其他型号及固件的兼容性需实测。
+已在 Mac mini M4 + Redmi G Pro 32U 2026（P32UEA-RGP）上验证网络 ADB 与唤醒恢复。其他型号及固件的兼容性需实测。
 
 ## 从源码构建
 
@@ -49,7 +48,6 @@ open "红米G Pro ToolBox.app"
 
 ```text
 Mac 原生应用
-├─ CoreAudio / 蓝牙 AVRCP → 显示器音量
 └─ 网络 ADB（TCP 5555）→ 显示器 Android 系统
    ├─ settings / AudioService → 设置与媒体音量
    ├─ MtkDirectTool.jar → MTK 画面控制

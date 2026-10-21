@@ -146,7 +146,6 @@ struct HomeView: View {
                             Label(state.mediaVolumeKeysEnabled ? (state.accessibilityTrusted ? "键盘音量控制已开启" : "键盘控制需要授权") : "设置键盘音量控制", systemImage: "keyboard")
                         }
                         Spacer()
-                        if state.dashboardVolumeTransport == "蓝牙" { Text("音量通过蓝牙控制") }
                     }
                     .font(.system(size: 13)).foregroundColor(Theme.secondaryText).buttonStyle(.plain)
                 }

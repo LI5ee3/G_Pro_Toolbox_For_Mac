@@ -3,6 +3,48 @@ import XCTest
 @testable import MimonitorToolbox
 
 final class AdbClientTests: XCTestCase {
+    func testAbsoluteVolumeUsesExistingBinderAndVerifiesTheFirstWrite() throws {
+        try fake("""
+        printf '%s\\n' "$4" >> "$0.calls"
+        case "$4" in
+          'service call audio 12 i32 3 i32 27 i32 0 s16 com.android.shell') echo 'Result: Parcel(00000000)' ;;
+          'service call audio 22 i32 3') echo 'Result: Parcel(00000000 0000001b)' ;;
+          *) exit 9 ;;
+        esac
+        """) { client in
+            XCTAssertTrue(client.setMediaVolume(27))
+            let calls = try String(contentsOfFile: client.adbPath + ".calls", encoding: .utf8)
+            XCTAssertEqual(calls.split(separator: "\n").count, 2)
+            XCTAssertFalse(calls.contains("input keyevent"))
+        }
+    }
+
+    func testBinderFailureKeepsExistingKeyEventVolumeFallback() throws {
+        try fake("""
+        printf '%s\\n' "$4" >> "$0.calls"
+        case "$4" in
+          'service call audio 12 '*) echo 'Parcel: Exception occurred' ;;
+          'service call audio 22 i32 3') echo 'Result: Parcel(00000000 0000000a)' ;;
+          'input keyevent KEYCODE_VOLUME_UP KEYCODE_VOLUME_UP') ;;
+          *) exit 9 ;;
+        esac
+        """) { client in
+            XCTAssertFalse(client.setMediaVolume(12))
+            let calls = try String(contentsOfFile: client.adbPath + ".calls", encoding: .utf8)
+            XCTAssertTrue(calls.contains("input keyevent KEYCODE_VOLUME_UP KEYCODE_VOLUME_UP"))
+        }
+    }
+
+    func testMuteUsesExistingBinderAndHardwareReadback() throws {
+        try fake("""
+        case "$4" in
+          'service call audio 10 i32 3 i32 -100 i32 0 s16 com.android.shell') echo 'Result: Parcel(00000000)' ;;
+          'service call audio 17 i32 3') echo 'Result: Parcel(00000000 00000001)' ;;
+          *) exit 9 ;;
+        esac
+        """) { client in XCTAssertTrue(client.setMediaMuted(true)) }
+    }
+
     func testDeviceStateAloneDoesNotProveTransportIsUsable() throws {
         try fake("""
         case "$3" in

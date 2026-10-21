@@ -3,7 +3,7 @@ import PackageDescription
 
 let package = Package(
     name: "MimonitorToolbox",
-    platforms: [.macOS(.v13)],
+    platforms: [.macOS("27.0")],
     targets: [
         .target(name: "MimonitorPresetCore", path: "Sources/MimonitorPresetCore"),
         .executableTarget(name: "MimonitorToolbox", dependencies: ["MimonitorPresetCore"],
