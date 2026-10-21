@@ -1,3 +1,4 @@
+import ToolboxConcurrency
 import ToolboxDomain
 import Foundation
 import AppKit
@@ -58,19 +59,21 @@ public final class AppCoordinator {
     package let keyboard = HotkeysModel()
     package nonisolated let adb: AdbClient
     package nonisolated let environment: AppEnvironment
-    package nonisolated let preferences: any PreferencesStore
+    package let preferences: any PreferencesStore
     internal nonisolated let executionLifetime = RuntimeGeneration()
     internal var isConfiguring = true
     package private(set) var isRunning = false
+    internal let workTasks = OwnedWorkSet()
     internal var runtimeTasks: [RuntimeCancellation] = []
     internal var startupWork: [DispatchWorkItem] = []
     package let hotkeyManager: HotkeyManager
     internal var pageRefreshIntent = PageRefreshIntent()
     internal let connectionQueue = DispatchQueue(label: "com.mimonitor.toolbox.connection")
     package nonisolated let deviceQueue = DispatchQueue(label: "com.mimonitor.toolbox.device", qos: .userInitiated)
-    package nonisolated let presetEngine: PresetEngine
+    package nonisolated let presetWorker: PresetWorker
     package var presetTimer: RuntimeCancellation?
     package var pendingPresetSave: DispatchWorkItem?
+    internal var presetOperationID: UUID?
     package var pendingPresetSaveID: String?
     package var pendingPresetSaveDevice: String?
     package var pictureEditRevision = 0
@@ -122,10 +125,11 @@ public final class AppCoordinator {
         self.adb = environment.adb
         self.hotkeyManager = environment.hotkeys
         preferences.register(defaults: ["crosshair_game_mode_only": true])
-        self.presetEngine = PresetEngine(store: PresetStore(defaults: preferences))
+        self.presetWorker = PresetWorker(store: PresetStore(defaults: preferences))
         self.ipInput = preferences.string(forKey: "saved_ip") ?? ""
         self.hdrMemoryEnabled = preferences.bool(forKey: "hdr_sdr_local_dimming_enabled")
         self.freesyncMemoryEnabled = preferences.bool(forKey: "freesync_mode_memory_enabled")
+        self.deviceWorkState.freesyncPreviousMode = preferences.integer(forKey: "freesync_previous_mode")
         self.crosshairGameModeOnly = preferences.bool(forKey: "crosshair_game_mode_only")
         self.accessibilityTrusted = false
         self.hotkeyDebugEnabled = preferences.bool(forKey: "hotkey_debug")
@@ -144,8 +148,8 @@ public final class AppCoordinator {
         self.menuBarItems = Self.loadMenuBarItems(preferences)
         self.hotkeyCountdownEnabled = preferences.object(forKey: "hotkey_countdown_enabled") as? Bool ?? true
         self.hotkeyCountdownSeconds = preferences.object(forKey: "hotkey_countdown_seconds") as? Double ?? 0.8
-        self.presetConfiguration = presetEngine.configuration
-        self.presetError = presetEngine.loadError
+        self.presetConfiguration = presetWorker.initialConfiguration
+        self.presetError = presetWorker.loadError
         self.isConfiguring = false
         if environment.mode == .simulation { executionLifetime.begin() }
     }
@@ -235,6 +239,7 @@ public final class AppCoordinator {
 
     package func stop() {
         adb.cancelSession()
+        workTasks.cancelAll()
         executionLifetime.end()
         isRunning = false
         connectionIntent.disconnect()
@@ -250,6 +255,7 @@ public final class AppCoordinator {
         resetMediaVolumeSession()
         monitorChecking = false
         crosshairReconcileBusy = false
+        presetOperationID = nil
         isPresetOperationInFlight = false; isPresetBusy = false; presetOperationText = ""
         mediaBrightnessCommitInFlight = false
         hotkeyManager.stop()
@@ -299,7 +305,7 @@ public final class AppCoordinator {
         let request = connectionIntent.generation
         if adb.ip.isEmpty { adb.ip = target }
         monitorChecking = true
-        runConnectionTask {
+        runConnectionTask(onCancel: { self.monitorChecking = false }) {
             defer { self.publishCompletion { self.monitorChecking = false } }
 
             if wasConnected && self.adb.deviceState() == "device" && self.adb.transportWorks() {

@@ -186,7 +186,7 @@ extension AppCoordinator {
 
     internal func applyCrosshairModeValue(_ value: Int, message: String) {
         crosshairReconcileBusy = true
-        runBackground {
+        runBackground(onCancel: { self.crosshairReconcileBusy = false }) {
             self.adb.settingsPut("front_sight_index", String(value))
             self.adb.refreshPq()
             self.publish {

@@ -12,7 +12,7 @@ let package = Package(
         .executable(name: "ToolboxPreviewHost", targets: ["ToolboxPreviewHost"]),
     ],
     targets: [
-        .target(name: "MimonitorPresetCore", dependencies: ["ToolboxDomain"]),
+        .target(name: "MimonitorPresetCore", dependencies: ["ToolboxDomain"], swiftSettings: [.swiftLanguageMode(.v6)]),
         .target(name: "ToolboxConcurrency", swiftSettings: [.swiftLanguageMode(.v6)]),
         .target(name: "ToolboxProcessExecution", dependencies: ["ToolboxConcurrency"], swiftSettings: [.swiftLanguageMode(.v6)]),
         .target(name: "ToolboxDomain", swiftSettings: [.swiftLanguageMode(.v6)]),

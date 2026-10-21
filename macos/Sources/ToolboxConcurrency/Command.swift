@@ -4,8 +4,9 @@ import Synchronization
 /// One-way, lock-protected cancellation shared by a task and its blocking subprocess.
 package final class CommandCancellation: Sendable {
     private let cancelled = Mutex(false)
-    package init() {}
-    package var isCancelled: Bool { cancelled.withLock { $0 } }
+    private let parent: CommandCancellation?
+    package init(parent: CommandCancellation? = nil) { self.parent = parent }
+    package var isCancelled: Bool { cancelled.withLock { $0 } || parent?.isCancelled == true }
     package func cancel() { cancelled.withLock { $0 = true } }
     /// Only for dedicated blocking workers, never the MainActor or a cooperative executor.
     @discardableResult package func sleep(for interval: TimeInterval) -> Bool {

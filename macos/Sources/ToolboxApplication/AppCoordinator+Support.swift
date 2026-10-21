@@ -1,3 +1,4 @@
+import ToolboxConcurrency
 import Foundation
 import AppKit
 import ToolboxDomain
@@ -33,24 +34,36 @@ extension AppCoordinator {
         }
     }
 
-    package func runBackground(_ work: @escaping @Sendable () -> Void) {
-        guard isRunning || environment.mode == .simulation else { return }
-        let token = executionLifetime.token(), session = adb.session()
-        deviceQueue.async { [executionLifetime, adb] in
-            adb.withSession(session) {
-                guard executionLifetime.allows(token), !session.cancellation.isCancelled else { return }
-                work()
-            }
-        }
+    package func runBackground(onCancel: @escaping @MainActor () -> Void = {}, _ work: @escaping @Sendable () -> Void) {
+        submitOperation(on: deviceQueue, work: work, onCancel: onCancel) { _ in }
     }
 
-    internal func runConnectionTask(_ work: @escaping @Sendable () -> Void) {
+    internal func runConnectionTask(onCancel: @escaping @MainActor () -> Void = {}, _ work: @escaping @Sendable () -> Void) {
+        submitOperation(on: connectionQueue, work: work, onCancel: onCancel) { _ in }
+    }
+
+    /// Snapshot on MainActor, run the entire synchronous transaction on its worker, then await a
+    /// typed result. The recursive protocol lock never crosses await or a task suspension point.
+    internal func submitOperation<Value: Sendable>(on queue: DispatchQueue,
+            work: @escaping @Sendable () -> Value,
+            onCancel: @escaping @MainActor () -> Void = {},
+            completion: @escaping @MainActor (Value) -> Void) {
         guard isRunning || environment.mode == .simulation else { return }
-        let token = executionLifetime.token(), session = adb.session()
-        connectionQueue.async { [executionLifetime, adb] in
-            adb.withSession(session) {
-                guard executionLifetime.allows(token), !session.cancellation.isCancelled else { return }
-                work()
+        let lifetime = executionLifetime.token(), session = adb.session().childOperation()
+        let job = BlockingExecutor(queue: queue).submit(cancellation: session.cancellation) { [adb, executionLifetime] in
+            try RuntimeWorkContext.$lifetime.withValue(lifetime) {
+                try adb.withSession(session) {
+                    guard executionLifetime.allows(lifetime), !session.cancellation.isCancelled else { throw CancellationError() }
+                    return work()
+                }
+            }
+        }
+        workTasks.observe(job) { [weak self, executionLifetime] result in
+            guard self != nil, executionLifetime.allows(lifetime) else { return }
+            guard !session.cancellation.isCancelled else { onCancel(); return }
+            switch result {
+            case .success(let value): completion(value)
+            case .failure: onCancel()
             }
         }
     }
@@ -58,7 +71,7 @@ extension AppCoordinator {
     /// Drop callbacks queued by a replaced session or a stopped/restarted app lifetime.
     nonisolated internal func publish(_ work: @escaping @MainActor () -> Void) {
         let cancellation = adb.operationSession?.cancellation
-        let lifetime = executionLifetime.token()
+        let lifetime = RuntimeWorkContext.lifetime ?? executionLifetime.token()
         DispatchQueue.main.async { [executionLifetime] in
             guard executionLifetime.allows(lifetime), cancellation?.isCancelled != true else { return }
             work()
@@ -67,7 +80,7 @@ extension AppCoordinator {
 
     /// Completion bookkeeping must finish even when the target changed. Feature values still use publish.
     nonisolated internal func publishCompletion(_ work: @escaping @MainActor () -> Void) {
-        let lifetime = executionLifetime.token()
+        let lifetime = RuntimeWorkContext.lifetime ?? executionLifetime.token()
         DispatchQueue.main.async { [executionLifetime] in
             guard executionLifetime.allows(lifetime) else { return }; work()
         }

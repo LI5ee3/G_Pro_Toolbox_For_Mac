@@ -98,3 +98,37 @@ final class SessionPublicationTests: XCTestCase {
         XCTAssertTrue(runtime.display.recordedCommands.isEmpty)
     }
 }
+
+@MainActor
+final class SessionCleanupTests: XCTestCase {
+    func testCancelledQueuedPresetReleasesBusyState() async {
+        let runtime = PreviewRuntime(), state = runtime.makeState()
+        state.deviceQueue.suspend()
+        state.createPreset(name: "must not be saved")
+        XCTAssertTrue(state.presets.isPresetOperationInFlight)
+        state.adb.beginSession(ip: "192.0.2.2")
+        state.deviceQueue.resume()
+        for _ in 0..<100 where state.presets.isPresetOperationInFlight {
+            try? await Task.sleep(for: .milliseconds(5))
+        }
+        XCTAssertFalse(state.presets.isPresetOperationInFlight)
+        XCTAssertFalse(state.presets.isPresetBusy)
+        XCTAssertTrue(state.presets.presetConfiguration.presets.isEmpty)
+    }
+    func testOldCompletionAfterStopAndRestartCannotPublishIntoNewLifetime() async {
+        let runtime = PreviewRuntime(), state = runtime.makeState()
+        let began = DispatchSemaphore(value: 0), release = DispatchSemaphore(value: 0)
+        state.runBackground {
+            began.signal(); _ = release.wait(timeout: .now() + 2)
+            state.publishCompletion { state.volume.dashboardVolume = 99 }
+        }
+        XCTAssertEqual(began.wait(timeout: .now() + 2), .success)
+        state.stop(); state.start()
+        state.seedSimulationReadings(volume: 25, muted: false)
+        release.signal()
+        let done = expectation(description: "old completion drained")
+        state.deviceQueue.async { DispatchQueue.main.async { done.fulfill() } }
+        await fulfillment(of: [done], timeout: 2)
+        XCTAssertEqual(state.volume.dashboardVolume, 25)
+    }
+}

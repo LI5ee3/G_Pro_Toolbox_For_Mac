@@ -14,6 +14,12 @@ def direct(name):
 assert direct('ToolboxDomain') == set()
 assert any(setting.get('kind', {}).get('swiftLanguageMode', {}).get('_0') == '6'
            for setting in targets['ToolboxDomain']['settings'])
+for name in ['ToolboxDomain', 'ToolboxConcurrency', 'ToolboxProcessExecution', 'MimonitorPresetCore']:
+    assert any(setting.get('kind', {}).get('swiftLanguageMode', {}).get('_0') == '6' for setting in targets[name]['settings']), name
+    for source in (root / 'Sources' / name).rglob('*.swift'):
+        assert '@unchecked Sendable' not in source.read_text(), source
+assert direct('ToolboxConcurrency') == set()
+assert direct('ToolboxProcessExecution') == {'ToolboxConcurrency'}
 assert direct('MimonitorPresetCore') == {'ToolboxDomain'}
 assert direct('ToolboxApplication') == {'ToolboxDomain', 'MimonitorPresetCore', 'ToolboxConcurrency'}
 assert 'MimonitorToolbox' not in direct('ToolboxMacAdapters')

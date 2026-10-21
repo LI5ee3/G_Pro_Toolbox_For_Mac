@@ -316,18 +316,20 @@ extension AppCoordinator {
                     // Dolby Vision、游戏子模式（SDR 游戏 RPG 之类）这些不是用户手动选的档位，
                     // 记下来再还原会很突兀 —— 而且它们在 FreeSync 开关时本来就会被自动切换。
                     if RegisterMap.modeNames[mode] != nil {
-                        self.preferences.set(mode, forKey: "freesync_previous_mode")
+                        self.deviceWorkState.freesyncPreviousMode = mode
                         self.publish {
+                            self.preferences.set(mode, forKey: "freesync_previous_mode")
                             self.log("FreeSync 模式记忆: 记录开启前模式 \(RegisterMap.modeNames[mode] ?? "\(mode)")")
                         }
                     } else {
-                        self.preferences.removeObject(forKey: "freesync_previous_mode")
+                        self.deviceWorkState.freesyncPreviousMode = 0
                         self.publish {
+                            self.preferences.removeObject(forKey: "freesync_previous_mode")
                             self.log("FreeSync 模式记忆: 当前是 \(RegisterMap.sceneNames[mode] ?? "未知模式")，非标准模式不记录")
                         }
                     }
                 } else if !on && wasOn {
-                    let saved = self.preferences.integer(forKey: "freesync_previous_mode")
+                    let saved = self.deviceWorkState.freesyncPreviousMode
                     restoreMode = RegisterMap.modeNames[saved] != nil ? saved : nil
                 }
             }

@@ -28,8 +28,11 @@ extension AppCoordinator {
     }
 
     package func startPresetFeatures() {
-        presetConfiguration = presetEngine.configuration
-        if let error = presetEngine.loadError { presetError = error; log(error) }
+        submitOperation(on: deviceQueue, work: { self.presetWorker.withEngine { $0.configuration } }) {
+            self.presetConfiguration = $0
+            self.updateAutomaticTaskStatus()
+        }
+        if let error = presetWorker.loadError { presetError = error; log(error) }
         presetTimer = environment.scheduler.repeating(every: 15, commonModes: true) { [weak self] in
             self?.checkAutomaticTasks()
         }
@@ -56,7 +59,7 @@ extension AppCoordinator {
 
     package func checkAutomaticTasks() {
         updateAutomaticTaskStatus()
-        guard isConnected, !isPresetOperationInFlight, presetEngine.loadError == nil else { return }
+        guard isConnected, !isPresetOperationInFlight, presetWorker.loadError == nil else { return }
         if pendingPresetSave == nil, let id = pendingPresetSaveID, activePresetID == id,
            pendingPresetSaveDevice == adb.ip,
            !presetConfiguration.applicationIncomplete {
@@ -204,17 +207,26 @@ extension AppCoordinator {
         mediaBrightnessPreview = nil
         mediaBrightnessHardware = nil
         if refresh || navigateToPicture { invalidatePictureRefreshesForPreset() }
+        let operationID = UUID()
+        presetOperationID = operationID
         let hudToken = switchHUDTitle.map { environment.feedback.beginOperation(title: $0) }
         updateHdrMemoryStatus()
         updateFreesyncMemoryStatus()
 
-        runBackground {
+        runBackground(onCancel: {
+            guard self.presetOperationID == operationID else { return }
+            self.presetOperationID = nil
+            self.isPresetOperationInFlight = false; self.isPresetBusy = false; self.presetOperationText = ""
+            self.updateHdrMemoryStatus(); self.updateFreesyncMemoryStatus(); self.updateAutomaticTaskStatus()
+            if let hudToken { self.environment.feedback.finishOperation(token: hudToken, result: .cancelled, title: nil) }
+        }) {
             let current = DispatchQueue.main.sync {
                 self.isConnected && self.connectionIntent.isCurrent(request) && self.adb.ip == identity
             }
             let device = connected && current ? self.environment.presetDevice(self.adb, identity) : nil
+            let (reports, errorText, savedEdits, configuration) = self.presetWorker.withEngine { engine in
             var reports: [PresetApplyReport] = []
-            self.presetEngine.onReport = { reports.append($0) }
+            engine.onReport = { reports.append($0) }
             var errorText: String?
             var savedEdits = saveID == nil
             do {
@@ -224,20 +236,24 @@ extension AppCoordinator {
                     }
                     if flushAutosave, let saveID, let device {
                         // Never save mixed values from a failed application into the original preset.
-                        if !self.presetEngine.configuration.applicationIncomplete {
-                            try self.presetEngine.synchronize(id: saveID, device: device)
+                        if !engine.configuration.applicationIncomplete {
+                            try engine.synchronize(id: saveID, device: device)
                         }
                         savedEdits = true
                     }
                     try self.adb.checkCancellation()
-                    try operation(self.presetEngine, device)
+                    try operation(engine, device)
                     if !flushAutosave { savedEdits = true }
                 }
             } catch { errorText = error.localizedDescription }
-            self.presetEngine.onReport = nil
-            let configuration = self.presetEngine.configuration
+            engine.onReport = nil
+            return (reports, errorText, savedEdits, engine.configuration)
+
+            }
 
             self.publishCompletion {
+                guard self.presetOperationID == operationID else { return }
+                self.presetOperationID = nil
                 self.presetConfiguration = configuration
                 self.isPresetOperationInFlight = false
                 self.isPresetBusy = false
