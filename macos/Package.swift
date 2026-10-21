@@ -13,15 +13,17 @@ let package = Package(
     ],
     targets: [
         .target(name: "MimonitorPresetCore", dependencies: ["ToolboxDomain"]),
+        .target(name: "ToolboxConcurrency", swiftSettings: [.swiftLanguageMode(.v6)]),
+        .target(name: "ToolboxProcessExecution", dependencies: ["ToolboxConcurrency"], swiftSettings: [.swiftLanguageMode(.v6)]),
         .target(name: "ToolboxDomain", swiftSettings: [.swiftLanguageMode(.v6)]),
-        .target(name: "ToolboxApplication", dependencies: ["ToolboxDomain", "MimonitorPresetCore"]),
+        .target(name: "ToolboxApplication", dependencies: ["ToolboxDomain", "MimonitorPresetCore", "ToolboxConcurrency"]),
         .target(name: "MimonitorToolbox", dependencies: ["ToolboxApplication", "ToolboxDomain", "MimonitorPresetCore"]),
-        .target(name: "ToolboxMacAdapters", dependencies: ["ToolboxApplication", "ToolboxDomain", "MimonitorPresetCore"]),
-        .target(name: "ToolboxPreviewSupport", dependencies: ["MimonitorToolbox", "ToolboxApplication", "ToolboxDomain", "MimonitorPresetCore"]),
+        .target(name: "ToolboxMacAdapters", dependencies: ["ToolboxProcessExecution", "ToolboxConcurrency", "ToolboxApplication", "ToolboxDomain", "MimonitorPresetCore"]),
+        .target(name: "ToolboxPreviewSupport", dependencies: ["ToolboxConcurrency","MimonitorToolbox", "ToolboxApplication", "ToolboxDomain", "MimonitorPresetCore"]),
         .executableTarget(name: "ToolboxApp", dependencies: ["MimonitorToolbox", "ToolboxMacAdapters"]),
         .executableTarget(name: "ToolboxPreviewHost", dependencies: ["ToolboxPreviewSupport"]),
         .testTarget(name: "MimonitorPresetCoreTests", dependencies: ["MimonitorPresetCore"]),
-        .testTarget(name: "MimonitorToolboxTests", dependencies: ["MimonitorToolbox", "ToolboxApplication", "ToolboxDomain", "MimonitorPresetCore", "ToolboxMacAdapters", "ToolboxPreviewSupport"]),
+        .testTarget(name: "MimonitorToolboxTests", dependencies: ["ToolboxConcurrency", "ToolboxProcessExecution","MimonitorToolbox", "ToolboxApplication", "ToolboxDomain", "MimonitorPresetCore", "ToolboxMacAdapters", "ToolboxPreviewSupport"]),
     ],
     swiftLanguageModes: [.v5]
 )

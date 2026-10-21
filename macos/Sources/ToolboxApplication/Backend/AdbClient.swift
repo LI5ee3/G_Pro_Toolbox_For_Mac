@@ -1,12 +1,7 @@
+import ToolboxConcurrency
 import ToolboxDomain
 import Foundation
 import MimonitorPresetCore
-
-package struct ProcessResult {
-    package let output: String
-    package let exitCode: Int32
-    package init(output: String, exitCode: Int32) { self.output = output; self.exitCode = exitCode }
-}
 
 /// ADB 客户端（移植自 adb.py）：封装对独立 adb server 的调用。
 package final class AdbClient {

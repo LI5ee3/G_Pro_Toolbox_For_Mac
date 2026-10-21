@@ -1,3 +1,4 @@
+import ToolboxConcurrency
 import ToolboxDomain
 import AppKit
 import Foundation
@@ -47,17 +48,6 @@ package struct RuntimeResources {
     }
 }
 
-package struct CommandRequest {
-    package let executable: String
-    package let arguments: [String]
-    package let serverPort: String
-    package let timeout: TimeInterval
-    package init(executable: String, arguments: [String], serverPort: String, timeout: TimeInterval) {
-        self.executable = executable; self.arguments = arguments; self.serverPort = serverPort; self.timeout = timeout
-    }
-}
-
-/// Only the production adapter target supplies real implementations of these effects.
 package struct SystemActions {
     package init() {}
     package var isTrusted: () -> Bool = { false }

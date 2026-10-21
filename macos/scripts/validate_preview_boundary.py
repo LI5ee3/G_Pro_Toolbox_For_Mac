@@ -27,12 +27,13 @@ def dependencies(name):
 reachable = dependencies('ToolboxPreviewHost')
 assert 'ToolboxMacAdapters' not in reachable, reachable
 assert 'ToolboxApp' not in reachable, reachable
-for module in ['ToolboxDomain', 'ToolboxApplication', 'MimonitorToolbox', 'ToolboxPreviewSupport', 'ToolboxPreviewHost']:
+assert 'ToolboxProcessExecution' not in reachable, reachable
+for module in ['ToolboxConcurrency', 'ToolboxDomain', 'ToolboxApplication', 'MimonitorToolbox', 'ToolboxPreviewSupport', 'ToolboxPreviewHost']:
     for source in (root / 'Sources' / module).rglob('*.swift'):
         text = source.read_text()
         for forbidden in ['Process()', 'CGEvent.tapCreate(', 'AudioObjectSetPropertyData(',
                           'NSWorkspace.shared', 'UserDefaults.standard', 'NSApp.terminate(',
-                          'FileManager.default', 'NSSavePanel()', 'NSOpenPanel()', 'PresetStore()']:
+                          'FileManager.default', 'NSSavePanel()', 'NSOpenPanel()', 'PresetStore()', 'posix_spawn(', 'Darwin.kill(']:
             # Comments are not executable boundaries.
             executable_lines = '\n'.join(line for line in text.splitlines() if not line.lstrip().startswith('//'))
             assert forbidden not in executable_lines, (source, forbidden)
@@ -42,7 +43,7 @@ if len(sys.argv) > 1:
         if not binary.is_file():
             continue
         symbols = subprocess.check_output(['nm', '-gjU', str(binary)], text=True, stderr=subprocess.DEVNULL)
-        for forbidden in ['SystemProcessRunner', 'LiveHotkeyDriver', 'LiveToolboxRuntime', 'NetworkScan', 'ToolboxMacAdapters']:
+        for forbidden in ['SystemProcessRunner', 'LiveHotkeyDriver', 'LiveToolboxRuntime', 'NetworkScan', 'ToolboxMacAdapters', 'ToolboxProcessExecution']:
             assert forbidden not in symbols, (binary, forbidden)
     resources = app / 'Contents' / 'Resources'
     assert not (resources / 'runtime').exists()

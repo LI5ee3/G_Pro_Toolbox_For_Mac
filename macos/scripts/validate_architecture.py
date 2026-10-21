@@ -15,7 +15,7 @@ assert direct('ToolboxDomain') == set()
 assert any(setting.get('kind', {}).get('swiftLanguageMode', {}).get('_0') == '6'
            for setting in targets['ToolboxDomain']['settings'])
 assert direct('MimonitorPresetCore') == {'ToolboxDomain'}
-assert direct('ToolboxApplication') == {'ToolboxDomain', 'MimonitorPresetCore'}
+assert direct('ToolboxApplication') == {'ToolboxDomain', 'MimonitorPresetCore', 'ToolboxConcurrency'}
 assert 'MimonitorToolbox' not in direct('ToolboxMacAdapters')
 assert 'ToolboxMacAdapters' not in direct('MimonitorToolbox')
 assert 'ToolboxMacAdapters' not in direct('ToolboxPreviewSupport')
