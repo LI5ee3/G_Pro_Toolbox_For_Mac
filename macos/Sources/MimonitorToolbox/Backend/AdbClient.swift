@@ -1,42 +1,43 @@
 import Foundation
 import MimonitorPresetCore
 
-struct ProcessResult {
-    let output: String
-    let exitCode: Int32
+package struct ProcessResult {
+    package let output: String
+    package let exitCode: Int32
+    package init(output: String, exitCode: Int32) { self.output = output; self.exitCode = exitCode }
 }
 
 /// ADB 客户端（移植自 adb.py）：封装对独立 adb server 的调用。
-final class AdbClient {
-    let adbPath: String
-    let serverPort: String
-    var ip: String = ""
+package final class AdbClient {
+    package let adbPath: String
+    package let serverPort: String
+    package var ip: String = ""
     private let channelLock = NSRecursiveLock()
 
     /// All ADB commands participate, including connection/recovery and JNI batch reads.
     /// A recursive lock permits a whole preset capture/apply to nest existing helpers.
-    func transaction<T>(_ work: () throws -> T) rethrows -> T {
+    package func transaction<T>(_ work: () throws -> T) rethrows -> T {
         channelLock.lock()
         defer { channelLock.unlock() }
         return try work()
     }
 
-    let resources: RuntimeResources
+    package let resources: RuntimeResources
     private let execute: (CommandRequest) -> ProcessResult
 
-    init(resources: RuntimeResources, execute: @escaping (CommandRequest) -> ProcessResult) {
+    package init(resources: RuntimeResources, execute: @escaping (CommandRequest) -> ProcessResult) {
         self.resources = resources
         self.adbPath = resources.adbPath
         self.serverPort = resources.serverPort
         self.execute = execute
     }
 
-    var serial: String { ip.isEmpty ? "" : "\(ip):5555" }
+    package var serial: String { ip.isEmpty ? "" : "\(ip):5555" }
 
     // MARK: - 进程执行
 
     @discardableResult
-    func run(_ args: [String], timeout: TimeInterval = 15) -> ProcessResult {
+    package func run(_ args: [String], timeout: TimeInterval = 15) -> ProcessResult {
         transaction {
             execute(CommandRequest(executable: adbPath, arguments: args,
                 serverPort: serverPort, timeout: timeout))
@@ -46,7 +47,7 @@ final class AdbClient {
     // MARK: - 基础命令
 
     /// Temporary, target-pinned validation. Never changes the active display or restarts its server.
-    func probeScannedDevice(ip targetIP: String) -> ScannedDevice? {
+    package func probeScannedDevice(ip targetIP: String) -> ScannedDevice? {
         guard !targetIP.isEmpty else { return nil }
         return transaction {
             let target = "\(targetIP):5555"
@@ -66,13 +67,13 @@ final class AdbClient {
     }
 
     @discardableResult
-    func shell(_ command: String) -> String {
+    package func shell(_ command: String) -> String {
         run(["-s", serial, "shell", command], timeout: 25)
             .output.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
     @discardableResult
-    func checkedShell(_ command: String, target: String) throws -> String {
+    package func checkedShell(_ command: String, target: String) throws -> String {
         guard !target.isEmpty else { throw PresetError("未连接显示器") }
         let result = run(["-s", target, "shell", command], timeout: 25)
         let output = result.output.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -87,13 +88,13 @@ final class AdbClient {
     }
 
     @discardableResult
-    func connect() -> String {
+    package func connect() -> String {
         guard !ip.isEmpty else { return "" }
         return run(["connect", serial], timeout: 10).output
     }
 
     @discardableResult
-    func disconnect(ip: String) -> String {
+    package func disconnect(ip: String) -> String {
         guard !ip.isEmpty else { return "" }
         return run(["disconnect", "\(ip):5555"], timeout: 5).output
     }
@@ -103,7 +104,7 @@ final class AdbClient {
     /// `adb connect` 只是把 TCP 连接挂上去就立刻返回，此时 `get-state` 往往还是
     /// `offline`（adbd 握手还没完成）。只查一次就会把成功的连接误判成失败，
     /// 所以要轮询等它翻转。`unauthorized` 不会自愈，直接返回。
-    func waitForDevice(timeout: TimeInterval = 6) -> String {
+    package func waitForDevice(timeout: TimeInterval = 6) -> String {
         let deadline = Date().addingTimeInterval(timeout)
         var state = deviceState()
         while state != "device" && Date() < deadline {
@@ -121,7 +122,7 @@ final class AdbClient {
     /// 而 kill + start 出一个全新的 server 立刻就能连上。
     private var lastServerRestart = Date.distantPast
 
-    func restartServer() {
+    package func restartServer() {
         lastServerRestart = Date()
         _ = run(["kill-server"], timeout: 5)
         Thread.sleep(forTimeInterval: 0.8)
@@ -138,7 +139,7 @@ final class AdbClient {
     ///
     /// 恢复过程本身要十几秒（设备侧 adbd 得先清掉旧的 transport），期间重启 server
     /// 会把正在进行的握手打断，于是「重试越勤 → 越连不上」。所以重启必须限流。
-    func serverRestartAllowed(cooldown: TimeInterval = 25) -> Bool {
+    package func serverRestartAllowed(cooldown: TimeInterval = 25) -> Bool {
         Date().timeIntervalSince(lastServerRestart) >= cooldown
     }
 
@@ -147,7 +148,7 @@ final class AdbClient {
     /// 注意这里**故意不做 `disconnect`**：实测在「卡在 offline」时，先 disconnect 会让
     /// server 转入 "No route to host"，越修越坏；而 kill-server + start-server 才是
     /// 唯一能可靠治好的手段，所以失败后直接走重启 server 这条路。
-    func ensureConnected() -> (ok: Bool, state: String) {
+    package func ensureConnected() -> (ok: Bool, state: String) {
         guard !ip.isEmpty else { return (false, "unknown") }
 
         // get-state 说 device 还不够，要确认真能跑命令（可能是残留的死连接）
@@ -169,7 +170,7 @@ final class AdbClient {
     }
 
     /// server 是否还活着（能响应 version 查询）。
-    func isServerAlive() -> Bool {
+    package func isServerAlive() -> Bool {
         run(["version"], timeout: 3).exitCode == 0
     }
 
@@ -177,7 +178,7 @@ final class AdbClient {
     ///
     /// 冷启动时第一条 adb 命令要顺带等 server 起来，紧接着 connect 很容易落到 offline。
     /// 启动时先预热，自动连接那一步就能快好几秒。
-    func warmUpServer() {
+    package func warmUpServer() {
         // start-server 本身幂等：已有 server 时直接返回，没有才拉起。
         // 不要先 isServerAlive() 再 start-server —— 那会连做两次启动操作，
         // 和随后的自动连接撞在一起。
@@ -186,17 +187,17 @@ final class AdbClient {
 
     /// 硬重连（保活守护部署后、设备重启后调用）。
     @discardableResult
-    func reconnect() -> String {
+    package func reconnect() -> String {
         let (ok, state) = ensureConnected()
         return ok ? "connected" : state
     }
 
     /// 安装 APK（-r 覆盖安装，-d 允许降级），返回 adb 原始输出。
-    func installApk(_ path: String) -> String {
+    package func installApk(_ path: String) -> String {
         run(["-s", serial, "install", "-r", "-d", path], timeout: 120).output
     }
 
-    func deviceState() -> String {
+    package func deviceState() -> String {
         guard !ip.isEmpty else { return "unknown" }
         return run(["-s", serial, "get-state"], timeout: 3)
             .output.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -204,7 +205,7 @@ final class AdbClient {
 
     /// 设备型号，用于连接后确认对端确实是显示器（原版 get_model）。
     /// 命令失败时 adb 会把错误文本原样吐出来（如 "adb: device offline"），不能当型号用。
-    func getModel() -> String {
+    package func getModel() -> String {
         let raw = shell("getprop ro.product.model").trimmingCharacters(in: .whitespacesAndNewlines)
         let lower = raw.lowercased()
         let looksLikeError = raw.isEmpty
@@ -219,11 +220,11 @@ final class AdbClient {
     /// `get-state` 返回 "device" **不代表**连接可用：adb server 会保留上一条已经死掉的
     /// TCP 连接，这时 get-state 说 device，但任何真实命令都会失败并把设备标成 offline。
     /// 所以必须用一条真实命令确认。
-    func transportWorks() -> Bool {
+    package func transportWorks() -> Bool {
         shell("echo __mimonitor_probe__").contains("__mimonitor_probe__")
     }
 
-    func settingsGet(_ key: String) -> String {
+    package func settingsGet(_ key: String) -> String {
         shell("settings get global \(key)")
     }
 
@@ -234,7 +235,7 @@ final class AdbClient {
     ///   - 逐个 `settings get`：21 次 adb 进程启动 ≈ 2.3s
     ///   - 合并成一条 shell 循环：21 次设备端进程 ≈ 0.94s
     ///   - `settings list global`：一次往返 ≈ 0.08s（快一个数量级）
-    func settingsGetBatch(_ keys: [String]) -> [String: String] {
+    package func settingsGetBatch(_ keys: [String]) -> [String: String] {
         // 只允许安全字符，避免注入到 shell 命令里
         let safe = keys.filter { key in
             !key.isEmpty && key.allSatisfy { $0.isLetter || $0.isNumber || $0 == "_" || $0 == "." }
@@ -274,7 +275,7 @@ final class AdbClient {
 
     /// 解析 `wm size` 的 Override size（移植自原版 _check_4k_state）。
     /// 没有 Override 时返回 nil，表示用的是面板原生分辨率。
-    func getOverrideSize() -> (width: Int, height: Int)? {
+    package func getOverrideSize() -> (width: Int, height: Int)? {
         for line in shell("wm size").split(separator: "\n") where line.contains("Override size") {
             guard let colon = line.lastIndex(of: ":") else { return nil }
             let parts = line[line.index(after: colon)...]
@@ -289,7 +290,7 @@ final class AdbClient {
     }
 
     /// 读取 `wm density` 的 Override 值（同样是 UI 缩放的判据之一）。
-    func getOverrideDensity() -> Int? {
+    package func getOverrideDensity() -> Int? {
         for line in shell("wm density").split(separator: "\n") where line.contains("Override density") {
             guard let colon = line.lastIndex(of: ":") else { return nil }
             return Int(line[line.index(after: colon)...].trimmingCharacters(in: .whitespaces))
@@ -297,17 +298,17 @@ final class AdbClient {
         return nil
     }
 
-    func settingsPut(_ key: String, _ value: String) {
+    package func settingsPut(_ key: String, _ value: String) {
         shell("settings put global \(key) \(value)")
     }
 
     /// 一次 shell 写多个 settings，省掉每条一次 ADB 往返。
-    func settingsPutBatch(_ pairs: [(String, String)]) {
+    package func settingsPutBatch(_ pairs: [(String, String)]) {
         guard !pairs.isEmpty else { return }
         shell(pairs.map { "settings put global \($0.0) \($0.1)" }.joined(separator: "; "))
     }
 
-    func keyevent(_ code: String) {
+    package func keyevent(_ code: String) {
         shell("input keyevent \(code)")
     }
 
@@ -332,12 +333,12 @@ final class AdbClient {
         static let getStreamVolumeForMute = 22
     }
     /// AudioManager.STREAM_MUSIC
-    static let streamMusic = 3
+    package static let streamMusic = 3
     /// AudioManager.ADJUST_MUTE / ADJUST_UNMUTE（hidden API 常量）
-    static let adjustMute = -100
-    static let adjustUnmute = 100
+    package static let adjustMute = -100
+    package static let adjustUnmute = 100
     /// 调用方包名必须属于 shell uid，否则 AudioService 的 AppOps 校验会抛 SecurityException。
-    static let binderShellPackage = "com.android.shell"
+    package static let binderShellPackage = "com.android.shell"
 
     /// nil = 尚未验证 binder 通道；true/false = 验证结果。
     /// 只在第一次写音量/静音时回读确认 transaction code 没被 ROM 改掉。
@@ -350,7 +351,7 @@ final class AdbClient {
     ///   - `settings get system volume_music_speaker` 在刚写完的 ~1 秒内还是旧值
     ///     （Settings 落盘/缓存有延迟），拿它做回读校验会被坑到。
     /// txn 不可用时回退 settings。
-    func mediaVolume() -> Int? {
+    package func mediaVolume() -> Int? {
         let output = shell("service call audio \(AudioServiceTxn.getStreamVolumeForMute) i32 \(Self.streamMusic)")
         if let value = Self.parseServiceCallInt(output), (0...100).contains(value) {
             return value
@@ -361,7 +362,7 @@ final class AdbClient {
     }
 
     /// 媒体流当前是否静音。
-    func mediaMuted() -> Bool? {
+    package func mediaMuted() -> Bool? {
         let output = shell("service call audio \(AudioServiceTxn.isStreamMute) i32 \(Self.streamMusic)")
         guard let value = Self.parseServiceCallInt(output) else { return nil }
         return value != 0
@@ -370,7 +371,7 @@ final class AdbClient {
     /// 绝对设置媒体音量（0~100）。返回是否走了 binder 快速通道。
     /// binder 不可用时退回 `input keyevent` 逐级调整（先读当前值再补差值）。
     @discardableResult
-    func setMediaVolume(_ value: Int, unmuteFirst: Bool = false) -> Bool {
+    package func setMediaVolume(_ value: Int, unmuteFirst: Bool = false) -> Bool {
         let target = max(0, min(100, value))
         if unmuteFirst { _ = setMediaMuted(false) }
         if mediaVolumeBinderVerified != false {
@@ -395,7 +396,7 @@ final class AdbClient {
 
     /// 设置/解除媒体流静音。返回是否走了 binder 快速通道。
     @discardableResult
-    func setMediaMuted(_ muted: Bool) -> Bool {
+    package func setMediaMuted(_ muted: Bool) -> Bool {
         if mediaVolumeBinderVerified != false {
             let direction = muted ? Self.adjustMute : Self.adjustUnmute
             let output = shell("service call audio \(AudioServiceTxn.adjustStreamVolume) i32 \(Self.streamMusic) i32 \(direction) i32 0 s16 \(Self.binderShellPackage)")
@@ -427,7 +428,7 @@ final class AdbClient {
     }
 
     /// `service call` 是否执行成功（没有 binder 异常）。抽出来方便单测。
-    static func serviceCallSucceeded(_ output: String) -> Bool {
+    package static func serviceCallSucceeded(_ output: String) -> Bool {
         guard output.contains("Result: Parcel(") else { return false }
         let lower = output.lowercased()
         return !lower.contains("error") && !lower.contains("exception")
@@ -437,7 +438,7 @@ final class AdbClient {
     /// 形如 `Result: Parcel(\t00000000 00000018   '........')` → 24。
     /// 第一个词是 binder 的异常码，所以至少要有两个词才算真的带返回值；
     /// void 方法（只有一个异常码）返回 nil，避免被当成值 0。抽出来方便单测。
-    static func parseServiceCallInt(_ output: String) -> Int? {
+    package static func parseServiceCallInt(_ output: String) -> Int? {
         let hexDigits = Set("0123456789abcdefABCDEF")
         var tokens: [String] = []
         var current = ""
@@ -454,14 +455,14 @@ final class AdbClient {
         return value
     }
 
-    func refreshPq() {
+    package func refreshPq() {
         shell("am broadcast -a com.xiaomi.mitv.action.PIC_MODE_CHANGED --ei picmode 7")
     }
 
     // MARK: - JNI / TvService
 
     /// 构造 `service call TvService 3 s16 "sh -c eval..."` 命令（移植自 adb.py）。
-    func buildTvserviceCommand(jar: String, args: [String]) -> String {
+    package func buildTvserviceCommand(jar: String, args: [String]) -> String {
         let encoded = args.map { "\\${IFS}\($0)" }.joined()
         return "service call TvService 3 s16 \"sh -c eval\\${IFS}CLASSPATH=\(jar)\\${IFS}/system/bin/app_process\\${IFS}/data/data/mitv.service/cache\(encoded)\""
     }
@@ -474,12 +475,12 @@ final class AdbClient {
     ///
     /// 写成"真实空格 + 转义双引号"的老形式会静默失败 —— `sh -c` 只拿到被截断的第一个
     /// 词（如 `"cp`），而 `service call` 依旧返回 Parcel，看着像成功。
-    func buildTvserviceShellCommand(parts: [String]) -> String {
+    package func buildTvserviceShellCommand(parts: [String]) -> String {
         let encoded = parts.map { "\\${IFS}\($0)" }.joined()
         return "service call TvService 3 s16 \"sh -c eval\(encoded)\""
     }
 
-    func jniSet(key: String, value: String, upd: Int = 3) {
+    package func jniSet(key: String, value: String, upd: Int = 3) {
         let jar = "/data/data/mitv.service/cache/MtkDirectTool.jar"
         shell(buildTvserviceCommand(jar: jar, args: ["MtkDirectTool", "set", key, value, String(upd)]))
     }
@@ -494,7 +495,7 @@ final class AdbClient {
     /// settings 必须等渐变结束再写：`picture_backlight` 的 ContentObserver 会直接改硬件，
     /// 提前写会把画面一下拉到目标值（先闪到目标、再被渐变拉回起点，观感就是来回闪）。
     /// 这里在设备侧用一个等待循环等渐变写完成标记，再执行 `settings put`。
-    func jniRamp(key: String, from: Int, to: Int, settingsKeys: [String] = [],
+    package func jniRamp(key: String, from: Int, to: Int, settingsKeys: [String] = [],
                  upd: Int = 3, stepMs: Int = 0, step: Int = 1) {
         let jar = "/data/data/mitv.service/cache/MtkDirectTool.jar"
         let dir = "/sdcard/Download/Mimonitor_Toolbox"
@@ -509,12 +510,12 @@ final class AdbClient {
         shell(parts.joined(separator: "; "))
     }
 
-    func hdrToneMapping(_ value: String, upd: Int = 3) {
+    package func hdrToneMapping(_ value: String, upd: Int = 3) {
         let jar = "/data/data/mitv.service/cache/MtkDirectTool.jar"
         shell(buildTvserviceCommand(jar: jar, args: ["MtkDirectTool", "setHdrToneMapping", value, String(upd)]))
     }
 
-    func setColorGains(red: String, green: String, blue: String) {
+    package func setColorGains(red: String, green: String, blue: String) {
         let jar = "/data/data/mitv.service/cache/MtkDirectTool.jar"
         shell(buildTvserviceCommand(jar: jar, args: ["MtkDirectTool", "setColorGains", red, green, blue]))
     }
@@ -541,14 +542,14 @@ final class AdbClient {
         return values
     }
 
-    func jniBatchGet(keys: [String]) -> [String: String] {
+    package func jniBatchGet(keys: [String]) -> [String: String] {
         transaction {
             guard let command = jniBatchCommand(keys: keys) else { return [:] }
             return parseJniBatch(shell(command))
         }
     }
 
-    func jniBatchGetChecked(keys: [String], target: String) throws -> [String: String] {
+    package func jniBatchGetChecked(keys: [String], target: String) throws -> [String: String] {
         try transaction {
             guard let command = jniBatchCommand(keys: keys) else { return [:] }
             let values = parseJniBatch(try checkedShell(command, target: target))
@@ -558,14 +559,14 @@ final class AdbClient {
         }
     }
 
-    func colorfulLed(action: String, args: [String] = []) {
+    package func colorfulLed(action: String, args: [String] = []) {
         let jar = "/data/data/mitv.service/cache/ColorfulLedTool.jar"
         shell(buildTvserviceCommand(jar: jar, args: ["ColorfulLedTool", action] + args))
     }
 
     // MARK: - Jar 部署
 
-    func ensureJars() {
+    package func ensureJars() {
         healJar("MtkDirectTool.jar")
         healJar("ColorfulLedTool.jar")
     }
@@ -578,11 +579,7 @@ final class AdbClient {
         let sizeLines = shell("stat -c %s \(sdcardJar) 2>/dev/null || echo 0").split(separator: "\n")
         let sdSize = Int(sizeLines.last.map(String.init) ?? "0") ?? 0
 
-        var localSize = 0
-        if let attrs = try? FileManager.default.attributesOfItem(atPath: local),
-           let n = attrs[.size] as? NSNumber {
-            localSize = n.intValue
-        }
+        let localSize = resources.fileSize(local)
 
         if sdSize < 1000 || (localSize > 0 && sdSize != localSize) {
             run(["-s", serial, "push", local, sdcardJar], timeout: 30)

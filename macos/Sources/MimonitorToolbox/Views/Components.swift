@@ -38,7 +38,7 @@ private struct ToolboxGlassSurface: ViewModifier {
     @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
     let cornerRadius: CGFloat
     func body(content: Content) -> some View {
-        if #available(macOS 26.0, *), !reduceTransparency {
+        if !reduceTransparency {
             content.glassEffect(.regular, in: .rect(cornerRadius: cornerRadius))
         } else {
             content.background(Theme.card, in: RoundedRectangle(cornerRadius: cornerRadius))
@@ -68,7 +68,7 @@ private struct ToolboxActionModifier: ViewModifier {
     let prominent: Bool
     @ViewBuilder func body(content: Content) -> some View {
         if prominent {
-            if #available(macOS 26.0, *), !reduceTransparency {
+            if !reduceTransparency {
                 content.controlSize(.large).buttonStyle(.glassProminent)
             } else { content.controlSize(.large).buttonStyle(.borderedProminent) }
         } else { content.buttonStyle(ToolboxActionStyle()) }
@@ -87,9 +87,7 @@ extension View {
 struct ToolboxGlassGroup<Content: View>: View {
     @ViewBuilder let content: Content
     var body: some View {
-        if #available(macOS 26.0, *) {
-            GlassEffectContainer(spacing: 16) { content }
-        } else { content }
+        GlassEffectContainer(spacing: 16) { content }
     }
 }
 

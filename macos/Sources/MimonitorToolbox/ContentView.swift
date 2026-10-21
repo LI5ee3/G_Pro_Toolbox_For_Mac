@@ -7,6 +7,8 @@ struct ContentView: View {
     @State private var selection: Page = .home
     @State private var appeared = false
     @Namespace private var navigation
+    init(initialPage: Page = .home) { _selection = State(initialValue: initialPage) }
+
     private let pages: [Page] = [.home, .picture, .game, .source, .light, .presets, .autoTasks, .remote]
 
     private func name(_ page: Page) -> String {
@@ -85,6 +87,8 @@ struct ContentView: View {
                 .opacity(reduceMotion || appeared ? 1 : 0)
                 .offset(y: reduceMotion || appeared ? 0 : 6)
         }
+        .preferredColorScheme(state.environment.mode == .simulation
+            ? (state.theme == "light" ? .light : state.theme == "dark" ? .dark : nil) : nil)
         .font(.system(size: 14))
         .tint(Theme.accent)
         .accentColor(Theme.accent)

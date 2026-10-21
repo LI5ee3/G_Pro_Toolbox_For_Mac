@@ -1,9 +1,10 @@
+import MimonitorToolbox
 import AppKit
 import Foundation
 import MimonitorPresetCore
 
 /// Virtual time only; never registers a RunLoop timer or sleeps a thread.
-final class ManualScheduler: RuntimeScheduling {
+package final class ManualScheduler: RuntimeScheduling {
     private struct Entry {
         let id: UUID
         var deadline: TimeInterval
@@ -11,18 +12,18 @@ final class ManualScheduler: RuntimeScheduling {
         let action: () -> Void
     }
     private var entries: [Entry] = []
-    private(set) var time: TimeInterval = 0
-    var pendingCount: Int { entries.count }
-    func repeating(every interval: TimeInterval, commonModes: Bool,
+    package private(set) var time: TimeInterval = 0
+    package var pendingCount: Int { entries.count }
+    package func repeating(every interval: TimeInterval, commonModes: Bool,
                    _ action: @escaping () -> Void) -> RuntimeCancellation {
         let id = UUID()
         entries.append(Entry(id: id, deadline: time + interval, interval: interval, action: action))
         return RuntimeCancellation { [weak self] in self?.entries.removeAll { $0.id == id } }
     }
-    func after(_ delay: TimeInterval, work: DispatchWorkItem) {
+    package func after(_ delay: TimeInterval, work: DispatchWorkItem) {
         entries.append(Entry(id: UUID(), deadline: time + delay, interval: nil, action: { work.perform() }))
     }
-    func advance(by delta: TimeInterval) {
+    package func advance(by delta: TimeInterval) {
         let target = time + max(0, delta)
         while let next = entries.min(by: { $0.deadline < $1.deadline }), next.deadline <= target {
             entries.removeAll { $0.id == next.id }; time = next.deadline
@@ -35,35 +36,36 @@ final class ManualScheduler: RuntimeScheduling {
     }
 }
 
-final class RecordingHotkeyDriver: HotkeyDriving {
-    private(set) var starts = 0
-    private(set) var stops = 0
-    func start(handler: @escaping (CGEventType, CGEvent) -> Bool, onDisabled: @escaping () -> Void) -> Bool { starts += 1; return true }
-    func stop() { stops += 1 }
+package final class RecordingHotkeyDriver: HotkeyDriving {
+    package private(set) var starts = 0
+    package private(set) var stops = 0
+    package func start(handler: @escaping (CGEventType, CGEvent) -> Bool, onDisabled: @escaping () -> Void) -> Bool { starts += 1; return true }
+    package func stop() { stops += 1 }
 }
 
-final class RecordingFeedback: FeedbackPresenting {
-    private(set) var hints: [String] = []
-    func show(title: String, value: String) { hints.append(title + ":" + value) }
-    func show(title: String, value: String, countdown: TimeInterval) { show(title: title, value: value) }
-    func endCountdown() {}
-    func beginOperation(title: String) -> UUID { hints.append(title); return UUID() }
-    func finishOperation(token: UUID, result: HUDOperationResult, title: String?) { hints.append(String(describing: result)) }
-    func brightness(_ value: Int) -> Bool { false }
-    func volume(_ value: Int) -> Bool { false }
-    func mute() -> Bool { false }
-    func stop() {}
+package final class RecordingFeedback: FeedbackPresenting {
+    package private(set) var hints: [String] = []
+    package func show(title: String, value: String) { hints.append(title + ":" + value) }
+    package func show(title: String, value: String, countdown: TimeInterval) { show(title: title, value: value) }
+    package func endCountdown() {}
+    package func beginOperation(title: String) -> UUID { hints.append(title); return UUID() }
+    package func finishOperation(token: UUID, result: HUDOperationResult, title: String?) { hints.append(String(describing: result)) }
+    package func brightness(_ value: Int) -> Bool { false }
+    package func volume(_ value: Int) -> Bool { false }
+    package func mute() -> Bool { false }
+    package func stop() {}
 }
 
 /// In-memory display. Incoming shell text is parsed as data and is NEVER executed.
-final class PreviewDisplay: PresetDevice {
-    let identity = "192.0.2.27"
+package final class PreviewDisplay: PresetDevice {
+    package let identity = "192.0.2.27"
     private let lock = NSRecursiveLock()
     private var commands: [String] = []
-    var failWrites = false
-    var volume = 10
-    var muted = false
-    var values: [String: String] = [
+    package var failWrites = false
+    package var unknownReadings = false
+    package var volume = 10
+    package var muted = false
+    package var values: [String: String] = [
         "picture_mode": "14", "picture_backlight": "45", "xiaomi_picture_backlight": "45",
         "tv_picture_light_sensor": "0", "picture_brightness": "50", "picture_contrast": "60",
         "picture_saturation": "50", "picture_hue": "50", "picture_sharpness": "30",
@@ -74,16 +76,16 @@ final class PreviewDisplay: PresetDevice {
         "atmosphere_light_switcher_pm2": "4", "atmosphere_light_illumination": "9",
         "atmosphere_light_color_temp": "1", "atmosphere_light_color_value": "0"
     ]
-    var recordedCommands: [String] { lock.lock(); defer { lock.unlock() }; return commands }
-    func capture() throws -> [String: String] { lock.lock(); defer { lock.unlock() }; return values }
-    func apply(_ values: [String: String]) throws -> PresetApplyReport {
+    package var recordedCommands: [String] { lock.lock(); defer { lock.unlock() }; return commands }
+    package func capture() throws -> [String: String] { lock.lock(); defer { lock.unlock() }; return values }
+    package func apply(_ values: [String: String]) throws -> PresetApplyReport {
         lock.lock(); defer { lock.unlock() }
         if failWrites { throw PresetError("模拟设备写入失败，可重试") }
         self.values.merge(values) { _, new in new }
         commands.append("preset.apply")
         return PresetApplyReport(applied: ["画面设置"])
     }
-    func execute(_ request: CommandRequest) -> ProcessResult {
+    package func execute(_ request: CommandRequest) -> ProcessResult {
         lock.lock(); defer { lock.unlock() }
         let args = request.arguments
         commands.append(args.joined(separator: " "))
@@ -98,6 +100,7 @@ final class PreviewDisplay: PresetDevice {
         if shell.contains("__mimonitor_probe__") { return result("__mimonitor_probe__") }
         if shell == "getprop ro.product.model" { return result("MiTV Preview") }
         if shell.hasPrefix("settings list global") { return result(values.sorted { $0.key < $1.key }.map { "\($0.key)=\($0.value)" }.joined(separator: "\n")) }
+        if unknownReadings && (shell.hasPrefix("service call audio 22") || shell.hasPrefix("service call audio 17") || shell == "settings get system volume_music_speaker") { return result("null") }
         if shell.hasPrefix("settings get ") { return result(values[String(shell.split(separator: " ").last ?? "")] ?? "0") }
         if shell.hasPrefix("service call audio 22") { return result(String(format: "Result: Parcel(00000000 %08x)", volume)) }
         if shell.hasPrefix("service call audio 17") { return result("Result: Parcel(00000000 \(muted ? "00000001" : "00000000"))") }
@@ -142,15 +145,16 @@ final class PreviewDisplay: PresetDevice {
     }
 }
 
-final class PreviewRuntime {
-    enum Scenario: String, CaseIterable { case connected = "已连接", disconnected = "未连接", failure = "写入失败", unknown = "未知读数" }
-    let preferences = MemoryPreferences()
-    let scheduler = ManualScheduler()
-    let display = PreviewDisplay()
-    let hotkeyDriver = RecordingHotkeyDriver()
-    let feedback = RecordingFeedback()
-    private(set) var effects: [String] = []
-    func environment(mode: AppEnvironment.Mode = .simulation) -> AppEnvironment {
+package final class PreviewRuntime {
+    package enum Scenario: String, CaseIterable { case connected = "已连接", disconnected = "未连接", failure = "写入失败", unknown = "未知读数" }
+    package let preferences = MemoryPreferences()
+    package let scheduler = ManualScheduler()
+    package let display = PreviewDisplay()
+    package let hotkeyDriver = RecordingHotkeyDriver()
+    package let feedback = RecordingFeedback()
+    package private(set) var effects: [String] = []
+    private var loginEnabled = false
+    package func environment(mode: AppEnvironment.Mode = .simulation) -> AppEnvironment {
         let resources = RuntimeResources(adbPath: "/mock/adb", serverPort: "0", runtime: { _ in nil }, guardianAPK: { "/mock/guardian.apk" })
         var system = SystemActions()
         func record(_ name: String) { effects.append(name) }
@@ -159,7 +163,8 @@ final class PreviewRuntime {
         system.openAccessibility = { record("permission.settings") }
         system.defaultOutput = { "Mi Monitor" }
         system.scan = { [self.display.identity] }; system.subnets = { ["192.0.2"] }
-        system.setAutostart = { _ in record("login.write") }
+        system.setAutostart = { self.loginEnabled = $0; record("login.write") }
+        system.autostartEnabled = { self.loginEnabled }
         system.applyTheme = { _ in record("theme") }
         system.copyText = { _ in record("clipboard") }
         system.openURL = { _ in record("url") }
@@ -175,10 +180,11 @@ final class PreviewRuntime {
             system: system, now: { Date(timeIntervalSince1970: 1_800_000_000 + self.scheduler.time) },
             calendar: Calendar(identifier: .gregorian), presetDevice: { _, _ in self.display })
     }
-    func makeState(_ scenario: Scenario = .connected) -> AppState {
+    package func makeState(_ scenario: Scenario = .connected) -> AppState {
         let state = AppState(environment: environment())
         state.ipInput = display.identity
         display.failWrites = scenario == .failure
+        display.unknownReadings = scenario == .unknown
         if scenario != .disconnected {
             state.adb.ip = display.identity
             state.connectionStatus = .connected("MiTV Preview · \(display.identity)")

@@ -3,25 +3,25 @@ import Foundation
 import MimonitorPresetCore
 
 /// Cancellation owns timers, notifications and delayed startup work, not a window lifetime.
-final class RuntimeCancellation {
+package final class RuntimeCancellation {
     private var cancellation: (() -> Void)?
-    init(_ cancellation: @escaping () -> Void = {}) { self.cancellation = cancellation }
-    func invalidate() { cancellation?(); cancellation = nil }
+    package init(_ cancellation: @escaping () -> Void = {}) { self.cancellation = cancellation }
+    package func invalidate() { cancellation?(); cancellation = nil }
     deinit { invalidate() }
 }
 
-protocol RuntimeScheduling: AnyObject {
+package protocol RuntimeScheduling: AnyObject {
     func repeating(every interval: TimeInterval, commonModes: Bool, _ action: @escaping () -> Void) -> RuntimeCancellation
     func after(_ delay: TimeInterval, work: DispatchWorkItem)
 }
 
-protocol HotkeyDriving: AnyObject {
+package protocol HotkeyDriving: AnyObject {
     func start(handler: @escaping (CGEventType, CGEvent) -> Bool,
                onDisabled: @escaping () -> Void) -> Bool
     func stop()
 }
 
-protocol FeedbackPresenting: AnyObject {
+package protocol FeedbackPresenting: AnyObject {
     func show(title: String, value: String)
     func show(title: String, value: String, countdown: TimeInterval)
     func endCountdown()
@@ -33,73 +33,93 @@ protocol FeedbackPresenting: AnyObject {
     func stop()
 }
 
-struct RuntimeResources {
-    let adbPath: String
-    let serverPort: String
-    let runtime: (String) -> String?
-    let guardianAPK: () -> String?
+package struct RuntimeResources {
+    package let adbPath: String
+    package let serverPort: String
+    package let runtime: (String) -> String?
+    package let guardianAPK: () -> String?
+    package let fileSize: (String) -> Int
+    package init(adbPath: String, serverPort: String, runtime: @escaping (String) -> String?,
+                 guardianAPK: @escaping () -> String?, fileSize: @escaping (String) -> Int = { _ in 0 }) {
+        self.adbPath = adbPath; self.serverPort = serverPort
+        self.runtime = runtime; self.guardianAPK = guardianAPK; self.fileSize = fileSize
+    }
 }
 
-struct CommandRequest {
-    let executable: String
-    let arguments: [String]
-    let serverPort: String
-    let timeout: TimeInterval
+package struct CommandRequest {
+    package let executable: String
+    package let arguments: [String]
+    package let serverPort: String
+    package let timeout: TimeInterval
+    package init(executable: String, arguments: [String], serverPort: String, timeout: TimeInterval) {
+        self.executable = executable; self.arguments = arguments; self.serverPort = serverPort; self.timeout = timeout
+    }
 }
 
 /// Only the production adapter target supplies real implementations of these effects.
-struct SystemActions {
-    var isTrusted: () -> Bool = { false }
-    var promptAccessibility: () -> Bool = { false }
-    var openAccessibility: () -> Void = {}
-    var defaultOutput: () -> String? = { nil }
-    var hostHDR: () -> Bool = { false }
-    var targetDisplay: (String) -> CGDirectDisplayID? = { _ in nil }
-    var focusedDisplay: () -> CGDirectDisplayID? = { nil }
-    var scan: () -> [String] = { [] }
-    var subnets: () -> [String] = { [] }
-    var tcpOpen: (String, Int, Double) -> Bool = { _, _, _ in false }
-    var ping: (String) -> Bool = { _ in false }
-    var isExecutable: (String) -> Bool = { _ in false }
-    var observeWake: (@escaping () -> Void, @escaping () -> Void) -> RuntimeCancellation = { _, _ in RuntimeCancellation() }
-    var setAutostart: (Bool) -> Void = { _ in }
-    var autostartEnabled: () -> Bool = { false }
-    var applyTheme: (String) -> Void = { _ in }
-    var showMainWindow: () -> Void = {}
-    var quit: () -> Void = {}
-    var copyText: (String) -> Void = { _ in }
-    var openURL: (URL) -> Void = { _ in }
-    var chooseAPK: (@escaping (URL) -> Void) -> Void = { _ in }
-    var chooseLogExport: (@escaping (URL) -> Void) -> Void = { _ in }
-    var terminal: (String) -> Bool = { _ in false }
-    var startLog: (String) -> Void = { _ in }
-    var appendLog: (String) -> Void = { _ in }
-    var stopLog: () -> Void = {}
-    var exportLog: (URL, String) -> Void = { _, _ in }
-    var openLogDirectory: () -> Void = {}
+package struct SystemActions {
+    package init() {}
+    package var isTrusted: () -> Bool = { false }
+    package var promptAccessibility: () -> Bool = { false }
+    package var openAccessibility: () -> Void = {}
+    package var defaultOutput: () -> String? = { nil }
+    package var hostHDR: () -> Bool = { false }
+    package var targetDisplay: (String) -> CGDirectDisplayID? = { _ in nil }
+    package var focusedDisplay: () -> CGDirectDisplayID? = { nil }
+    package var scan: () -> [String] = { [] }
+    package var subnets: () -> [String] = { [] }
+    package var tcpOpen: (String, Int, Double) -> Bool = { _, _, _ in false }
+    package var ping: (String) -> Bool = { _ in false }
+    package var isExecutable: (String) -> Bool = { _ in false }
+    package var observeWake: (@escaping () -> Void, @escaping () -> Void) -> RuntimeCancellation = { _, _ in RuntimeCancellation() }
+    package var setAutostart: (Bool) -> Void = { _ in }
+    package var autostartEnabled: () -> Bool = { false }
+    package var applyTheme: (String) -> Void = { _ in }
+    package var showMainWindow: () -> Void = {}
+    package var quit: () -> Void = {}
+    package var copyText: (String) -> Void = { _ in }
+    package var openURL: (URL) -> Void = { _ in }
+    package var chooseAPK: (@escaping (URL) -> Void) -> Void = { _ in }
+    package var chooseLogExport: (@escaping (URL) -> Void) -> Void = { _ in }
+    package var terminal: (String) -> Bool = { _ in false }
+    package var startLog: (String) -> Void = { _ in }
+    package var appendLog: (String) -> Void = { _ in }
+    package var stopLog: () -> Void = {}
+    package var exportLog: (URL, String) -> Void = { _, _ in }
+    package var openLogDirectory: () -> Void = {}
 }
 
-struct AppEnvironment {
-    enum Mode { case live, simulation }
-    let mode: Mode
-    let preferences: any PreferencesStore
-    let adb: AdbClient
-    let hotkeys: HotkeyManager
-    let feedback: any FeedbackPresenting
-    let scheduler: any RuntimeScheduling
-    let system: SystemActions
-    let now: () -> Date
-    let calendar: Calendar
-    let presetDevice: (AdbClient, String) -> any PresetDevice
+package struct AppEnvironment {
+    package enum Mode { case live, simulation }
+    package let mode: Mode
+    package let preferences: any PreferencesStore
+    package let adb: AdbClient
+    package let hotkeys: HotkeyManager
+    package let feedback: any FeedbackPresenting
+    package let scheduler: any RuntimeScheduling
+    package let system: SystemActions
+    package let now: () -> Date
+    package let calendar: Calendar
+    package let presetDevice: (AdbClient, String) -> any PresetDevice
+    package init(mode: Mode, preferences: any PreferencesStore, adb: AdbClient,
+                 hotkeys: HotkeyManager, feedback: any FeedbackPresenting,
+                 scheduler: any RuntimeScheduling, system: SystemActions,
+                 now: @escaping () -> Date, calendar: Calendar,
+                 presetDevice: @escaping (AdbClient, String) -> any PresetDevice) {
+        self.mode = mode; self.preferences = preferences; self.adb = adb; self.hotkeys = hotkeys
+        self.feedback = feedback; self.scheduler = scheduler; self.system = system
+        self.now = now; self.calendar = calendar; self.presetDevice = presetDevice
+    }
 }
 
 /// A stopped/restarted lifetime cannot execute work queued by an older lifetime.
-final class RuntimeGeneration {
+package final class RuntimeGeneration {
     private let lock = NSLock()
     private var revision = 0
     private var enabled = false
-    func begin() { lock.lock(); defer { lock.unlock() }; revision &+= 1; enabled = true }
-    func end() { lock.lock(); defer { lock.unlock() }; revision &+= 1; enabled = false }
-    func token() -> Int { lock.lock(); defer { lock.unlock() }; return revision }
-    func allows(_ token: Int) -> Bool { lock.lock(); defer { lock.unlock() }; return enabled && revision == token }
+    package func begin() { lock.lock(); defer { lock.unlock() }; revision &+= 1; enabled = true }
+    package func resumeIfNeeded() { lock.lock(); defer { lock.unlock() }; if !enabled { revision &+= 1; enabled = true } }
+    package func end() { lock.lock(); defer { lock.unlock() }; revision &+= 1; enabled = false }
+    package func token() -> Int { lock.lock(); defer { lock.unlock() }; return revision }
+    package func allows(_ token: Int) -> Bool { lock.lock(); defer { lock.unlock() }; return enabled && revision == token }
 }

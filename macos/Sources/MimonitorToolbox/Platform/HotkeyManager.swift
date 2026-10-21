@@ -10,25 +10,25 @@ private let nxSystemDefinedEventType: UInt32 = 14
 
 // MARK: - 快捷键配置模型
 
-struct HotkeyConfig: Codable, Equatable {
-    var modifier: String = "无"
-    var key: String = "无"
-    var isEnabled: Bool { modifier != "无" && key != "无" }
+package struct HotkeyConfig: Codable, Equatable {
+    package var modifier: String = "无"
+    package var key: String = "无"
+    package var isEnabled: Bool { modifier != "无" && key != "无" }
 }
 
-struct AdjustHotkeyConfig: Codable, Equatable {
-    var param: String = "backlight"
-    var direction: String = "increase"
-    var step: Int = 5
-    var modifier: String = "无"
-    var key: String = "无"
-    var isEnabled: Bool { modifier != "无" && key != "无" }
+package struct AdjustHotkeyConfig: Codable, Equatable {
+    package var param: String = "backlight"
+    package var direction: String = "increase"
+    package var step: Int = 5
+    package var modifier: String = "无"
+    package var key: String = "无"
+    package var isEnabled: Bool { modifier != "无" && key != "无" }
 }
 
-enum HotkeyLists {
+package enum HotkeyLists {
     /// 下拉里能选到的修饰键组合。名称必须和 `HotkeyMap.modifierName(for:)`
     /// 生成的一致，否则录入的快捷键在下拉里显示不出来。
-    static let modifiers = [
+    package static let modifiers = [
         "无", "Cmd", "Cmd + Shift", "Cmd + Option", "Cmd + Ctrl",
         "Ctrl", "Ctrl + Alt", "Ctrl + Shift",
         "Alt", "Alt + Shift", "Shift",
@@ -63,8 +63,8 @@ let adjustableParams: [(id: String, label: String, defaultStep: Int)] = [
 
 // MARK: - 按键 / 修饰键映射
 
-enum HotkeyMap {
-    static func modifiers(for name: String) -> CGEventFlags {
+package enum HotkeyMap {
+    package static func modifiers(for name: String) -> CGEventFlags {
         var flags: CGEventFlags = []
         if name.contains("Cmd") || name.contains("Win") { flags.insert(.maskCommand) }
         if name.contains("Ctrl") { flags.insert(.maskControl) }
@@ -108,13 +108,13 @@ enum HotkeyMap {
     }()
 
     /// 由按键事件反查显示名。录制快捷键时用。
-    static func keyName(for code: CGKeyCode) -> String? {
+    package static func keyName(for code: CGKeyCode) -> String? {
         reverseTable[Int(code)]
     }
 
     /// 由修饰键标志生成名称。**顺序必须和 HotkeyLists.modifiers 里的写法一致**，
     /// 否则录制出来的值在下拉里匹配不上。
-    static func modifierName(for flags: NSEvent.ModifierFlags) -> String {
+    package static func modifierName(for flags: NSEvent.ModifierFlags) -> String {
         var parts: [String] = []
         if flags.contains(.command) { parts.append("Cmd") }
         if flags.contains(.control) { parts.append("Ctrl") }
@@ -123,7 +123,7 @@ enum HotkeyMap {
         return parts.isEmpty ? "无" : parts.joined(separator: " + ")
     }
 
-    static func keyCode(for name: String) -> CGKeyCode? {
+    package static func keyCode(for name: String) -> CGKeyCode? {
         if name == "无" || name.isEmpty { return nil }
         if let code = ansiTables[name.uppercased()] { return CGKeyCode(code) }
         if name == "+" { return CGKeyCode(kVK_ANSI_Equal) }
@@ -145,7 +145,7 @@ enum HotkeyMap {
 
 // MARK: - 全局快捷键监听（CGEventTap）
 
-final class HotkeyManager {
+package final class HotkeyManager {
     struct Binding {
         let id: String
         let modifiers: CGEventFlags
@@ -169,16 +169,16 @@ final class HotkeyManager {
     // 1、2 会在回调里返回 nil 吞掉事件；3 不吞（避免劫持真实的 F1/F2）。
     private static let auxControlButtonSubtype: Int16 = 8
     private static let mediaKeyStateDown: Int = 0xA
-    static let keyTypeBrightnessUp: Int32 = 2      // NX_KEYTYPE_BRIGHTNESS_UP
-    static let keyTypeBrightnessDown: Int32 = 3    // NX_KEYTYPE_BRIGHTNESS_DOWN
-    static let keyTypeVolumeUp: Int32 = 0          // NX_KEYTYPE_SOUND_UP
-    static let keyTypeVolumeDown: Int32 = 1        // NX_KEYTYPE_SOUND_DOWN
-    static let keyTypeMute: Int32 = 7              // NX_KEYTYPE_MUTE
-    static let mediaBrightnessUpID = "media_brightness_up"
-    static let mediaBrightnessDownID = "media_brightness_down"
-    static let mediaVolumeUpID = "media_volume_up"
-    static let mediaVolumeDownID = "media_volume_down"
-    static let mediaMuteID = "media_volume_mute"
+    package static let keyTypeBrightnessUp: Int32 = 2      // NX_KEYTYPE_BRIGHTNESS_UP
+    package static let keyTypeBrightnessDown: Int32 = 3    // NX_KEYTYPE_BRIGHTNESS_DOWN
+    package static let keyTypeVolumeUp: Int32 = 0          // NX_KEYTYPE_SOUND_UP
+    package static let keyTypeVolumeDown: Int32 = 1        // NX_KEYTYPE_SOUND_DOWN
+    package static let keyTypeMute: Int32 = 7              // NX_KEYTYPE_MUTE
+    package static let mediaBrightnessUpID = "media_brightness_up"
+    package static let mediaBrightnessDownID = "media_brightness_down"
+    package static let mediaVolumeUpID = "media_volume_up"
+    package static let mediaVolumeDownID = "media_volume_down"
+    package static let mediaMuteID = "media_volume_mute"
     /// 媒体键以普通 keyDown 到达时的键码（亮度 144/145、音量 72/73/74）。
     private static let mediaKeyDownBrightnessUp: Int64 = 144
     private static let mediaKeyDownBrightnessDown: Int64 = 145
@@ -187,19 +187,19 @@ final class HotkeyManager {
     private static let mediaKeyDownMute: Int64 = 74
     /// 功能键当标准功能键时的兜底键码
     /// （调亮 F2 / 调暗 F1、音量加 F12 / 减 F11 / 静音 F10）。
-    static let keyCodeBrightnessUp = CGKeyCode(kVK_F2)
-    static let keyCodeBrightnessDown = CGKeyCode(kVK_F1)
-    static let keyCodeVolumeUp = CGKeyCode(kVK_F12)
-    static let keyCodeVolumeDown = CGKeyCode(kVK_F11)
-    static let keyCodeMute = CGKeyCode(kVK_F10)
+    package static let keyCodeBrightnessUp = CGKeyCode(kVK_F2)
+    package static let keyCodeBrightnessDown = CGKeyCode(kVK_F1)
+    package static let keyCodeVolumeUp = CGKeyCode(kVK_F12)
+    package static let keyCodeVolumeDown = CGKeyCode(kVK_F11)
+    package static let keyCodeMute = CGKeyCode(kVK_F10)
 
     /// 是否是亮度键的 NX_KEYTYPE
-    static func isBrightnessKeyType(_ keyType: Int32) -> Bool {
+    package static func isBrightnessKeyType(_ keyType: Int32) -> Bool {
         keyType == keyTypeBrightnessUp || keyType == keyTypeBrightnessDown
     }
 
     /// 是否是音量键的 NX_KEYTYPE（含静音）
-    static func isVolumeKeyType(_ keyType: Int32) -> Bool {
+    package static func isVolumeKeyType(_ keyType: Int32) -> Bool {
         keyType == keyTypeVolumeUp || keyType == keyTypeVolumeDown || keyType == keyTypeMute
     }
 
@@ -207,28 +207,28 @@ final class HotkeyManager {
     private var mediaBindings: [MediaBinding] = []
 
     /// 触发回调：参数为绑定 id（cycle 用 action 名，adjust 用 "adjust:<index>"）。
-    var onTrigger: ((String) -> Void)?
+    package var onTrigger: ((String) -> Void)?
 
     /// 诊断用：按键码命中某条绑定但修饰键不匹配时回调。
     /// 用来区分「事件根本没到」和「到了但组合不对」。
-    var onKeyCodeMatch: ((CGKeyCode, CGEventFlags, CGEventFlags) -> Void)?
+    package var onKeyCodeMatch: ((CGKeyCode, CGEventFlags, CGEventFlags) -> Void)?
 
     /// 诊断用：收到任意按键事件时回调
-    var onKeyEvent: ((CGEvent) -> Void)?
+    package var onKeyEvent: ((CGEvent) -> Void)?
 
     /// 诊断用：收到系统媒体键（亮度/音量…）时回调，参数为键类型与是否按下
-    var onMediaKeyEvent: ((Int32, Bool) -> Void)?
+    package var onMediaKeyEvent: ((Int32, Bool) -> Void)?
 
     /// 媒体键是否该由本应用处理（参数为 NX_KEYTYPE）。返回 false 时事件原样放行给系统
     /// —— 亮度键看焦点是否在目标显示器上，音量键看当前音频输出是不是显示器。
-    var shouldHandleMediaKey: ((Int32) -> Bool)?
+    package var shouldHandleMediaKey: ((Int32) -> Bool)?
 
     /// 监听被系统禁用时回调
-    var onTapDisabled: (() -> Void)?
+    package var onTapDisabled: (() -> Void)?
 
     private static let combinedMask: CGEventFlags = [.maskCommand, .maskControl, .maskAlternate, .maskShift]
 
-    func register(id: String, modifierName: String, keyName: String) {
+    package func register(id: String, modifierName: String, keyName: String) {
         bindings.removeAll { $0.id == id }
         guard modifierName != "无", keyName != "无",
               let keyCode = HotkeyMap.keyCode(for: keyName) else { return }
@@ -238,19 +238,19 @@ final class HotkeyManager {
     }
 
     /// 注册一个系统媒体键（目前用于硬件亮度键）。
-    func registerMedia(id: String, keyType: Int32) {
+    package func registerMedia(id: String, keyType: Int32) {
         mediaBindings.removeAll { $0.id == id }
         mediaBindings.append(MediaBinding(id: id, keyType: keyType))
     }
 
     /// 注册一个不带修饰键的普通按键。给硬件亮度键做兼容：
     /// 系统若把 F1/F2 当标准功能键，就只会发 keyDown，不会发 NX_SYSDEFINED。
-    func registerRaw(id: String, keyCode: CGKeyCode) {
+    package func registerRaw(id: String, keyCode: CGKeyCode) {
         bindings.removeAll { $0.id == id }
         bindings.append(Binding(id: id, modifiers: [], keyCode: keyCode))
     }
 
-    func clear() {
+    package func clear() {
         bindings.removeAll()
         mediaBindings.removeAll()
     }
@@ -259,10 +259,10 @@ final class HotkeyManager {
     /// `tapCreate` 在缺权限时会直接返回 nil —— 这种情况必须让调用方知道，
     /// 否则表现就是"快捷键配了但完全没反应"。
     private let driver: any HotkeyDriving
-    init(driver: any HotkeyDriving) { self.driver = driver }
+    package init(driver: any HotkeyDriving) { self.driver = driver }
 
     @discardableResult
-    func start() -> Bool {
+    package func start() -> Bool {
         driver.start(handler: { [weak self] type, event in
             guard let self else { return false }
             if type == .keyDown {
@@ -278,12 +278,12 @@ final class HotkeyManager {
     }
 
     /// 已注册的绑定数量（用于诊断）
-    var bindingCount: Int { bindings.count }
+    package var bindingCount: Int { bindings.count }
 
     /// 已注册的系统媒体键数量（用于诊断）
-    var mediaBindingCount: Int { mediaBindings.count }
+    package var mediaBindingCount: Int { mediaBindings.count }
 
-    func stop() { driver.stop() }
+    package func stop() { driver.stop() }
 
     private func handle(_ event: CGEvent) {
         let keyCode = CGKeyCode(event.getIntegerValueField(.keyboardEventKeycode))
@@ -315,7 +315,7 @@ final class HotkeyManager {
     }
 
     /// 把「以普通 keyDown 到达」的媒体键键码映射到 NX_KEYTYPE。抽出来方便单测。
-    static func mediaKeyType(forKeyCode keyCode: Int64) -> Int32? {
+    package static func mediaKeyType(forKeyCode keyCode: Int64) -> Int32? {
         switch keyCode {
         case mediaKeyDownBrightnessUp: return keyTypeBrightnessUp
         case mediaKeyDownBrightnessDown: return keyTypeBrightnessDown
@@ -346,16 +346,16 @@ final class HotkeyManager {
 
     /// 解析 NX_SYSDEFINED 的 `data1`：高 16 位是媒体键类型，
     /// bit 8~15 是状态（0xA 按下 / 0xB 抬起）。抽出来方便单测。
-    static func parseMediaKey(data1: Int) -> (keyType: Int32, isDown: Bool) {
+    package static func parseMediaKey(data1: Int) -> (keyType: Int32, isDown: Bool) {
         let keyType = Int32(truncatingIfNeeded: (data1 & 0xFFFF0000) >> 16)
         let isDown = (data1 & 0xFF00) >> 8 == mediaKeyStateDown
         return (keyType, isDown)
     }
 
     /// 事件是否已到达监听（用于诊断）
-    private(set) var receivedKeyEvents = 0
+    package private(set) var receivedKeyEvents = 0
 
     /// 系统媒体键事件计数（用于诊断）
-    private(set) var receivedMediaKeyEvents = 0
+    package private(set) var receivedMediaKeyEvents = 0
 
 }

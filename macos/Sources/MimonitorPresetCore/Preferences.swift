@@ -2,6 +2,11 @@ import Foundation
 
 /// Explicit storage boundary shared by app preferences and the existing preset store.
 public protocol PreferencesStore: AnyObject {
+    func string(forKey key: String) -> String?
+    func data(forKey key: String) -> Data?
+    func array(forKey key: String) -> [Any]?
+    func bool(forKey key: String) -> Bool
+    func integer(forKey key: String) -> Int
     func object(forKey key: String) -> Any?
     func set(_ value: Any?, forKey key: String)
     func removeObject(forKey key: String)

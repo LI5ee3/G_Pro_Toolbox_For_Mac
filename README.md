@@ -30,7 +30,9 @@ Redmi G Pro 27U / 32U 显示器的原生 macOS 控制应用，使用 SwiftUI、A
 
 ## 从源码构建
 
-安装 Xcode 命令行工具后，在仓库根目录运行：
+使用 macOS 27 与 Xcode 27.1，在 `macos/Toolbox.xcodeproj` 选择 `ToolboxApp`（真实应用）或 `ToolboxPreviews`（安全预览）。详细隔离规则见 [开发说明](macos/README.md)。
+
+命令行入口继续可用，在仓库根目录运行：
 
 ```sh
 cd macos

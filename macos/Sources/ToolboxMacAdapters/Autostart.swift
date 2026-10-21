@@ -1,3 +1,4 @@
+import MimonitorToolbox
 import Foundation
 
 /// 开机自启动（LaunchAgent）。

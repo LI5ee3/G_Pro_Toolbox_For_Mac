@@ -83,7 +83,7 @@ fetch_adb() {
 
 # 仅构建 Apple Silicon；通过 SwiftPM 查询产物目录，兼容不同构建引擎。
 echo "==> 1/6 编译 Apple Silicon release 版本（arm64）..."
-swift build -c release --arch arm64
+swift build -c release --arch arm64 --product MimonitorToolbox
 BIN_PATH="$(swift build -c release --arch arm64 --show-bin-path)/$EXEC_NAME"
 [ "$(lipo -archs "$BIN_PATH")" = "arm64" ] \
     || { echo "❌ 主程序必须仅包含 arm64"; exit 1; }

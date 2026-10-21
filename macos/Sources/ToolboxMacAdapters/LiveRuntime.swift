@@ -1,3 +1,4 @@
+import MimonitorToolbox
 import AppKit
 import Foundation
 import MimonitorPresetCore
@@ -95,9 +96,12 @@ private final class LiveLogFile {
 extension AppEnvironment {
     /// Call only from the production composition root, after choosing the runtime mode.
     static func live() -> AppEnvironment {
+        precondition(ProcessInfo.processInfo.environment["XCODE_RUNNING_FOR_PREVIEWS"] != "1", "Use the ToolboxPreviewHost scheme for safe previews")
         let resources = RuntimeResources(adbPath: LiveResourceLocator.locateAdb(),
             serverPort: ProcessInfo.processInfo.environment["MIMONITOR_ADB_SERVER_PORT"] ?? "5038",
-            runtime: LiveResourceLocator.runtimeResource, guardianAPK: LiveResourceLocator.guardianApkPath)
+            runtime: LiveResourceLocator.runtimeResource, guardianAPK: LiveResourceLocator.guardianApkPath, fileSize: { path in
+                ((try? FileManager.default.attributesOfItem(atPath: path)[.size]) as? NSNumber)?.intValue ?? 0
+            })
         let adb = AdbClient(resources: resources, execute: SystemProcessRunner.run)
         let logFile = LiveLogFile()
         var system = SystemActions()
@@ -108,7 +112,7 @@ extension AppEnvironment {
         system.openAccessibility = {
             NSWorkspace.shared.open(URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility")!)
         }
-        system.defaultOutput = AudioOutputMonitor.defaultOutputDeviceName
+        system.defaultOutput = CoreAudioOutputReader.defaultOutputDeviceName
         system.hostHDR = HDRDetector.hostSideHDR
         system.targetDisplay = { name in
             guard !name.isEmpty else { return nil }
@@ -165,4 +169,9 @@ extension AppEnvironment {
             scheduler: LiveScheduler(), system: system, now: Date.init, calendar: .current,
             presetDevice: { AdbPresetDevice(adb: $0, identity: $1) })
     }
+}
+
+/// The only public production composition factory. PreviewSupport never imports this module.
+public enum LiveToolboxRuntime {
+    public static func makeSession() -> ToolboxSession { ToolboxSession(environment: .live()) }
 }

@@ -1,3 +1,4 @@
+import MimonitorToolbox
 import Cocoa
 
 /// OSDUIHelper 暴露的协议。方法签名必须和系统里的一致，

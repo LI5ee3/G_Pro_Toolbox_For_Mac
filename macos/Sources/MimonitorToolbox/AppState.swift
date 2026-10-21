@@ -3,7 +3,7 @@ import SwiftUI
 import AppKit
 import MimonitorPresetCore
 
-enum ConnectionStatus: Equatable {
+package enum ConnectionStatus: Equatable {
     case disconnected
     case connecting
     case connected(String)
@@ -54,9 +54,9 @@ fileprivate struct GuardianStatus {
 
 /// 应用状态：连接状态、当前读取值、日志，以及所有显示器控制动作。
 /// 对应原版 App 类的职责（不含 UI 控件，UI 由各 View 负责）。
-final class AppState: ObservableObject {
-    let adb: AdbClient
-    let environment: AppEnvironment
+package final class AppState: ObservableObject {
+    package let adb: AdbClient
+    package let environment: AppEnvironment
     let preferences: any PreferencesStore
     private let executionLifetime = RuntimeGeneration()
     private var isConfiguring = true
@@ -85,8 +85,8 @@ final class AppState: ObservableObject {
     var pictureSettleUntil = Date.distantPast
     var lastAutomaticTaskError = ""
 
-    @Published var connectionStatus: ConnectionStatus = .disconnected
-    @Published var currentValues: [String: String] = [:]
+    @Published package var connectionStatus: ConnectionStatus = .disconnected
+    @Published package var currentValues: [String: String] = [:]
     @Published var logLines: [String] = []
     /// 每写一行日志就自增。界面靠它触发自动滚动 ——
     /// 不能用 logLines.count：日志满 500 行后会 removeFirst，count 恒定不变，
@@ -96,12 +96,12 @@ final class AppState: ObservableObject {
     @Published var scannedDeviceModels: [String: String] = [:]
     @Published var selectedDevice: String = ""
     @Published var activeSource: String = "未知"
-    @Published var loadedPages: Set<String> = []
+    @Published package var loadedPages: Set<String> = []
     @Published var isBusy: Bool = false
     /// 正在刷新的页面，用于显示 loading 遮罩
     @Published var loadingPages: Set<String> = []
 
-    @Published var ipInput: String = ""
+    @Published package var ipInput: String = ""
 
     // 工具页状态
     @Published var logToFileEnabled = false
@@ -225,7 +225,7 @@ final class AppState: ObservableObject {
     }
     @Published var autostartEnabled = false
 
-    init(environment: AppEnvironment) {
+    package init(environment: AppEnvironment) {
         self.environment = environment
         self.preferences = environment.preferences
         self.adb = environment.adb
@@ -262,7 +262,7 @@ final class AppState: ObservableObject {
     }
 
     /// Fixture entry point. It cannot modify a production runtime.
-    func seedSimulationReadings(volume: Int?, muted: Bool?) {
+    package func seedSimulationReadings(volume: Int?, muted: Bool?) {
         precondition(environment.mode == .simulation)
         dashboardVolume = volume; dashboardMuted = muted
         mediaVolumeHardware = volume; mediaVolumePreview = volume; mediaVolumeMuted = muted
@@ -270,7 +270,8 @@ final class AppState: ObservableObject {
 
     /// The app lifetime owns live services; construction and previews never start them.
     func start() {
-        guard !isRunning, environment.mode == .live else { return }
+        if environment.mode == .simulation { executionLifetime.resumeIfNeeded(); return }
+        guard !isRunning else { return }
         isRunning = true
         executionLifetime.begin()
         accessibilityTrusted = environment.system.isTrusted()
@@ -355,7 +356,7 @@ final class AppState: ObservableObject {
         cyclePending.values.forEach { $0.work.cancel() }; cyclePending.removeAll()
         adjustPendingWork.values.forEach { $0.cancel() }; adjustPendingWork.removeAll()
         mediaBrightnessCommit?.cancel(); mediaBrightnessCommit = nil
-        mediaVolumeCommit?.cancel(); mediaVolumeCommit = nil
+        resetMediaVolumeSession()
         hotkeyManager.stop()
         environment.feedback.stop()
         environment.system.stopLog()
@@ -669,6 +670,7 @@ final class AppState: ObservableObject {
     }
 
     func disconnectAdb() {
+        resetMediaVolumeSession()
         pendingPresetSave?.cancel()
         pendingPresetSave = nil
         // Keep dirty identity; reconnecting this same display can still save the edit safely.
@@ -837,7 +839,7 @@ final class AppState: ObservableObject {
     }
 
     /// 有数据可刷的页面（对应原版 _page_data_keys）。主页/工具页没有可读寄存器。
-    static let refreshablePages: Set<String> = ["picture", "game", "source", "light"]
+    package static let refreshablePages: Set<String> = ["picture", "game", "source", "light"]
 
     func refreshPage(_ page: String) {
         guard isConnected else { return }
@@ -2390,6 +2392,19 @@ final class AppState: ObservableObject {
     /// 收尾提交延迟：首次按下立即下发，这个延迟只决定连按中间值何时被合并。
     private let mediaVolumeCommitDelay: TimeInterval = 0.12
 
+    private func resetMediaVolumeSession() {
+        mediaVolumeCommit?.cancel(); mediaVolumeCommit = nil
+        mediaVolumeCommitInFlight = false
+        mediaVolumePreview = nil; mediaVolumeHardware = nil; mediaVolumeMuted = nil
+        mediaVolumeNeedsUnmute = false; mediaVolumeFallbackLogged = false
+        dashboardVolume = nil; dashboardMuted = nil
+    }
+
+    // Main-thread state is checked before queued work and before publishing its result.
+    private func mediaSessionIsCurrent(_ request: Int, target: String) -> Bool {
+        isConnected && connectionIntent.isCurrent(request) && adb.ip == target
+    }
+
     /// 默认音频输出是否就是目标显示器 —— 音量键接管门。
     /// 读不到输出设备时返回 false：宁可交给系统，也不要吞掉按键却没反应。
     func shouldHandleNativeVolume() -> Bool {
@@ -2404,11 +2419,13 @@ final class AppState: ObservableObject {
     func refreshMediaVolumeState() {
         guard isConnected else { return }
         guard mediaVolumePreview == nil || mediaVolumePreview == mediaVolumeHardware else { return }
+        let request = connectionIntent.generation, target = adb.ip
         runBackground {
+            guard DispatchQueue.main.sync(execute: { self.mediaSessionIsCurrent(request, target: target) }) else { return }
             let volume = self.adb.mediaVolume()
             let muted = self.adb.mediaMuted()
             DispatchQueue.main.async {
-                guard self.isConnected else { return }
+                guard self.mediaSessionIsCurrent(request, target: target) else { return }
                 if let volume {
                     self.mediaVolumePreview = volume
                     self.mediaVolumeHardware = volume
@@ -2480,9 +2497,12 @@ final class AppState: ObservableObject {
         guard mediaVolumeHardware != value || unmute else { return }
         mediaVolumeNeedsUnmute = false
         mediaVolumeCommitInFlight = true
+        let request = connectionIntent.generation, target = adb.ip
         runBackground {
+            guard DispatchQueue.main.sync(execute: { self.mediaSessionIsCurrent(request, target: target) }) else { return }
             let usedBinder = self.adb.setMediaVolume(value, unmuteFirst: unmute)
             DispatchQueue.main.async {
+                guard self.mediaSessionIsCurrent(request, target: target) else { return }
                 self.mediaVolumeCommitInFlight = false
                 self.mediaVolumeHardware = value
                 if !usedBinder, !self.mediaVolumeFallbackLogged {
@@ -2500,9 +2520,14 @@ final class AppState: ObservableObject {
             applyMediaMute(!known)
         } else {
             // 状态未知（刚连接/被外部改过）：先回读再切换
+            let request = connectionIntent.generation, target = adb.ip
             runBackground {
+                guard DispatchQueue.main.sync(execute: { self.mediaSessionIsCurrent(request, target: target) }) else { return }
                 let current = self.adb.mediaMuted() ?? false
-                DispatchQueue.main.async { self.applyMediaMute(!current) }
+                DispatchQueue.main.async {
+                    guard self.mediaSessionIsCurrent(request, target: target) else { return }
+                    self.applyMediaMute(!current)
+                }
             }
         }
     }
@@ -2518,9 +2543,12 @@ final class AppState: ObservableObject {
             environment.feedback.show(title: "静音", value: muted ? "开" : "关")
         }
         guard writeToDevice else { return }
+        let request = connectionIntent.generation, target = adb.ip
         runBackground {
+            guard DispatchQueue.main.sync(execute: { self.mediaSessionIsCurrent(request, target: target) }) else { return }
             let usedBinder = self.adb.setMediaMuted(muted)
             DispatchQueue.main.async {
+                guard self.mediaSessionIsCurrent(request, target: target) else { return }
                 if !usedBinder, !self.mediaVolumeFallbackLogged {
                     self.mediaVolumeFallbackLogged = true
                     self.log("静音键: AudioService binder 不可用，已回退 input keyevent")

@@ -24,7 +24,9 @@ concurrency:
 
 jobs:
   build:
-    runs-on: macos-14
+    # The product and its tests require macOS 27. Use a dedicated matching runner.
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: [self-hosted, macOS, ARM64, toolbox-macos27]
     steps:
       - uses: actions/checkout@v4
 
@@ -52,6 +54,8 @@ jobs:
       - name: 工具链版本
         run: |
           test "$(uname -m)" = "arm64" || { echo "需要 Apple Silicon runner"; exit 1; }
+          MACOS_MAJOR="$(sw_vers -productVersion | cut -d. -f1)"
+          test "$MACOS_MAJOR" -ge 27 || { echo "需要 macOS 27 或更新系统"; exit 1; }
           swift --version
           sw_vers
 
@@ -62,6 +66,12 @@ jobs:
       - name: 单元测试
         working-directory: macos
         run: swift test
+
+      - name: 验证安全 Preview 边界与 Xcode 宿主
+        working-directory: macos
+        run: |
+          python3 scripts/validate_preview_boundary.py
+          xcodebuild -project Toolbox.xcodeproj -scheme ToolboxPreviews -configuration Debug -destination 'platform=macOS,arch=arm64' build
 
       # 把发布用的自签名证书从 Secrets 导进来。
       #

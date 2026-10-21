@@ -2,11 +2,11 @@ import Foundation
 import MimonitorPresetCore
 
 /// Captures the target at submission time; changing adb.ip cannot redirect a running preset.
-final class AdbPresetDevice: PresetDevice {
-    let identity: String
+package final class AdbPresetDevice: PresetDevice {
+    package let identity: String
     private let target: String
     private let adb: AdbClient
-    init(adb: AdbClient, identity: String) {
+    package init(adb: AdbClient, identity: String) {
         self.adb = adb; self.identity = identity; self.target = "\(identity):5555"
     }
 
@@ -18,7 +18,7 @@ final class AdbPresetDevice: PresetDevice {
         return source
     }
 
-    func capture() throws -> [String: String] {
+    package func capture() throws -> [String: String] {
         try adb.transaction {
             let output = try adb.checkedShell("settings list global", target: target)
             var settings: [String: String] = [:]
@@ -67,7 +67,7 @@ final class AdbPresetDevice: PresetDevice {
         }
     }
 
-    func apply(_ values: [String: String]) throws -> PresetApplyReport {
+    package func apply(_ values: [String: String]) throws -> PresetApplyReport {
         try adb.transaction {
             let source = try source()
             var report = PicturePresetPlan.apply(values, source: source) { command in

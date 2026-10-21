@@ -3,6 +3,32 @@
 Redmi G Pro 27U / 32U 显示器的原生 macOS 控制工具，使用 SwiftUI、AppKit 和 CoreAudio。
 仅支持 macOS 27 及以上的 Apple Silicon Mac（M 系列芯片）。本仓库仅维护 Mac 应用；设备端协议与实现源自 [原项目](https://github.com/YiHoooong/Mimonitor_Toolbox)，在此基础上继续开发。
 
+## Xcode 开发与安全 Preview（R0–R2b）
+
+开发与运行均要求 macOS 27 或更新的 Apple Silicon Mac，使用本机已验证的 Xcode 27.1 工具链。
+
+打开 `Toolbox.xcodeproj`，两个共享 scheme：
+
+- **ToolboxApp**：真实应用；运行会启动现有网络 ADB、快捷键和后台任务。
+- **ToolboxPreviews**：隔离的 App Target；不链接 `ToolboxMacAdapters`，不包含 adb/JAR/APK。
+
+选 **ToolboxPreviews**，打开 `Sources/ToolboxPreviewSupport/PreviewGallery.swift`，刷新 Canvas。也可以直接运行该 scheme 得到独立预览窗口。顶部选择页面与场景，底部按钮推进虚拟时间；所有权限、文件、终端、登录项和设备动作均为内存模拟。不要用真实 App scheme 预览：生产组合根会检测并拒绝 Xcode Preview 运行上下文。
+
+```sh
+swift test
+python3 scripts/validate_preview_boundary.py
+xcodebuild -project Toolbox.xcodeproj -scheme ToolboxPreviews -configuration Debug -destination 'platform=macOS,arch=arm64' build
+xcodebuild -project Toolbox.xcodeproj -scheme ToolboxApp -configuration Release -destination 'platform=macOS,arch=arm64' build
+```
+
+生产 App 的 Xcode 资源复制阶段只使用已有 `assets/runtime/adb` 或 `.cache/platform-tools/adb`，不在 Preview 或编译期间下载程序。首次准备运行资源可沿用下方 `build_app.sh` 的官方 platform-tools 缓存流程；必需的 JAR/APK、图标及 NOTICE 缺失时 Xcode 构建失败。CLI `swift build --product MimonitorToolbox` 入口继续保留，应用实现与 Xcode 宿主共享同一库。
+
+当前模块：`MimonitorPresetCore`（原预设核心）、`MimonitorToolbox`（共享界面/原 AppState 与可注入命令门面）、`ToolboxMacAdapters`（真实平台实现）、`ToolboxPreviewSupport`（内存模拟）。AppState 的进一步拆分及全面 Observation/Swift 6 迁移属于后续 R3/R4，不在本批一次完成。
+
+CI 已显式要求带 `toolbox-macos27` 标签的专用 macOS 27 ARM64 runner；未注册该 runner 时任务会排队。本批未配置远端 runner 或触发远端 CI。同仓库受信任分支可运行，外部 fork PR 不自动在该自托管 runner 上执行。
+
+构建产物不自动替换已安装/正在运行的应用；先检查签名和资源，再由用户选择安装。正式 Developer ID、公证和发布治理属于 R6。
+
 ## ADB 音量控制
 
 键盘音量加减和静音通过已连接的网络 ADB 控制显示器，声音可继续通过 DP/HDMI 输出。保留辅助功能授权、默认音频输出限制、自定义步长和原生 OSD 16 格。ADB 离线时不接管系统音量键；CoreAudio 只读取默认输出设备，不写入音量。原蓝牙控制已移除，系统配对不受影响。
@@ -130,22 +156,22 @@ CI 用 `MACOS_CERT_P12` / `MACOS_CERT_PASSWORD` 两个 Secret。没配时回退 
 
 ```
 macos/
-├─ Package.swift                  # SPM 清单
-├─ build_app.sh                   # 一键打包 .app + DMG
-├─ make_dmg.sh / make_icon.sh     # DMG 打包 / 图标生成
-├─ setup_signing_cert.sh          # 创建本机固定签名证书
-├─ export_signing_cert.sh         # 把证书导出成 GitHub Secrets
-├─ reinstall.sh                   # 装到 /Applications 并重启
-└─ Sources/MimonitorToolbox/
-   ├─ App.swift                   # @main 入口、菜单栏、Dock 图标显隐
-   ├─ ContentView.swift           # 顶部导航外壳
-   ├─ Models.swift                # 寄存器映射表 + 选项表
-   ├─ AppState.swift              # 连接状态 / 当前值 / 日志 / 全部控制动作
-   ├─ NetworkScan.swift           # 内网 5555 扫描
-   ├─ Backend/AdbClient.swift     # ADB 协议层（settings / JNI / 灯效 / jar 部署 / apk）
-   ├─ Platform/                   # 快捷键 / HDR 检测 / 自启动
-   └─ Views/                      # 各页面 + 通用控件
+├─ Toolbox.xcodeproj/             # 原生 App / 安全 Preview App Target
+├─ Config/                       # Info.plist、开发签名权限
+├─ Package.swift                 # 共享模块与 CLI 兼容宿主
+├─ prepare_runtime.sh            # Xcode 生产 Target 的离线资源准备
+├─ build_app.sh / make_dmg.sh     # 保留的 CLI 打包与 DMG 流程
+├─ scripts/validate_preview_boundary.py
+└─ Sources/
+   ├─ ToolboxApp/                # 生产组合根、AppDelegate、Dock 生命周期
+   ├─ ToolboxPreviewHost/        # 独立安全预览 App 入口
+   ├─ ToolboxPreviewSupport/     # #Preview 画廊、内存设备和虚拟时间
+   ├─ ToolboxMacAdapters/        # Process、tap、CoreAudio 读取、HUD、资源、登录项
+   ├─ MimonitorPresetCore/       # 预设模型、计划、迁移、存储接口
+   └─ MimonitorToolbox/          # 共享 UI、AppState、ADB 命令、注入边界
 ```
+
+首批改造的范围、验证与限制见 [REFACTORING.md](REFACTORING.md)。
 
 ## Mac 功能
 
@@ -235,7 +261,8 @@ EDID / FreeSync 这类会改变显示器输入信号格式（可能黑屏或改�
 `.github/workflows/macos.yml` 是本项目唯一的应用构建与发布流程：
 
 - **触发**：主分支的 push / PR（包含共享资源的变动）、`v*` 标签，以及手动运行
-- **build**：debug 编译 → 单元测试 → 导入签名证书 → Apple Silicon 打包 → 校验产物 → 上传 artifact
+- **runner**：需要专用的 macOS 27、Apple Silicon、Xcode 27.1 自托管 runner，标签为 `toolbox-macos27`；未配置时任务会排队。本轮没有注册 runner 或运行远程 CI。外部 fork PR 不运行自托管构建。
+- **build**：平台检查 → debug 编译与单元测试 → Preview 边界及原生 Target 构建 → 原有签名打包与产物校验 → 上传 artifact
 - **release**：仅标签触发，把 DMG 和 zip 附到 GitHub Release
 
 校验步骤逐项确认：可执行文件存在、内嵌 adb / 两个 jar / 保活 apk 齐全、**确实是

@@ -25,3 +25,9 @@ __pycache__/
 
 # ── 其它 ──
 *.log
+
+# Per-developer Xcode state; shared project and schemes remain versioned.
+**/xcuserdata/
+*.xcuserstate
+
+/macos/.swiftpm/

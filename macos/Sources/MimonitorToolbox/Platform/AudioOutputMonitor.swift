@@ -1,4 +1,3 @@
-import CoreAudio
 import Foundation
 
 /// 当前默认音频输出设备的查询（CoreAudio）。
@@ -17,32 +16,6 @@ enum AudioOutputMonitor {
         guard enabled, adbConnected else { return false }
         return !gateEnabled || matches(configuredName: configuredOutputName, outputName: outputName)
     }
-    /// 默认输出设备的名称。查不到（无输出设备 / CoreAudio 异常）时返回 nil。
-    static func defaultOutputDeviceName() -> String? {
-        var deviceID = AudioDeviceID(kAudioObjectUnknown)
-        var deviceSize = UInt32(MemoryLayout<AudioDeviceID>.size)
-        var deviceAddress = AudioObjectPropertyAddress(
-            mSelector: kAudioHardwarePropertyDefaultOutputDevice,
-            mScope: kAudioObjectPropertyScopeGlobal,
-            mElement: kAudioObjectPropertyElementMain)
-        var status = AudioObjectGetPropertyData(AudioObjectID(kAudioObjectSystemObject),
-                                                &deviceAddress, 0, nil,
-                                                &deviceSize, &deviceID)
-        guard status == noErr, deviceID != AudioDeviceID(kAudioObjectUnknown) else { return nil }
-
-        var name: Unmanaged<CFString>?
-        var nameSize = UInt32(MemoryLayout<Unmanaged<CFString>?>.size)
-        var nameAddress = AudioObjectPropertyAddress(
-            mSelector: kAudioObjectPropertyName,
-            mScope: kAudioObjectPropertyScopeGlobal,
-            mElement: kAudioObjectPropertyElementMain)
-        status = withUnsafeMutablePointer(to: &name) { pointer in
-            AudioObjectGetPropertyData(deviceID, &nameAddress, 0, nil, &nameSize, pointer)
-        }
-        guard status == noErr, let name else { return nil }
-        return name.takeRetainedValue() as String
-    }
-
     /// 默认输出设备名是否匹配配置的关键字。抽成纯函数方便单测。
     ///
     /// - 配置为空：视为「不过滤」，返回 true。
@@ -54,8 +27,4 @@ enum AudioOutputMonitor {
         return outputName.localizedCaseInsensitiveContains(keyword)
     }
 
-    /// 便捷入口：直接按当前默认输出设备判断。
-    static func defaultOutputMatches(configuredName: String) -> Bool {
-        matches(configuredName: configuredName, outputName: defaultOutputDeviceName())
-    }
 }

@@ -1,3 +1,4 @@
+@testable import ToolboxPreviewSupport
 import XCTest
 import MimonitorPresetCore
 @testable import MimonitorToolbox
@@ -69,6 +70,27 @@ final class RuntimeSafetyTests: XCTestCase {
         XCTAssertTrue(runtime.display.recordedCommands.isEmpty)
     }
 
+    func testPreviewCanResumeAfterCanvasTemporarilyHidesIt() async {
+        let runtime = PreviewRuntime(), state = runtime.makeState()
+        state.stop(); state.start()
+        state.key("KEYCODE_DPAD_CENTER")
+        let drained = expectation(description: "resumed simulation drained")
+        state.deviceQueue.async { drained.fulfill() }
+        await fulfillment(of: [drained], timeout: 2)
+        XCTAssertTrue(runtime.display.recordedCommands.contains { $0.contains("KEYCODE_DPAD_CENTER") })
+        XCTAssertEqual(runtime.hotkeyDriver.starts, 0)
+    }
+
+    func testUnknownPreviewReadingsStayUnknownAfterRefresh() async {
+        let runtime = PreviewRuntime(), state = runtime.makeState(.unknown)
+        state.refreshMediaVolumeState()
+        let drained = expectation(description: "unknown read drained")
+        state.deviceQueue.async { drained.fulfill() }
+        await fulfillment(of: [drained], timeout: 2)
+        XCTAssertNil(state.dashboardVolume)
+        XCTAssertNil(state.dashboardMuted)
+    }
+
     func testTwoRapidMuteClicksAreSerializedOnTheMockDisplay() async {
         let runtime = PreviewRuntime(), state = runtime.makeState()
         state.toggleDashboardMute(); state.toggleDashboardMute()
@@ -77,6 +99,33 @@ final class RuntimeSafetyTests: XCTestCase {
         await fulfillment(of: [completion], timeout: 2)
         XCTAssertFalse(runtime.display.muted)
         XCTAssertEqual(runtime.display.recordedCommands.filter { $0.contains("service call audio 10") }.count, 2)
+    }
+
+    func testDisconnectDropsQueuedVolumeWriteAndTrailingCommit() async {
+        let runtime = PreviewRuntime(), state = runtime.makeState()
+        state.deviceQueue.suspend()
+        state.setDashboardVolume(75)
+        state.disconnectAdb()
+        state.deviceQueue.resume()
+        runtime.scheduler.advance(by: 1)
+        let drained = expectation(description: "disconnected volume queue drained")
+        state.deviceQueue.async { drained.fulfill() }
+        await fulfillment(of: [drained], timeout: 2)
+        XCTAssertFalse(runtime.display.recordedCommands.contains { $0.contains("service call audio 12") })
+        XCTAssertNil(state.dashboardVolume)
+    }
+
+    func testDisconnectDropsQueuedVolumeRead() async {
+        let runtime = PreviewRuntime(), state = runtime.makeState()
+        state.deviceQueue.suspend()
+        state.refreshMediaVolumeState()
+        state.disconnectAdb()
+        state.deviceQueue.resume()
+        let drained = expectation(description: "disconnected read queue drained")
+        state.deviceQueue.async { drained.fulfill() }
+        await fulfillment(of: [drained], timeout: 2)
+        XCTAssertFalse(runtime.display.recordedCommands.contains { $0.contains("shell") })
+        XCTAssertNil(state.dashboardMuted)
     }
 
     func testExplicitADBDisconnectDisablesDashboardAndStopsKeyInterception() {

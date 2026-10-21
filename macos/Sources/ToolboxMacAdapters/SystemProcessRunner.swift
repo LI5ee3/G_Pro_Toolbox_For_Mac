@@ -1,7 +1,8 @@
+import MimonitorToolbox
 import Foundation
 
-enum SystemProcessRunner {
-    static func run(_ request: CommandRequest) -> ProcessResult {
+package enum SystemProcessRunner {
+    package static func run(_ request: CommandRequest) -> ProcessResult {
         let process = Process()
         process.executableURL = URL(fileURLWithPath: request.executable)
         process.arguments = request.arguments
