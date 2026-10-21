@@ -1,6 +1,6 @@
 import Foundation
 
-package struct ScannedDevice: Equatable, Identifiable {
+package struct ScannedDevice: Equatable, Identifiable, Sendable {
     package init(ip: String, model: String) { self.ip = ip; self.model = model }
     package let ip: String
     package let model: String

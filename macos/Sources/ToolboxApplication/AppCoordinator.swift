@@ -1,6 +1,5 @@
 import ToolboxDomain
 import Foundation
-import SwiftUI
 import AppKit
 import MimonitorPresetCore
 
@@ -347,9 +346,7 @@ public final class AppCoordinator {
     }
 
 
-    package var gameModeHintIsWarning: Bool { gameModeState != .active }
 
-    package var isCustomColorTemp: Bool { intValue("picture_color_temperature", default: 1) == 3 }
 
     internal var pendingRefreshWork: DispatchWorkItem?
 

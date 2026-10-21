@@ -1,6 +1,5 @@
 import Foundation
 import AppKit
-import SwiftUI
 import ToolboxDomain
 import MimonitorPresetCore
 
@@ -40,7 +39,7 @@ extension AppCoordinator {
 
     /// 列表拖动排序（SwiftUI List 的 onMove 直接转过来）
     package func moveMenuBarItems(from: IndexSet, to: Int) {
-        menuBarItems.move(fromOffsets: from, toOffset: to)
+        menuBarItems = OrderedItems.move(menuBarItems, from: from, to: to)
     }
 
     /// 该条目对应的当前值，用于在菜单里给选项打勾

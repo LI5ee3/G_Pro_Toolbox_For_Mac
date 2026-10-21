@@ -5,6 +5,7 @@ import MimonitorPresetCore
 
 struct AutomaticTasksView: View {
     @ToolboxActions var state
+    @Environment(PresetsModel.self) private var presets
     @State private var editing: ScheduledPresetTask?
     @State private var deleting: ScheduledPresetTask?
     @State private var showDelete = false
@@ -18,7 +19,7 @@ struct AutomaticTasksView: View {
                     }
                     Spacer(minLength: 12)
                     Button {
-                        editing = ScheduledPresetTask(presetID: state.presetConfiguration.presets.first?.id ?? PicturePreset.baselineID,
+                        editing = ScheduledPresetTask(presetID: presets.presetConfiguration.presets.first?.id ?? PicturePreset.baselineID,
                                                        start: "18:00", end: "20:00")
                     } label: {
                         Label("新增任务", systemImage: "plus")
@@ -33,14 +34,14 @@ struct AutomaticTasksView: View {
                 .font(.system(size: 13))
                 .foregroundColor(Theme.secondaryText)
                 .fixedSize(horizontal: false, vertical: true)
-                if !state.presetConfiguration.tasks.isEmpty || state.presetConfiguration.session != nil {
+                if !presets.presetConfiguration.tasks.isEmpty || presets.presetConfiguration.session != nil {
                     HStack(alignment: .top, spacing: 10) {
                         Image(systemName: "clock.arrow.circlepath").foregroundColor(Theme.accent)
                         VStack(alignment: .leading, spacing: 5) {
-                            Text(state.automaticTaskStatus)
+                            Text(presets.automaticTaskStatus)
                                 .font(.system(size: 13, weight: .medium))
-                            if let session = state.presetConfiguration.session {
-                                let previous = state.presetConfiguration.presets.first { $0.id == session.previousPresetID }?.name ?? "无预设"
+                            if let session = presets.presetConfiguration.session {
+                                let previous = presets.presetConfiguration.presets.first { $0.id == session.previousPresetID }?.name ?? "无预设"
                                 Text("本轮结束后返回：\(previous)")
                                     .font(.system(size: 12)).foregroundColor(Theme.secondaryText)
                             }
@@ -51,7 +52,7 @@ struct AutomaticTasksView: View {
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .background(Theme.control.opacity(0.65), in: RoundedRectangle(cornerRadius: 10))
                 }
-                if state.presetConfiguration.tasks.isEmpty {
+                if presets.presetConfiguration.tasks.isEmpty {
                     VStack(spacing: 12) {
                         Image(systemName: "calendar.badge.clock")
                             .font(.system(size: 30, weight: .light))
@@ -63,9 +64,9 @@ struct AutomaticTasksView: View {
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 38)
                 }
-                if !state.presetConfiguration.tasks.isEmpty {
+                if !presets.presetConfiguration.tasks.isEmpty {
                     VStack(spacing: 0) {
-                        ForEach(Array(state.presetConfiguration.tasks.enumerated()), id: \.element.id) { index, task in
+                        ForEach(Array(presets.presetConfiguration.tasks.enumerated()), id: \.element.id) { index, task in
                             if index > 0 {
                                 Divider().overlay(Theme.stroke.opacity(0.65)).padding(.horizontal, 18)
                             }
@@ -80,11 +81,11 @@ struct AutomaticTasksView: View {
             .padding(28)
             .font(.system(size: 14))
             .tint(Theme.accent)
-            .disabled(state.isPresetOperationInFlight)
+            .disabled(presets.isPresetOperationInFlight)
         }
         .onAppear { state.checkAutomaticTasks() }
         .sheet(item: $editing) { task in
-            AutomaticTaskSheet(task: task, presets: state.presetConfiguration.presets) { state.saveAutomaticTask($0) }
+            AutomaticTaskSheet(task: task, presets: presets.presetConfiguration.presets) { state.saveAutomaticTask($0) }
         }
         .alert("删除自动任务？", isPresented: $showDelete, presenting: deleting) { task in
             Button("取消", role: .cancel) {}
@@ -115,8 +116,8 @@ struct AutomaticTasksView: View {
                 Label(presetName(task.presetID), systemImage: "display")
                     .font(.system(size: 13, weight: .medium))
                     .lineLimit(2)
-                if state.presetConfiguration.session?.taskID == task.id,
-                   state.presetConfiguration.session?.appliedTargetID == task.presetID {
+                if presets.presetConfiguration.session?.taskID == task.id,
+                   presets.presetConfiguration.session?.appliedTargetID == task.presetID {
                     Label("已执行", systemImage: "checkmark.circle.fill")
                         .font(.system(size: 12)).foregroundColor(Theme.accent).fixedSize()
                 }
@@ -139,7 +140,7 @@ struct AutomaticTasksView: View {
                     .toolboxAction()
                     .help("下移，提高重叠时的优先级")
                     .accessibilityLabel("下移任务")
-                    .disabled(index == state.presetConfiguration.tasks.count - 1)
+                    .disabled(index == presets.presetConfiguration.tasks.count - 1)
                 }
                 Button("编辑") { editing = task }.toolboxAction()
                 Button("删除…", role: .destructive) { deleting = task; showDelete = true }
@@ -151,7 +152,7 @@ struct AutomaticTasksView: View {
     }
 
     private func presetName(_ id: String) -> String {
-        id == PicturePreset.baselineID ? "无预设" : state.presetConfiguration.presets.first { $0.id == id }?.name ?? "预设已删除"
+        id == PicturePreset.baselineID ? "无预设" : presets.presetConfiguration.presets.first { $0.id == id }?.name ?? "预设已删除"
     }
     private func isOvernight(_ task: ScheduledPresetTask) -> Bool {
         guard let start = PresetSchedule.minute(task.start), let end = PresetSchedule.minute(task.end) else { return false }

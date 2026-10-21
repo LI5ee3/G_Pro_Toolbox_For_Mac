@@ -5,6 +5,8 @@ import MimonitorPresetCore
 
 struct PresetsView: View {
     @ToolboxActions var state
+    @Environment(ConnectionModel.self) private var connection
+    @Environment(PresetsModel.self) private var presets
     @State private var editor: PresetNameRequest?
     @State private var deleting: PicturePreset?
     @State private var showDelete = false
@@ -24,18 +26,18 @@ struct PresetsView: View {
                     }
                     .toolboxAction(prominent: true)
                     .controlSize(.regular)
-                    .disabled(!state.isConnected || state.presetConfiguration.applicationIncomplete)
+                    .disabled(!connection.isConnected || presets.presetConfiguration.applicationIncomplete)
                 }
 
                 VStack(alignment: .leading, spacing: 7) {
                     Text("应用后，画面页、快捷键和菜单栏的调整会自动保存到当前预设。")
-                    Label("菜单栏：\(state.presetConfiguration.menuBarPresets.count)/4 个预设", systemImage: "menubar.rectangle")
+                    Label("菜单栏：\(presets.presetConfiguration.menuBarPresets.count)/4 个预设", systemImage: "menubar.rectangle")
                 }
                 .font(.system(size: 13))
                 .foregroundColor(Theme.secondaryText)
                 .fixedSize(horizontal: false, vertical: true)
 
-                if !state.isConnected {
+                if !connection.isConnected {
                     Label("未连接显示器。可管理名称；创建、应用和编辑需先连接。", systemImage: "wifi.slash")
                         .font(.system(size: 13))
                         .foregroundColor(Theme.secondaryText)
@@ -47,25 +49,25 @@ struct PresetsView: View {
                     PresetCard(title: "无预设", summary: "不使用任何预设，仅修改当前显示器状态",
                                isCurrent: baselineIsCurrent, applicationIncomplete: false,
                                showInMenuBar: menuBarBinding(PicturePreset.baselineID),
-                               canEnableMenuBar: state.presetConfiguration.canEnableMenuBarPreset(id: PicturePreset.baselineID)) {
+                               canEnableMenuBar: presets.presetConfiguration.canEnableMenuBarPreset(id: PicturePreset.baselineID)) {
                         Button { state.restoreBaseline(edit: true) } label: {
                             Text("编辑画面").frame(width: 64)
                         }
                         .toolboxAction()
-                        .disabled(!state.isConnected || (!baselineIsCurrent && !state.canRestoreBaseline))
+                        .disabled(!connection.isConnected || (!baselineIsCurrent && !state.canRestoreBaseline))
                         Button { state.restoreBaseline() } label: {
                             Text("应用").frame(width: 48)
                         }
                         .toolboxAction(prominent: true)
                         .disabled(!state.canRestoreBaseline || baselineIsCurrent)
                     }
-                    ForEach(state.presetConfiguration.presets) { preset in
+                    ForEach(presets.presetConfiguration.presets) { preset in
                         Divider().overlay(Theme.stroke.opacity(0.65)).padding(.horizontal, 18)
                         PresetCard(title: preset.name, summary: summary(preset),
-                                   isCurrent: state.isConnected && state.activePresetID == preset.id && !state.presetConfiguration.applicationIncomplete,
-                                   applicationIncomplete: state.activePresetID == preset.id && state.presetConfiguration.applicationIncomplete,
+                                   isCurrent: connection.isConnected && state.activePresetID == preset.id && !presets.presetConfiguration.applicationIncomplete,
+                                   applicationIncomplete: state.activePresetID == preset.id && presets.presetConfiguration.applicationIncomplete,
                                    showInMenuBar: menuBarBinding(preset.id),
-                                   canEnableMenuBar: state.presetConfiguration.canEnableMenuBarPreset(id: preset.id)) {
+                                   canEnableMenuBar: presets.presetConfiguration.canEnableMenuBarPreset(id: preset.id)) {
                             Menu {
                                 Button("重命名") { editor = PresetNameRequest(preset: preset) }
                                 Button("删除…", role: .destructive) { deleting = preset; showDelete = true }
@@ -83,12 +85,12 @@ struct PresetsView: View {
                                 Text("编辑画面").frame(width: 64)
                             }
                             .toolboxAction()
-                            .disabled(!state.isConnected)
+                            .disabled(!connection.isConnected)
                             Button { state.applyPreset(id: preset.id) } label: {
                                 Text("应用").frame(width: 48)
                             }
                             .toolboxAction(prominent: true)
-                            .disabled(!state.isConnected || (state.activePresetID == preset.id && !state.presetConfiguration.applicationIncomplete))
+                            .disabled(!connection.isConnected || (state.activePresetID == preset.id && !presets.presetConfiguration.applicationIncomplete))
                         }
                     }
                 }
@@ -99,7 +101,7 @@ struct PresetsView: View {
             .padding(28)
             .font(.system(size: 14))
             .tint(Theme.accent)
-            .disabled(state.isPresetOperationInFlight)
+            .disabled(presets.isPresetOperationInFlight)
         }
         .sheet(item: $editor) { request in
             PresetNameSheet(preset: request.preset) { name in
@@ -116,12 +118,12 @@ struct PresetsView: View {
     }
 
     private var baselineIsCurrent: Bool {
-        state.isConnected && state.activePresetID == nil && !state.presetConfiguration.applicationIncomplete
+        connection.isConnected && state.activePresetID == nil && !presets.presetConfiguration.applicationIncomplete
     }
 
     private func menuBarBinding(_ id: String) -> Binding<Bool> {
         Binding(
-            get: { state.presetConfiguration.normalizedMenuBarPresetIDs.contains(id) },
+            get: { presets.presetConfiguration.normalizedMenuBarPresetIDs.contains(id) },
             set: { state.setPresetMenuBarVisibility(id: id, visible: $0) }
         )
     }
@@ -190,6 +192,7 @@ private struct PresetNameRequest: Identifiable {
 
 private struct PresetNameSheet: View {
     @ToolboxActions private var state
+    @Environment(PresetsModel.self) private var presets
     @Environment(\.dismiss) private var dismiss
     let preset: PicturePreset?
     let save: (String) -> Void
@@ -232,10 +235,10 @@ private struct PresetNameSheet: View {
         .font(.system(size: 14))
         .tint(Theme.accent)
         .interactiveDismissDisabled(saving)
-        .onChange(of: state.isPresetOperationInFlight) { _, inFlight in
+        .onChange(of: presets.isPresetOperationInFlight) { _, inFlight in
             guard saving, !inFlight else { return }
             saving = false
-            if let message = state.presetError {
+            if let message = presets.presetError {
                 failure = preset == nil ? "未能创建预设。请检查 ADB 连接或本机存储后重试；名称已保留。" : message
                 state.presetError = nil
             } else {

@@ -7,6 +7,9 @@ import MimonitorPresetCore
 /// 菜单栏下方面板。比系统菜单自由得多 —— 能放滑块、分组、任意布局。
 struct MenuBarPanel: View {
     @ToolboxActions var state
+    @Environment(ConnectionModel.self) private var connection
+    @Environment(PresetsModel.self) private var presets
+    @Environment(HotkeysModel.self) private var keyboard
     @Environment(\.openWindow) private var openWindow
     @State private var contentHeight: CGFloat = 64
 
@@ -15,9 +18,9 @@ struct MenuBarPanel: View {
             // 状态行
             HStack(spacing: 8) {
                 Circle()
-                    .fill(state.connection.statusColor)
+                    .fill(connection.statusColor)
                     .frame(width: 8, height: 8)
-                Text(state.statusText)
+                Text(connection.statusText)
                     .font(.system(size: 14, weight: .medium))
                     .lineLimit(1)
                     .truncationMode(.middle)
@@ -28,7 +31,7 @@ struct MenuBarPanel: View {
 
             Divider()
 
-            if state.menuBarItems.isEmpty && state.presetConfiguration.menuBarPresets.isEmpty {
+            if keyboard.menuBarItems.isEmpty && presets.presetConfiguration.menuBarPresets.isEmpty {
                 Text("还没有添加快捷项。\n去「菜单栏」或「预设模式」页添加。")
                     .font(.callout)
                     .foregroundColor(.secondary)
@@ -38,10 +41,10 @@ struct MenuBarPanel: View {
             } else {
                 ScrollView {
                     VStack(alignment: .leading, spacing: 10) {
-                        if !state.presetConfiguration.menuBarPresets.isEmpty {
+                        if !presets.presetConfiguration.menuBarPresets.isEmpty {
                             MenuBarPresetPicker()
                         }
-                        ForEach(state.menuBarItems, id: \.self) { id in
+                        ForEach(keyboard.menuBarItems, id: \.self) { id in
                             if let entry = MenuBarCatalog.entry(id) {
                                 MenuBarPanelRow(entry: entry)
                             }
@@ -69,16 +72,16 @@ struct MenuBarPanel: View {
                 Button("显示主窗口") {
                     // 先切回 .regular 再开窗：此时应用可能正处于 .accessory
                     // （Dock 里没有图标），不先切的话窗口能开出来但 Dock 图标要等一拍
-                    state.environment.system.showMainWindow()
-                    if state.environment.mode == .live { openWindow(id: "main") }
+                    state.showMainWindow()
+                    if !state.isSimulation { openWindow(id: "main") }
                 }
-                if state.isConnected {
+                if connection.isConnected {
                     Button("断开") { state.disconnectAdb() }
                 } else {
                     Button("重连") { state.connect() }
                 }
                 Spacer()
-                Button("退出") { state.environment.system.quit() }
+                Button("退出") { state.quit() }
             }
             .buttonStyle(.bordered)
             .controlSize(.small)
@@ -104,29 +107,31 @@ private struct MenuBarContentHeightKey: PreferenceKey {
 /// Native segmented selection, matching the close-behavior control in ToolsView.
 private struct MenuBarPresetPicker: View {
     @ToolboxActions var state
+    @Environment(ConnectionModel.self) private var connection
+    @Environment(PresetsModel.self) private var presets
 
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
             Text("预设模式").font(.callout).foregroundColor(.secondary)
             ScrollView(.horizontal, showsIndicators: false) {
                 PresetSegmentedControl(
-                    presets: state.presetConfiguration.menuBarPresets,
-                    selectedID: state.isConnected && !state.presetConfiguration.applicationIncomplete
+                    presets: presets.presetConfiguration.menuBarPresets,
+                    selectedID: connection.isConnected && !presets.presetConfiguration.applicationIncomplete
                         ? (state.activePresetID ?? PicturePreset.baselineID) : nil,
-                    isEnabled: state.isConnected && !state.isPresetOperationInFlight,
+                    isEnabled: connection.isConnected && !presets.isPresetOperationInFlight,
                     baselineEnabled: state.activePresetID == nil || state.canRestoreBaseline,
                     onSelect: { id in
                         guard id != (state.activePresetID ?? PicturePreset.baselineID)
-                            || state.presetConfiguration.applicationIncomplete else { return }
+                            || presets.presetConfiguration.applicationIncomplete else { return }
                         if id == PicturePreset.baselineID { state.restoreBaseline() }
                         else { state.applyPreset(id: id) }
                     }
                 )
                 .accessibilityLabel("预设模式")
-                .frame(width: MenuBarPanelLayout.presetWidth(count: state.presetConfiguration.menuBarPresets.count), height: 24)
+                .frame(width: MenuBarPanelLayout.presetWidth(count: presets.presetConfiguration.menuBarPresets.count), height: 24)
             }
             .frame(height: 24)
-            .disabled(!state.isConnected || state.isPresetOperationInFlight)
+            .disabled(!connection.isConnected || presets.isPresetOperationInFlight)
         }
     }
 }
@@ -186,6 +191,7 @@ private struct PresetSegmentedControl: NSViewRepresentable {
 /// 面板里的单个快捷项。
 private struct MenuBarPanelRow: View {
     @ToolboxActions var state
+    @Environment(ConnectionModel.self) private var connection
     let entry: MenuBarEntry
 
     /// 滑块拖动中的本地值：松手才下发，避免拖动过程刷出一串 ADB 命令
@@ -234,8 +240,8 @@ private struct MenuBarPanelRow: View {
                 }
             }
         }
-        .disabled(!state.isConnected)
-        .opacity(state.isConnected ? 1 : 0.5)
+        .disabled(!connection.isConnected)
+        .opacity(connection.isConnected ? 1 : 0.5)
     }
 }
 

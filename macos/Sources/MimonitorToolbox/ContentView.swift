@@ -4,12 +4,15 @@ import SwiftUI
 
 struct ContentView: View {
     @ToolboxActions var state
+    @Environment(ConnectionModel.self) private var connection
+    @Environment(PresetsModel.self) private var presets
+    @Environment(NavigationModel.self) private var navigation
     @Environment(SettingsModel.self) private var settings
     @Environment(\.scenePhase) private var scenePhase
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var selection: Page = .home
     @State private var appeared = false
-    @Namespace private var navigation
+    @Namespace private var navigationAnimation
     init(initialPage: Page = .home) { _selection = State(initialValue: initialPage) }
 
     private let pages: [Page] = [.home, .picture, .game, .source, .light, .presets, .autoTasks, .remote]
@@ -40,7 +43,7 @@ struct ContentView: View {
                 .background {
                     if selection == page {
                         RoundedRectangle(cornerRadius: 10).fill(Theme.card)
-                            .matchedGeometryEffect(id: "selection", in: navigation)
+                            .matchedGeometryEffect(id: "selection", in: navigationAnimation)
                     }
                 }
         }
@@ -90,7 +93,7 @@ struct ContentView: View {
                 .opacity(reduceMotion || appeared ? 1 : 0)
                 .offset(y: reduceMotion || appeared ? 0 : 6)
         }
-        .preferredColorScheme(state.environment.mode == .simulation
+        .preferredColorScheme(state.isSimulation
             ? (settings.theme == "light" ? .light : settings.theme == "dark" ? .dark : nil) : nil)
         .font(.system(size: 14))
         .tint(Theme.accent)
@@ -102,13 +105,13 @@ struct ContentView: View {
         .onChange(of: scenePhase) { _, phase in
             if phase == .active { state.refreshAccessibilityStatus() }
         }
-        .onChange(of: state.requestedPage) { _, page in
+        .onChange(of: navigation.requestedPage) { _, page in
             guard let page else { return }
             selection = page
             state.requestedPage = nil
         }
         .onChange(of: selection) { _, page in
-            if state.needsConnection(page) && !state.isConnected {
+            if state.needsConnection(page) && !connection.isConnected {
                 state.log("未连接显示器，请先在控制台连接。")
                 selection = .home
                 return
@@ -116,12 +119,12 @@ struct ContentView: View {
             state.onPageAppear(page)
         }
         .overlay {
-            if state.isPresetBusy {
+            if presets.isPresetBusy {
                 ZStack {
                     Color.black.opacity(0.12)
                     VStack(spacing: 14) {
                         ProgressView()
-                        Text(state.presetOperationText).font(.system(size: 14))
+                        Text(presets.presetOperationText).font(.system(size: 14))
                     }
                     .padding(28).background(Theme.card, in: RoundedRectangle(cornerRadius: 18))
                     .overlay(RoundedRectangle(cornerRadius: 18).stroke(Theme.stroke))
@@ -129,11 +132,11 @@ struct ContentView: View {
             }
         }
         .alert("预设与自动任务", isPresented: Binding(
-            get: { state.presetError != nil },
+            get: { presets.presetError != nil },
             set: { if !$0 { state.presetError = nil } }
         )) {
             Button("好", role: .cancel) { state.presetError = nil }
-        } message: { Text(state.presetError ?? "") }
+        } message: { Text(presets.presetError ?? "") }
     }
 
     @ViewBuilder private var detailView: some View {

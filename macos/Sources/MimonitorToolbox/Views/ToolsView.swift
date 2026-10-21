@@ -5,6 +5,9 @@ import UniformTypeIdentifiers
 
 struct ToolsView: View {
     @ToolboxActions var state
+    @Environment(ConnectionModel.self) private var connection
+    @Environment(ToolsModel.self) private var tools
+    @Environment(HotkeysModel.self) private var keyboard
     @Environment(SettingsModel.self) private var settings
     @State private var pending4K = false
     @State private var show4KConfirm = false
@@ -13,8 +16,8 @@ struct ToolsView: View {
     @State private var showGuardianConfirm = false
 
     private var configuredHotkeyCount: Int {
-        state.hotkeys.values.filter { $0.isEnabled }.count
-            + state.adjustHotkeys.filter { $0.isEnabled }.count
+        keyboard.hotkeys.values.filter { $0.isEnabled }.count
+            + keyboard.adjustHotkeys.filter { $0.isEnabled }.count
     }
 
     var body: some View {
@@ -51,9 +54,9 @@ struct ToolsView: View {
                 }
                 HStack(spacing: 6) {
                     Image(systemName: "chevron.left.forwardslash.chevron.right")
-                    Button("项目源代码") { state.environment.system.openURL(URL(string: "https://github.com/LI5ee3/Mimonitor_Toolbox")!) }
+                    Button("项目源代码") { state.openProjectSource() }
                     Spacer()
-                    Button("原项目") { state.environment.system.openURL(URL(string: "https://github.com/YiHoooong/Mimonitor_Toolbox")!) }
+                    Button("原项目") { state.openProjectSource(upstream: true) }
                 }
                 .font(.system(size: 13))
                 .foregroundStyle(Theme.secondaryText)
@@ -91,9 +94,9 @@ struct ToolsView: View {
                 VStack(alignment: .leading, spacing: 8) {
                     Text("用组合键、系统音量键与亮度键控制显示器。")
                         .foregroundStyle(Theme.secondaryText)
-                    Label(state.accessibilityTrusted ? "辅助功能权限已授予" : "尚未授权，键盘控制暂不生效",
-                          systemImage: state.accessibilityTrusted ? "checkmark.seal" : "exclamationmark.triangle")
-                        .foregroundStyle(state.accessibilityTrusted ? Theme.success : Theme.warning)
+                    Label(keyboard.accessibilityTrusted ? "辅助功能权限已授予" : "尚未授权，键盘控制暂不生效",
+                          systemImage: keyboard.accessibilityTrusted ? "checkmark.seal" : "exclamationmark.triangle")
+                        .foregroundStyle(keyboard.accessibilityTrusted ? Theme.success : Theme.warning)
                 }
                 Spacer(minLength: 12)
                 VStack(alignment: .trailing, spacing: 8) {
@@ -103,7 +106,7 @@ struct ToolsView: View {
                         .font(.system(size: 13)).foregroundStyle(Theme.secondaryText)
                 }
             }
-            if !state.accessibilityTrusted {
+            if !keyboard.accessibilityTrusted {
                 HStack(spacing: 10) {
                     Button("前往授权") { state.requestAccessibilityPermission() }
                         .toolboxAction()
@@ -115,21 +118,21 @@ struct ToolsView: View {
             }
             Divider().padding(.vertical, 2)
             Toggle("快捷键松手后生效", isOn: Binding(
-                get: { state.hotkeyCountdownEnabled },
+                get: { keyboard.hotkeyCountdownEnabled },
                 set: { state.hotkeyCountdownEnabled = $0 }
             ))
             HStack(spacing: 16) {
                 Text("等待时长").frame(width: 92, alignment: .leading)
                 FastSlider(value: Binding(
-                    get: { state.hotkeyCountdownSeconds },
+                    get: { keyboard.hotkeyCountdownSeconds },
                     set: { state.hotkeyCountdownSeconds = $0 }
                 ), range: 0.2...3.0, step: 0.1) { _ in }
-                .disabled(!state.hotkeyCountdownEnabled)
-                Text(String(format: "%.1f 秒", state.hotkeyCountdownSeconds))
+                .disabled(!keyboard.hotkeyCountdownEnabled)
+                Text(String(format: "%.1f 秒", keyboard.hotkeyCountdownSeconds))
                     .monospacedDigit().frame(width: 60, alignment: .trailing)
             }
-            .opacity(state.hotkeyCountdownEnabled ? 1 : 0.4)
-            Text(state.hotkeyCountdownEnabled
+            .opacity(keyboard.hotkeyCountdownEnabled ? 1 : 0.4)
+            Text(keyboard.hotkeyCountdownEnabled
                  ? "倒计时结束后提交，连续按键只保留最后一个值。"
                  : "每次按键立即提交；连续按键可能使 ADB 命令排队。")
                 .font(.system(size: 13)).foregroundStyle(Theme.secondaryText)
@@ -170,7 +173,7 @@ struct ToolsView: View {
                     .font(.system(size: 25, weight: .light)).foregroundStyle(Theme.accent)
                     .frame(width: 40, height: 38)
                 VStack(alignment: .leading, spacing: 8) {
-                    Text(state.guardianStatus).textSelection(.enabled)
+                    Text(tools.guardianStatus).textSelection(.enabled)
                     Text("显示器端 AdbGuardian 尝试在重启、待机或唤醒后恢复 ADB。深度待机时服务可能停止，恢复时间由显示器系统决定。")
                         .font(.system(size: 13)).foregroundStyle(Theme.secondaryText)
                 }
@@ -196,7 +199,7 @@ struct ToolsView: View {
                 set: { state.toggleHdrMemory($0) }
             ))
             .disabled(state.memoriesSuspendedByPreset)
-            Text(state.hdrMemoryStatusText).foregroundStyle(Theme.secondaryText)
+            Text(tools.hdrMemoryStatusText).foregroundStyle(Theme.secondaryText)
             Text("根据 macOS EDR 判断 HDR 信号。")
                 .font(.system(size: 13)).foregroundStyle(Theme.secondaryText)
             Divider().padding(.vertical, 2)
@@ -205,17 +208,17 @@ struct ToolsView: View {
                 set: { state.toggleFreesyncMemory($0) }
             ))
             .disabled(state.memoriesSuspendedByPreset)
-            Text(state.freesyncMemoryStatusText).foregroundStyle(Theme.secondaryText)
+            Text(tools.freesyncMemoryStatusText).foregroundStyle(Theme.secondaryText)
             if state.memoriesSuspendedByPreset {
                 Label("使用预设时记忆设置已锁定；返回无预设后恢复。", systemImage: "lock")
                     .font(.system(size: 13)).foregroundStyle(Theme.secondaryText)
             }
             Divider().padding(.vertical, 2)
             Toggle("准星仅在游戏模式下生效", isOn: Binding(
-                get: { state.crosshairGameModeOnly },
+                get: { tools.crosshairGameModeOnly },
                 set: { state.toggleCrosshairGameModeOnly($0) }
             ))
-            Text(state.crosshairModeStatusText).foregroundStyle(Theme.secondaryText)
+            Text(tools.crosshairModeStatusText).foregroundStyle(Theme.secondaryText)
         }
     }
 
@@ -227,10 +230,10 @@ struct ToolsView: View {
                 Button("重新检测") { state.check4KState() }
                     .toolboxAction()
             }
-            Text("当前：\(state.is4KUI ? "4K · 3840×2160 / DPI 640" : "1080p · 1920×1080 / DPI 320")")
+            Text("当前：\(tools.is4KUI ? "4K · 3840×2160 / DPI 640" : "1080p · 1920×1080 / DPI 320")")
                 .foregroundStyle(Theme.secondaryText)
             Toggle("启用 4K UI", isOn: Binding(
-                get: { state.is4KUI },
+                get: { tools.is4KUI },
                 set: { pending4K = $0; show4KConfirm = true }
             ))
             Text("仅改变显示器内置系统界面的分辨率。切换前会再次确认，确认后显示器将重启。")
@@ -246,7 +249,7 @@ struct ToolsView: View {
             HStack(spacing: 12) {
                 Button("选择 APK 并安装…") { state.chooseAPK() }
                     .toolboxAction()
-                if state.isConnected {
+                if connection.isConnected {
                     Label("已连接", systemImage: "checkmark.circle").foregroundStyle(Theme.success)
                 }
             }
@@ -274,6 +277,7 @@ struct ToolsView: View {
 /// 触发工具页所有卡片的重新布局（实测 850ms）。
 struct HotkeyConfigSheet: View {
     @ToolboxActions var state
+    @Environment(HotkeysModel.self) private var keyboard
     @Environment(\.dismiss) private var dismiss
 
     var body: some View {
@@ -299,13 +303,13 @@ struct HotkeyConfigSheet: View {
 
                         Divider().padding(.vertical, 4)
 
-                        ForEach(state.adjustHotkeys.indices, id: \.self) { i in
+                        ForEach(keyboard.adjustHotkeys.indices, id: \.self) { i in
                             AdjustHotkeyRow(config: adjustBinding(i)) {
-                                state.adjustHotkeys.remove(at: i)
+                                keyboard.adjustHotkeys.remove(at: i)
                             }
                         }
                         Button("新建可调快捷键") {
-                            state.adjustHotkeys.append(AdjustHotkeyConfig())
+                            keyboard.adjustHotkeys.append(AdjustHotkeyConfig())
                         }
                         .toolboxAction()
 
@@ -317,13 +321,13 @@ struct HotkeyConfigSheet: View {
                         // 系统亮度调节键直接接管为显示器背光。
                         // 这类键可能以 NX_SYSDEFINED 或普通 keyDown(144/145) 到达，都要拦。
                         HStack(spacing: 12) {
-                            Toggle("亮度调节键调显示器背光", isOn: Binding(get: { state.mediaBrightnessKeysEnabled }, set: { state.mediaBrightnessKeysEnabled = $0 }))
+                            Toggle("亮度调节键调显示器背光", isOn: Binding(get: { keyboard.mediaBrightnessKeysEnabled }, set: { state.mediaBrightnessKeysEnabled = $0 }))
                                 .toggleStyle(.checkbox)
                             // 开原生 OSD 时步长固定 16 格，整个隐藏，别留一个灰着的「步长 10」
-                            if !state.mediaBrightnessNativeOSD {
-                                Stepper("步长 \(state.mediaBrightnessStep)", value: Binding(get: { state.mediaBrightnessStep }, set: { state.mediaBrightnessStep = $0 }), in: 1...100)
+                            if !keyboard.mediaBrightnessNativeOSD {
+                                Stepper("步长 \(keyboard.mediaBrightnessStep)", value: Binding(get: { keyboard.mediaBrightnessStep }, set: { state.mediaBrightnessStep = $0 }), in: 1...100)
                                     .frame(width: 140)
-                                    .disabled(!state.mediaBrightnessKeysEnabled)
+                                    .disabled(!keyboard.mediaBrightnessKeysEnabled)
                             }
                             Spacer()
                         }
@@ -331,28 +335,28 @@ struct HotkeyConfigSheet: View {
                             .font(.system(size: 13))
                             .foregroundStyle(Theme.secondaryText)
 
-                        Toggle("使用 macOS 原生亮度提示（OSD）", isOn: Binding(get: { state.mediaBrightnessNativeOSD }, set: { state.mediaBrightnessNativeOSD = $0 }))
+                        Toggle("使用 macOS 原生亮度提示（OSD）", isOn: Binding(get: { keyboard.mediaBrightnessNativeOSD }, set: { state.mediaBrightnessNativeOSD = $0 }))
                             .toggleStyle(.checkbox)
-                            .disabled(!state.mediaBrightnessKeysEnabled)
-                        Text(state.mediaBrightnessNativeOSD
+                            .disabled(!keyboard.mediaBrightnessKeysEnabled)
+                        Text(keyboard.mediaBrightnessNativeOSD
                              ? "原生提示固定为 16 格，每按一次调节一格，步长不可调。"
                              : "当前使用应用悬浮提示，可自行设定调节步长。")
                             .font(.system(size: 13))
                             .foregroundStyle(Theme.secondaryText)
 
-                        Toggle("多屏时仅在鼠标位于「\(state.mediaBrightnessDisplayName)」时拦截", isOn: Binding(get: { state.mediaBrightnessFocusOnly }, set: { state.mediaBrightnessFocusOnly = $0 }))
+                        Toggle("多屏时仅在鼠标位于「\(keyboard.mediaBrightnessDisplayName)」时拦截", isOn: Binding(get: { keyboard.mediaBrightnessFocusOnly }, set: { state.mediaBrightnessFocusOnly = $0 }))
                             .toggleStyle(.checkbox)
-                            .disabled(!state.mediaBrightnessKeysEnabled)
+                            .disabled(!keyboard.mediaBrightnessKeysEnabled)
                         HStack(spacing: 8) {
                             Text("显示器名称")
                                 .font(.system(size: 13))
                                 .foregroundStyle(Theme.secondaryText)
-                            TextField("Mi Monitor", text: Binding(get: { state.mediaBrightnessDisplayName }, set: { state.mediaBrightnessDisplayName = $0 }))
+                            TextField("Mi Monitor", text: Binding(get: { keyboard.mediaBrightnessDisplayName }, set: { state.mediaBrightnessDisplayName = $0 }))
                                 .textFieldStyle(.roundedBorder)
                                 .frame(width: 200)
                             Spacer()
                         }
-                        .disabled(!state.mediaBrightnessKeysEnabled)
+                        .disabled(!keyboard.mediaBrightnessKeysEnabled)
                         Text("鼠标不在目标显示器上时，亮度键交回系统处理（去调内置屏亮度）。")
                             .font(.system(size: 13))
                             .foregroundStyle(Theme.secondaryText)
@@ -364,12 +368,12 @@ struct HotkeyConfigSheet: View {
                     SettingsTaskSection(title: "音量键") {
                         // 系统音量调节键接管为显示器音量。
                         HStack(spacing: 12) {
-                            Toggle("音量调节键调显示器音量", isOn: Binding(get: { state.mediaVolumeKeysEnabled }, set: { state.mediaVolumeKeysEnabled = $0 }))
+                            Toggle("音量调节键调显示器音量", isOn: Binding(get: { keyboard.mediaVolumeKeysEnabled }, set: { state.mediaVolumeKeysEnabled = $0 }))
                                 .toggleStyle(.checkbox)
-                            if !state.mediaVolumeNativeOSD {
-                                Stepper("步长 \(state.mediaVolumeStep)", value: Binding(get: { state.mediaVolumeStep }, set: { state.mediaVolumeStep = $0 }), in: 1...100)
+                            if !keyboard.mediaVolumeNativeOSD {
+                                Stepper("步长 \(keyboard.mediaVolumeStep)", value: Binding(get: { keyboard.mediaVolumeStep }, set: { state.mediaVolumeStep = $0 }), in: 1...100)
                                     .frame(width: 140)
-                                    .disabled(!state.mediaVolumeKeysEnabled)
+                                    .disabled(!keyboard.mediaVolumeKeysEnabled)
                             }
                             Spacer()
                         }
@@ -377,28 +381,28 @@ struct HotkeyConfigSheet: View {
                             .font(.system(size: 13))
                             .foregroundStyle(Theme.secondaryText)
 
-                        Toggle("使用 macOS 原生音量提示（OSD）", isOn: Binding(get: { state.mediaVolumeNativeOSD }, set: { state.mediaVolumeNativeOSD = $0 }))
+                        Toggle("使用 macOS 原生音量提示（OSD）", isOn: Binding(get: { keyboard.mediaVolumeNativeOSD }, set: { state.mediaVolumeNativeOSD = $0 }))
                             .toggleStyle(.checkbox)
-                            .disabled(!state.mediaVolumeKeysEnabled)
-                        Text(state.mediaVolumeNativeOSD
+                            .disabled(!keyboard.mediaVolumeKeysEnabled)
+                        Text(keyboard.mediaVolumeNativeOSD
                              ? "原生音量提示固定为 16 格；提示失败时自动使用应用悬浮提示。"
                              : "当前使用应用悬浮提示，可自行设定调节步长。")
                             .font(.system(size: 13))
                             .foregroundStyle(Theme.secondaryText)
 
-                        Toggle("仅当默认音频输出为指定设备时接管", isOn: Binding(get: { state.mediaVolumeOutputGateEnabled }, set: { state.mediaVolumeOutputGateEnabled = $0 }))
+                        Toggle("仅当默认音频输出为指定设备时接管", isOn: Binding(get: { keyboard.mediaVolumeOutputGateEnabled }, set: { state.mediaVolumeOutputGateEnabled = $0 }))
                             .toggleStyle(.checkbox)
-                            .disabled(!state.mediaVolumeKeysEnabled)
+                            .disabled(!keyboard.mediaVolumeKeysEnabled)
                         HStack(spacing: 8) {
                             Text("音频输出设备名")
                                 .font(.system(size: 13))
                                 .foregroundStyle(Theme.secondaryText)
-                            TextField("Mi Monitor", text: Binding(get: { state.mediaVolumeOutputName }, set: { state.mediaVolumeOutputName = $0 }))
+                            TextField("Mi Monitor", text: Binding(get: { keyboard.mediaVolumeOutputName }, set: { state.mediaVolumeOutputName = $0 }))
                                 .textFieldStyle(.roundedBorder)
                                 .frame(width: 200)
                             Spacer()
                         }
-                        .disabled(!state.mediaVolumeKeysEnabled || !state.mediaVolumeOutputGateEnabled)
+                        .disabled(!keyboard.mediaVolumeKeysEnabled || !keyboard.mediaVolumeOutputGateEnabled)
                     }
                 }
                 .padding(28)
@@ -414,7 +418,7 @@ struct HotkeyConfigSheet: View {
                 HStack(spacing: 12) {
                     // 排查"配了没反应"时才有用；平时开着手打键盘会把日志刷满
                     Toggle("诊断日志", isOn: Binding(
-                        get: { state.hotkeyDebugEnabled },
+                        get: { keyboard.hotkeyDebugEnabled },
                         set: { state.hotkeyDebugEnabled = $0 }
                     ))
                     .toggleStyle(.checkbox)
@@ -439,15 +443,15 @@ struct HotkeyConfigSheet: View {
 
     private func hotkeyBinding(_ action: String) -> Binding<HotkeyConfig> {
         Binding(
-            get: { state.hotkeys[action] ?? HotkeyConfig() },
-            set: { state.hotkeys[action] = $0 }
+            get: { keyboard.hotkeys[action] ?? HotkeyConfig() },
+            set: { keyboard.hotkeys[action] = $0 }
         )
     }
 
     private func adjustBinding(_ index: Int) -> Binding<AdjustHotkeyConfig> {
         Binding(
-            get: { index < state.adjustHotkeys.count ? state.adjustHotkeys[index] : AdjustHotkeyConfig() },
-            set: { if index < state.adjustHotkeys.count { state.adjustHotkeys[index] = $0 } }
+            get: { index < keyboard.adjustHotkeys.count ? keyboard.adjustHotkeys[index] : AdjustHotkeyConfig() },
+            set: { if index < keyboard.adjustHotkeys.count { keyboard.adjustHotkeys[index] = $0 } }
         )
     }
 }

@@ -1,5 +1,5 @@
 /// 只在主线程修改。后台任务带着开始时的序号返回，过期结果不得改写连接状态。
-package struct ConnectionIntent {
+package struct ConnectionIntent: Sendable {
     package init() {}
     package private(set) var generation = 0
     package private(set) var allowsAutomaticRecovery = true

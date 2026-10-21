@@ -5,6 +5,7 @@ import SwiftUI
 /// 菜单栏快捷项与主窗口共用同一份设备状态及操作。
 struct MenuBarSettingsView: View {
     @ToolboxActions var state
+    @Environment(HotkeysModel.self) private var keyboard
 
     var body: some View {
         ScrollView {
@@ -21,14 +22,14 @@ struct MenuBarSettingsView: View {
                         .help("恢复默认快捷项及其排列顺序")
                 }
 
-                MenuSettingsSection(title: "快捷项顺序 · \(state.menuBarItems.count) 项") {
+                MenuSettingsSection(title: "快捷项顺序 · \(keyboard.menuBarItems.count) 项") {
                     HStack(spacing: 8) {
                         Image(systemName: "cursorarrow.and.square.on.square.dashed")
                             .foregroundStyle(Theme.accent)
                         Text("拖动下方条目调整顺序，修改立即保存。")
                             .font(.system(size: 13)).foregroundStyle(Theme.secondaryText)
                     }
-                    if state.menuBarItems.isEmpty {
+                    if keyboard.menuBarItems.isEmpty {
                         VStack(spacing: 10) {
                             Image(systemName: "menubar.rectangle")
                                 .font(.system(size: 30, weight: .light)).foregroundStyle(Theme.accent)
@@ -40,7 +41,7 @@ struct MenuBarSettingsView: View {
                     } else {
                         // List + onMove 保留真正的原生拖放排序。
                         List {
-                            ForEach(state.menuBarItems, id: \.self) { id in
+                            ForEach(keyboard.menuBarItems, id: \.self) { id in
                                 if let entry = MenuBarCatalog.entry(id) {
                                     HStack(spacing: 12) {
                                         Image(systemName: "line.3.horizontal")
@@ -68,7 +69,7 @@ struct MenuBarSettingsView: View {
                         .scrollContentBackground(.hidden)
                         .environment(\.defaultMinListRowHeight, 44)
                         // 原生列表嵌套在页面滚动区时需要确定高度。
-                        .frame(height: CGFloat(state.menuBarItems.count) * 44 + 8)
+                        .frame(height: CGFloat(keyboard.menuBarItems.count) * 44 + 8)
                     }
                 }
 

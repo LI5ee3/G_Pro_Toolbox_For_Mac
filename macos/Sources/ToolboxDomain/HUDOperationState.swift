@@ -1,6 +1,6 @@
 import Foundation
 
-package enum HUDOperationResult: Equatable {
+package enum HUDOperationResult: Equatable, Sendable {
     case success, failure, cancelled
 
     package static func completion(isCurrentConnection: Bool, hasError: Bool,
@@ -12,13 +12,13 @@ package enum HUDOperationResult: Equatable {
     }
 }
 
-package enum HUDOperationPhase: Equatable {
+package enum HUDOperationPhase: Equatable, Sendable {
     case running
     case finished(HUDOperationResult)
 }
 
 /// Main-thread ownership and completion tokens keep an old operation from replacing a new HUD.
-package struct HUDOperationState {
+package struct HUDOperationState: Sendable {
     package init() {}
     package private(set) var phase: HUDOperationPhase?
     private var token: UUID?

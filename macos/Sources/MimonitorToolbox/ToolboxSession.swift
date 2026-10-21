@@ -42,17 +42,28 @@ struct ToolboxActions: DynamicProperty {
     }
 }
 
+private struct ToolboxEnvironment: ViewModifier {
+    let actions: AppCoordinator
+    func body(content: Content) -> some View {
+        content.environment(\.toolboxActions, actions)
+            .environment(actions.settings).environment(actions.logs)
+            .environment(actions.connection).environment(actions.picture)
+            .environment(actions.presets).environment(actions.navigation)
+            .environment(actions.volume).environment(actions.tools).environment(actions.keyboard)
+    }
+}
+
 public struct ToolboxWindowContent: View {
     private let session: ToolboxSession
     private let screen: ToolboxScreen
     public init(session: ToolboxSession, screen: ToolboxScreen = .home) { self.session = session; self.screen = screen }
     public var body: some View {
-        ContentView(initialPage: screen.initialPage).environment(\.toolboxActions, session.state).environment(session.state.settings).environment(session.state.logs)
+        ContentView(initialPage: screen.initialPage).modifier(ToolboxEnvironment(actions: session.state))
     }
 }
 
 public struct ToolboxMenuBarContent: View {
     private let session: ToolboxSession
     public init(session: ToolboxSession) { self.session = session }
-    public var body: some View { MenuBarPanel().environment(\.toolboxActions, session.state).environment(session.state.settings).environment(session.state.logs) }
+    public var body: some View { MenuBarPanel().modifier(ToolboxEnvironment(actions: session.state)) }
 }

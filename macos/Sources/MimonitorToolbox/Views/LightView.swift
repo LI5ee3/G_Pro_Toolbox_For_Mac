@@ -4,10 +4,11 @@ import SwiftUI
 
 struct LightView: View {
     @ToolboxActions var state
+    @Environment(PictureModel.self) private var picture
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     private var lightMode: Int {
-        state.intValue("atmosphere_light_switcher_pm2", default: 4)
+        picture.intValue("atmosphere_light_switcher_pm2", default: 4)
     }
 
     // The LED helper accepts brightness only for lighting and solid modes.
@@ -53,8 +54,8 @@ struct LightView: View {
                 }
 
                 // 存储值为 0...14，界面显示 1...15；提交仍交给原状态方法转换。
-                SliderRow(title: "亮度挡位", range: 1...15,
-                          externalValue: state.intValue("atmosphere_light_illumination", default: 9) + 1) { v in
+                SliderRow(title: "亮度挡位", range: ControlRanges.screenLightUI.sliderBounds,
+                          externalValue: picture.intValue("atmosphere_light_illumination", default: 9) + 1) { v in
                     state.setLightIllumination(v)
                 }
                 .saturation(brightnessApplies ? 1 : 0)
@@ -69,13 +70,13 @@ struct LightView: View {
                     }
                     lightOptionRow(title: "照明色温", options: OptionLists.lightColorTemp,
                                    isActive: lightMode == 0, modeName: "照明",
-                                   selectedValue: state.intValue("atmosphere_light_color_temp", default: 1)) { v in
+                                   selectedValue: picture.intValue("atmosphere_light_color_temp", default: 1)) { v in
                         state.setLightColorTemp(v)
                     }
 
                     lightOptionRow(title: "纯色颜色", options: OptionLists.lightColor,
                                    isActive: lightMode == 2, modeName: "纯色",
-                                   selectedValue: state.intValue("atmosphere_light_color_value", default: 0)) { v in
+                                   selectedValue: picture.intValue("atmosphere_light_color_value", default: 0)) { v in
                         state.setLightColor(v)
                     }
                 }

@@ -6,8 +6,8 @@ import Foundation
 ///   - `options`：一组互斥取值，菜单里以打勾列表呈现（精密控光、色域、画面模式…）
 ///   - `stepper`：连续数值，菜单里给「增大 / 减小」两项（背光、对比度…）
 /// 菜单栏空间有限，所以不把 1~100 这种全量取值铺成列表。
-package struct MenuBarEntry: Identifiable, Hashable {
-    package enum Kind: Hashable {
+package struct MenuBarEntry: Identifiable, Hashable, Sendable {
+    package enum Kind: Hashable, Sendable {
         case options([Option])
         case stepper(min: Int, max: Int, step: Int)
     }
@@ -64,12 +64,12 @@ package enum MenuBarCatalog {
             Option(label: "关", value: 0),
             Option(label: "开", value: 1),
         ])),
-        MenuBarEntry(id: "backlight", label: "背光", kind: .stepper(min: 1, max: 100, step: 5)),
-        MenuBarEntry(id: "black_level", label: "黑色级别", kind: .stepper(min: 0, max: 100, step: 5)),
-        MenuBarEntry(id: "contrast", label: "对比度", kind: .stepper(min: 0, max: 100, step: 5)),
-        MenuBarEntry(id: "saturation", label: "饱和度", kind: .stepper(min: 0, max: 100, step: 5)),
-        MenuBarEntry(id: "hue", label: "色调", kind: .stepper(min: 0, max: 100, step: 5)),
-        MenuBarEntry(id: "sharpness", label: "锐度", kind: .stepper(min: 0, max: 100, step: 1)),
+        MenuBarEntry(id: "backlight", label: "背光", kind: .stepper(min: ControlRanges.backlight.lowerBound, max: ControlRanges.backlight.upperBound, step: 5)),
+        MenuBarEntry(id: "black_level", label: "黑色级别", kind: .stepper(min: ControlRanges.percentage.lowerBound, max: ControlRanges.percentage.upperBound, step: 5)),
+        MenuBarEntry(id: "contrast", label: "对比度", kind: .stepper(min: ControlRanges.percentage.lowerBound, max: ControlRanges.percentage.upperBound, step: 5)),
+        MenuBarEntry(id: "saturation", label: "饱和度", kind: .stepper(min: ControlRanges.percentage.lowerBound, max: ControlRanges.percentage.upperBound, step: 5)),
+        MenuBarEntry(id: "hue", label: "色调", kind: .stepper(min: ControlRanges.percentage.lowerBound, max: ControlRanges.percentage.upperBound, step: 5)),
+        MenuBarEntry(id: "sharpness", label: "锐度", kind: .stepper(min: ControlRanges.percentage.lowerBound, max: ControlRanges.percentage.upperBound, step: 1)),
         MenuBarEntry(id: "light_mode", label: "屏幕灯模式", kind: .options([
             Option(label: "关闭", value: 4),
             Option(label: "照明", value: 0),

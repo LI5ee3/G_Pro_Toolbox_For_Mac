@@ -339,3 +339,8 @@ struct PageHeader: View {
         }
     }
 }
+
+// Domain validation uses integers; native sliders use Double without changing the endpoints.
+extension ClosedRange where Bound == Int {
+    var sliderBounds: ClosedRange<Double> { Double(lowerBound)...Double(upperBound) }
+}

@@ -5,13 +5,15 @@ import MimonitorPresetCore
 
 extension AppCoordinator {
     package var activePresetID: String? {
-        presetConfiguration.activeDeviceIdentity == adb.ip ? presetConfiguration.activePresetID : nil
+        _ = connection.connectionStatus
+        return presetConfiguration.activeDeviceIdentity == adb.ip ? presetConfiguration.activePresetID : nil
     }
     package var activePresetName: String {
         presetConfiguration.presets.first { $0.id == activePresetID }?.name ?? "无预设"
     }
     package var presetControlPolicy: PresetControlPolicy {
-        PresetControlPolicy(configuration: presetConfiguration, deviceIdentity: adb.ip, isSwitching: isPresetBusy)
+        _ = connection.connectionStatus
+        return PresetControlPolicy(configuration: presetConfiguration, deviceIdentity: adb.ip, isSwitching: isPresetBusy)
     }
     package var memoriesSuspendedByPreset: Bool { presetControlPolicy.memoriesLocked }
     package var effectiveHdrMemoryEnabled: Bool {

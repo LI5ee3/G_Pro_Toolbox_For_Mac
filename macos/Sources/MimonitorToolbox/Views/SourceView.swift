@@ -4,9 +4,11 @@ import SwiftUI
 
 struct SourceView: View {
     @ToolboxActions var state
+    @Environment(ConnectionModel.self) private var connection
+    @Environment(PictureModel.self) private var picture
 
     private var selectedSource: Int {
-        state.intValue("mitv.tvplayer.hdmi.last.source", default: -1)
+        picture.intValue("mitv.tvplayer.hdmi.last.source", default: -1)
     }
 
     var body: some View {
@@ -19,12 +21,12 @@ struct SourceView: View {
                         Text("当前信号源")
                             .font(.system(size: 12, weight: .medium))
                             .foregroundStyle(Theme.secondaryText)
-                        Text(state.activeSource)
+                        Text(picture.activeSource)
                             .font(.system(size: 32, weight: .semibold, design: .rounded))
                             .foregroundStyle(Theme.accent)
                             .lineLimit(1)
                             .minimumScaleFactor(0.65)
-                        Label(state.isConnected ? "已连接" : "未连接", systemImage: state.isConnected ? "checkmark.circle.fill" : "circle")
+                        Label(connection.isConnected ? "已连接" : "未连接", systemImage: connection.isConnected ? "checkmark.circle.fill" : "circle")
                             .font(.system(size: 11))
                             .foregroundStyle(Theme.secondaryText)
                     }
@@ -49,7 +51,7 @@ struct SourceView: View {
             .frame(maxWidth: .infinity)
         }
         .onAppear { state.refreshPage("source") }
-        .loadingOverlay(state.loadingPages.contains("source"))
+        .loadingOverlay(picture.loadingPages.contains("source"))
     }
 
     private func sourceButton(_ option: Option) -> some View {

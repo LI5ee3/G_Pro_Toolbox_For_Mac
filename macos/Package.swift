@@ -12,8 +12,8 @@ let package = Package(
         .executable(name: "ToolboxPreviewHost", targets: ["ToolboxPreviewHost"]),
     ],
     targets: [
-        .target(name: "MimonitorPresetCore"),
-        .target(name: "ToolboxDomain", dependencies: ["MimonitorPresetCore"]),
+        .target(name: "MimonitorPresetCore", dependencies: ["ToolboxDomain"]),
+        .target(name: "ToolboxDomain", swiftSettings: [.swiftLanguageMode(.v6)]),
         .target(name: "ToolboxApplication", dependencies: ["ToolboxDomain", "MimonitorPresetCore"]),
         .target(name: "MimonitorToolbox", dependencies: ["ToolboxApplication", "ToolboxDomain", "MimonitorPresetCore"]),
         .target(name: "ToolboxMacAdapters", dependencies: ["ToolboxApplication", "ToolboxDomain", "MimonitorPresetCore"]),

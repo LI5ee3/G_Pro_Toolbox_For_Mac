@@ -1,28 +1,22 @@
 import Foundation
-import MimonitorPresetCore
 
 // MARK: - 寄存器映射（移植自 core.py）
 
 package enum RegisterMap {
     /// 小米色温 UI 值 -> MTK JNI 值
-    package static let colorTempToMtk = PicturePresetPlan.colorTempToMtk
+    package static let colorTempToMtk = PictureMappings.colorTempToMtk
     /// MTK 值 -> 小米 settings 枚举值（反查表，用于「JNI 覆盖 settings」）
-    package static let mtkToColorTemp: [Int: Int] = [1: 0, 2: 1, 3: 2, 0: 3, 4: 4, 5: 5, 6: 8]
+    package static let mtkToColorTemp: [Int: Int] = PictureMappings.mtkToColorTemp
 
     /// HDR 色调映射 UI 值 -> MTK 值
-    package static let hdrToneMappingUIToMtk = PicturePresetPlan.hdrToneMappingToMtk
+    package static let hdrToneMappingUIToMtk = PictureMappings.hdrToneMappingToMtk
 
     /// MTK 值 -> UI 值（反查表）
-    package static let hdrToneMappingMtkToUI: [Int: Int] = [5: 0, 0: 1, 2: 2, 1: 3]
+    package static let hdrToneMappingMtkToUI: [Int: Int] = PictureMappings.hdrToneMappingToUI
 
     /// 只有这些画面模式下才存在 HDR 色调映射这个选项（移植自 core.py）。
     /// 标准/电影/游戏等 SDR 模式下该项无意义，原版会直接隐藏控件。
-    package static let hdrToneMappingPictureModes: Set<Int> = [
-        11, 12, 13, 15, 16, 17, 18, 19,
-        22, 23,
-        29, 30, 31, 32, 33,
-        39, 40, 41, 42, 43, 44,
-    ]
+    package static let hdrToneMappingPictureModes = PictureMappings.hdrModes
 
     package static func isHdrToneMappingPictureMode(_ value: String?) -> Bool {
         guard let value,
@@ -130,7 +124,7 @@ package enum PageDataKeys {
 
 // MARK: - 通用选项
 
-package struct Option: Identifiable, Hashable {
+package struct Option: Identifiable, Hashable, Sendable {
     package init(label: String, value: Int) { self.label = label; self.value = value }
     package let label: String
     package let value: Int
@@ -201,7 +195,7 @@ package enum OptionLists {
 
 // MARK: - 侧边栏页面
 
-package enum Page: String, CaseIterable, Identifiable, Hashable {
+package enum Page: String, CaseIterable, Identifiable, Hashable, Sendable {
     case home, picture, game, source, light, menuBar, presets, autoTasks, tools, remote
 
     package var id: String { rawValue }

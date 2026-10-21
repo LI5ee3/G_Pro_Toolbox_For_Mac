@@ -10,7 +10,7 @@ package final class ConnectionModel {
     package var scannedDeviceModels: [String: String] = [:]
     package var selectedDevice: String = ""
     package var ipInput: String = ""
-    var intent = ConnectionIntent()
+    package var intent = ConnectionIntent()
     package init() {}
     package var isConnected: Bool {
         if case .connected = connectionStatus { return true }

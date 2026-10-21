@@ -127,4 +127,19 @@ final class ObservationTests: XCTestCase {
         XCTAssertTrue(state.presets.isPresetBusy)
         XCTAssertEqual(state.navigation.requestedPage, .picture)
     }
+
+    func testDisconnectInvalidatesPresetIdentityReadersWithoutChangingConfiguration() {
+        let runtime = PreviewRuntime(), state = runtime.makeState()
+        var config = PresetConfiguration()
+        config.activeDeviceIdentity = runtime.display.identity
+        config.activePresetID = "work"
+        state.presetConfiguration = config
+        let changes = ObservationCount()
+        withObservationTracking { _ = state.activePresetID } onChange: { changes.increment() }
+        XCTAssertEqual(state.activePresetID, "work")
+        state.disconnectAdb()
+        XCTAssertEqual(changes.value, 1)
+        XCTAssertNil(state.activePresetID)
+        XCTAssertEqual(state.presetConfiguration, config)
+    }
 }

@@ -1,6 +1,5 @@
 import Foundation
 import AppKit
-import SwiftUI
 import ToolboxDomain
 import MimonitorPresetCore
 
@@ -281,4 +280,11 @@ extension AppCoordinator {
     }
 
 
+    package var isSimulation: Bool { environment.mode == .simulation }
+    package func showMainWindow() { environment.system.showMainWindow() }
+    package func quit() { environment.system.quit() }
+    package func openProjectSource(upstream: Bool = false) {
+        let address = upstream ? "https://github.com/YiHoooong/Mimonitor_Toolbox" : "https://github.com/LI5ee3/Mimonitor_Toolbox"
+        environment.system.openURL(URL(string: address)!)
+    }
 }

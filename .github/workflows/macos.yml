@@ -70,6 +70,7 @@ jobs:
       - name: 验证安全 Preview 边界与 Xcode 宿主
         working-directory: macos
         run: |
+          python3 scripts/validate_architecture.py
           python3 scripts/validate_preview_boundary.py
           xcodebuild -project Toolbox.xcodeproj -scheme ToolboxPreviews -configuration Debug -destination 'platform=macOS,arch=arm64' build
 

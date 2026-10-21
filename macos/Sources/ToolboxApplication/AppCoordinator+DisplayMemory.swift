@@ -1,6 +1,5 @@
 import Foundation
 import AppKit
-import SwiftUI
 import ToolboxDomain
 import MimonitorPresetCore
 

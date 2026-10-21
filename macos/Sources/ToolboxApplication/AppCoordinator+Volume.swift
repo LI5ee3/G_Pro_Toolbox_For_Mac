@@ -1,6 +1,5 @@
 import Foundation
 import AppKit
-import SwiftUI
 import ToolboxDomain
 import MimonitorPresetCore
 
@@ -75,7 +74,7 @@ extension AppCoordinator {
             next = clamp(Int((Double(target) / Double(chiclets) * 100).rounded()), 0, 100)
         } else {
             let step = max(1, mediaVolumeStep)
-            next = clamp(AppCoordinator.alignToStep(base, step: step, increasing: increase), 0, 100)
+            next = clamp(ControlStep.alignToStep(base, step: step, increasing: increase), 0, 100)
         }
 
         // 静音时按音量键先解除静音（和 macOS/Android 原生行为一致）

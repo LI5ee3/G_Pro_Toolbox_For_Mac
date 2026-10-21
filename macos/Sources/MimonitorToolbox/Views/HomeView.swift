@@ -6,28 +6,33 @@ import UniformTypeIdentifiers
 
 struct HomeView: View {
     @ToolboxActions var state
+    @Environment(ConnectionModel.self) private var connection
+    @Environment(PictureModel.self) private var picture
+    @Environment(VolumeModel.self) private var volumeState
+    @Environment(ToolsModel.self) private var tools
+    @Environment(HotkeysModel.self) private var keyboard
     @State private var showConnection = false
     @State private var showLogs = false
     @State private var volume = 0.0
     @State private var backlight = 0.0
 
     private var mode: String {
-        guard let raw = state.currentValues["picture_mode"], let value = Int(raw) else { return "等待读取" }
+        guard let raw = picture.currentValues["picture_mode"], let value = Int(raw) else { return "等待读取" }
         return RegisterMap.sceneNames[value] ?? "模式 \(value)"
     }
     private var deviceName: String {
-        guard case .connected(let detail) = state.connectionStatus else { return "Redmi G Pro" }
+        guard case .connected(let detail) = connection.connectionStatus else { return "Redmi G Pro" }
         let name = detail.components(separatedBy: " · ").first ?? "Redmi G Pro"
-        return name.hasPrefix("MiTV") || name == state.ipInput ? "Redmi G Pro" : name
+        return name.hasPrefix("MiTV") || name == connection.ipInput ? "Redmi G Pro" : name
     }
     private var source: String {
-        let raw = state.currentValues["mitv.tvplayer.hdmi.last.source"] ?? ""
-        let name = Int(raw).flatMap { RegisterMap.sourceNames[$0] } ?? state.activeSource
+        let raw = picture.currentValues["mitv.tvplayer.hdmi.last.source"] ?? ""
+        let name = Int(raw).flatMap { RegisterMap.sourceNames[$0] } ?? picture.activeSource
         return name == "DP" ? "DisplayPort" : name
     }
     private var guardian: String {
-        if !state.isConnected { return "保活状态待连接" }
-        return state.guardianStatus.contains("✅") ? "保活正常" : "查看保活状态"
+        if !connection.isConnected { return "保活状态待连接" }
+        return tools.guardianStatus.contains("✅") ? "保活正常" : "查看保活状态"
     }
 
     var body: some View {
@@ -37,11 +42,11 @@ struct HomeView: View {
                     HStack(alignment: .top, spacing: 16) {
                         VStack(alignment: .leading, spacing: 7) {
                             Text(deviceName).font(.system(size: 23, weight: .semibold))
-                            Text(state.ipInput.isEmpty ? "网络 ADB" : "网络 ADB · \(state.ipInput)")
+                            Text(connection.ipInput.isEmpty ? "网络 ADB" : "网络 ADB · \(connection.ipInput)")
                                 .font(.system(size: 13)).foregroundColor(Theme.secondaryText)
                         }
                         Spacer()
-                        if state.isConnected {
+                        if connection.isConnected {
                             Label(source, systemImage: "cable.connector")
                                 .font(.system(size: 13)).foregroundColor(Theme.secondaryText)
                                 .padding(.horizontal, 12).padding(.vertical, 7)
@@ -57,11 +62,11 @@ struct HomeView: View {
                                                     Color(red: 0.13, green: 0.17, blue: 0.24)],
                                            startPoint: .topLeading, endPoint: .bottomTrailing)
                             VStack(spacing: 12) {
-                                Text(state.isConnected ? "画面模式" : "网络 ADB")
+                                Text(connection.isConnected ? "画面模式" : "网络 ADB")
                                     .font(.system(size: 13)).foregroundColor(Color(red: 0.75, green: 0.8, blue: 0.88))
-                                Text(state.isConnected ? mode : "等待连接")
+                                Text(connection.isConnected ? mode : "等待连接")
                                     .font(.system(size: 32, weight: .medium)).foregroundColor(.white)
-                                if state.isConnected {
+                                if connection.isConnected {
                                     Capsule().fill(Color.white.opacity(0.5)).frame(width: 28, height: 2).padding(.top, 4)
                                 } else {
                                     Button("连接显示器") { showConnection = true }
@@ -72,24 +77,24 @@ struct HomeView: View {
                     }
                     .frame(height: min(350, max(270, geometry.size.height - 350)))
                     .accessibilityElement(children: .contain)
-                    .accessibilityLabel("显示器，\(state.isConnected ? mode : "控制尚未连接")")
+                    .accessibilityLabel("显示器，\(connection.isConnected ? mode : "控制尚未连接")")
 
                 HStack(alignment: .top, spacing: 24) {
                     VStack(alignment: .leading, spacing: 17) {
                         HStack {
-                            Label("音量", systemImage: state.dashboardMuted == true ? "speaker.slash" : "speaker.wave.2")
+                            Label("音量", systemImage: volumeState.dashboardMuted == true ? "speaker.slash" : "speaker.wave.2")
                                 .font(.system(size: 14, weight: .semibold))
                             Spacer()
-                            reading(state.dashboardVolumeAvailable ? state.dashboardVolume : nil)
+                            reading(state.dashboardVolumeAvailable ? volumeState.dashboardVolume : nil)
                         }
-                        FastSlider(value: $volume, range: 0...100, step: 1) { state.setDashboardVolume(Int($0)) }
+                        FastSlider(value: $volume, range: ControlRanges.percentage.sliderBounds, step: 1) { state.setDashboardVolume(Int($0)) }
                             .accessibilityLabel("显示器音量")
-                            .disabled(state.dashboardVolume == nil || !state.dashboardVolumeAvailable)
+                            .disabled(volumeState.dashboardVolume == nil || !state.dashboardVolumeAvailable)
                         HStack {
                             Text("0")
                             Spacer()
                             Button { state.toggleDashboardMute() } label: {
-                                Label(state.dashboardMuted == true ? "解除静音" : "静音", systemImage: "speaker.slash")
+                                Label(volumeState.dashboardMuted == true ? "解除静音" : "静音", systemImage: "speaker.slash")
                             }.buttonStyle(.plain).disabled(!state.dashboardVolumeAvailable)
                             Spacer()
                             Text("100")
@@ -100,19 +105,19 @@ struct HomeView: View {
                         HStack {
                             Label("背光", systemImage: "sun.max").font(.system(size: 14, weight: .semibold))
                             Spacer()
-                            reading(state.isConnected ? Int(state.currentValues["picture_backlight"] ?? "") : nil)
+                            reading(connection.isConnected ? Int(picture.currentValues["picture_backlight"] ?? "") : nil)
                         }
-                        FastSlider(value: $backlight, range: 1...100, step: 1) { value in
+                        FastSlider(value: $backlight, range: ControlRanges.backlight.sliderBounds, step: 1) { value in
                             state.setPictureSlider(title: "背光", value: Int(value), jniKey: "g_disp__disp_back_light",
                                                    settingsKeys: ["picture_backlight", "xiaomi_picture_backlight"])
                         }
                         .accessibilityLabel("显示器背光")
-                        .disabled(!state.isConnected || state.currentValues["picture_backlight"] == nil)
+                        .disabled(!connection.isConnected || picture.currentValues["picture_backlight"] == nil)
                         HStack {
                             Text("1")
                             Spacer()
                             Button("更多画面设置") { state.requestedPage = .picture }
-                                .buttonStyle(.plain).disabled(!state.isConnected)
+                                .buttonStyle(.plain).disabled(!connection.isConnected)
                             Spacer()
                             Text("100")
                         }.font(.system(size: 13)).foregroundColor(Theme.secondaryText)
@@ -123,29 +128,29 @@ struct HomeView: View {
                         HStack(spacing: 5) {
                             ForEach([14, 9, 10], id: \.self) { value in
                                 SelectableButton(title: RegisterMap.modeNames[value] ?? "", isSelected:
-                                    RegisterMap.pictureModeGroupName(state.intValue("picture_mode", default: -1)) == RegisterMap.modeNames[value]) {
+                                    RegisterMap.pictureModeGroupName(picture.intValue("picture_mode", default: -1)) == RegisterMap.modeNames[value]) {
                                     state.setMode(value)
                                 }
                             }
                         }
-                        .disabled(!state.isConnected)
+                        .disabled(!connection.isConnected)
                         Button("管理预设") { state.requestedPage = .presets }
                             .font(.system(size: 13)).buttonStyle(.plain).foregroundColor(Theme.secondaryText)
-                            .disabled(!state.isConnected)
+                            .disabled(!connection.isConnected)
                     }
                 }
                 .padding(24)
                 .toolboxGlass(cornerRadius: 20)
 
 
-                    if let error = state.dashboardVolumeError {
+                    if let error = volumeState.dashboardVolumeError {
                         Label(error, systemImage: "exclamationmark.circle")
                             .font(.system(size: 13)).foregroundColor(Theme.warning)
                             .frame(maxWidth: .infinity, alignment: .leading)
                     }
                     HStack {
                         Button { state.requestedPage = .tools } label: {
-                            Label(state.mediaVolumeKeysEnabled ? (state.accessibilityTrusted ? "键盘音量控制已开启" : "键盘控制需要授权") : "设置键盘音量控制", systemImage: "keyboard")
+                            Label(keyboard.mediaVolumeKeysEnabled ? (keyboard.accessibilityTrusted ? "键盘音量控制已开启" : "键盘控制需要授权") : "设置键盘音量控制", systemImage: "keyboard")
                         }
                         Spacer()
                     }
@@ -160,24 +165,24 @@ struct HomeView: View {
         .sheet(isPresented: $showLogs) { OperationLogSheet() }
         .onAppear {
             syncValues(); state.refreshMediaVolumeState()
-            if state.isConnected { state.refreshPage("picture"); state.refreshPage("source") }
+            if connection.isConnected { state.refreshPage("picture"); state.refreshPage("source") }
         }
-        .onChange(of: state.dashboardVolume) { syncValues() }
-        .onChange(of: state.dashboardVolumeError) { syncValues() }
-        .onChange(of: state.currentValues["picture_backlight"]) { syncValues() }
-        .onChange(of: state.isConnected) { _, connected in if connected { state.refreshMediaVolumeState() } }
+        .onChange(of: volumeState.dashboardVolume) { syncValues() }
+        .onChange(of: volumeState.dashboardVolumeError) { syncValues() }
+        .onChange(of: picture.currentValues["picture_backlight"]) { syncValues() }
+        .onChange(of: connection.isConnected) { _, connected in if connected { state.refreshMediaVolumeState() } }
     }
 
     private var statusBar: some View {
         HStack(spacing: 18) {
-            Label(state.isConnected ? "ADB 已连接" : state.statusText,
-                  systemImage: state.isConnected ? "checkmark.circle.fill" : "wifi.slash")
-                .foregroundColor(state.connection.statusColor)
+            Label(connection.isConnected ? "ADB 已连接" : connection.statusText,
+                  systemImage: connection.isConnected ? "checkmark.circle.fill" : "wifi.slash")
+                .foregroundColor(connection.statusColor)
             Spacer()
             Button { state.requestedPage = .tools } label: { Label(guardian, systemImage: "checkmark.shield") }
-                .help(state.guardianStatus)
+                .help(tools.guardianStatus)
             Button { state.requestedPage = .tools } label: {
-                Label(state.connectionIntent.allowsAutomaticRecovery ? "唤醒后自动重连" : "自动重连已暂停", systemImage: "arrow.clockwise")
+                Label(connection.intent.allowsAutomaticRecovery ? "唤醒后自动重连" : "自动重连已暂停", systemImage: "arrow.clockwise")
             }
             Button { showLogs = true } label: { Label("日志", systemImage: "text.alignleft") }
         }
@@ -194,13 +199,14 @@ struct HomeView: View {
         }
     }
     private func syncValues() {
-        volume = Double(state.dashboardVolume ?? 0)
-        backlight = Double(state.intValue("picture_backlight", default: 1))
+        volume = Double(volumeState.dashboardVolume ?? 0)
+        backlight = Double(picture.intValue("picture_backlight", default: 1))
     }
 }
 
 private struct ConnectionSettingsSheet: View {
     @ToolboxActions var state
+    @Environment(ConnectionModel.self) private var connection
     @Environment(\.dismiss) private var dismiss
     var body: some View {
         VStack(alignment: .leading, spacing: 22) {
@@ -209,7 +215,7 @@ private struct ConnectionSettingsSheet: View {
                 .font(.system(size: 14)).foregroundColor(Theme.secondaryText)
             SectionCard(title: "网络 ADB") {
                 HStack(spacing: 12) {
-                    TextField("显示器 IP 地址", text: Binding(get: { state.ipInput }, set: { state.ipInput = $0 })).textFieldStyle(.roundedBorder)
+                    TextField("显示器 IP 地址", text: Binding(get: { connection.ipInput }, set: { state.ipInput = $0 })).textFieldStyle(.roundedBorder)
                         .onSubmit { state.connect() }
                     Button("开始连接") { state.connect() }.toolboxAction(prominent: true)
                 }
@@ -217,17 +223,17 @@ private struct ConnectionSettingsSheet: View {
                     Button("扫描内网") { state.scanNet() }.toolboxAction()
                     Button("网络诊断") { state.runDiagnostics() }.toolboxAction()
                     Spacer()
-                    Button("断开连接") { state.disconnectAdb() }.toolboxAction().disabled(!state.isConnected)
+                    Button("断开连接") { state.disconnectAdb() }.toolboxAction().disabled(!connection.isConnected)
                 }
             }
-            Picker("已扫描设备", selection: Binding(get: { state.selectedDevice }, set: { state.selectScannedDevice($0) })) {
+            Picker("已扫描设备", selection: Binding(get: { connection.selectedDevice }, set: { state.selectScannedDevice($0) })) {
                 Text("选择扫描到的显示器").tag("")
-                ForEach(state.scannedDevices, id: \.self) { device in
-                    Text(state.scannedDeviceModels[device].map { "\($0) (\(device))" } ?? device).tag(device)
+                ForEach(connection.scannedDevices, id: \.self) { device in
+                    Text(connection.scannedDeviceModels[device].map { "\($0) (\(device))" } ?? device).tag(device)
                 }
             }
-            Label(state.statusText, systemImage: state.isConnected ? "checkmark.circle" : "network")
-                .foregroundColor(state.connection.statusColor).font(.system(size: 14))
+            Label(connection.statusText, systemImage: connection.isConnected ? "checkmark.circle" : "network")
+                .foregroundColor(connection.statusColor).font(.system(size: 14))
         }
         .padding(30).frame(width: 640).background(Theme.canvas).tint(Theme.accent)
     }

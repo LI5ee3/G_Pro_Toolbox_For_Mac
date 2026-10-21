@@ -1,5 +1,5 @@
 /// 同一页面的新刷新会使较早的异步结果失效；不同页面互不影响。
-package struct PageRefreshIntent {
+package struct PageRefreshIntent: Sendable {
     package init() {}
     private var generations: [String: Int] = [:]
 

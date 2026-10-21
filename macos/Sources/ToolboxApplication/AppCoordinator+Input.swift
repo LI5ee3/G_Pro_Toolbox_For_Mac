@@ -1,6 +1,5 @@
 import Foundation
 import AppKit
-import SwiftUI
 import ToolboxDomain
 import MimonitorPresetCore
 
@@ -265,12 +264,6 @@ extension AppCoordinator {
     }
 
     /// 各参数待下发的预览值 / 待执行任务（键都是 param）
-    package nonisolated static func alignToStep(_ value: Int, step: Int, increasing: Bool) -> Int {
-        guard step > 1 else { return value + (increasing ? step : -step) }
-        if value % step == 0 { return value + (increasing ? step : -step) }
-        return increasing ? ((value / step) + 1) * step : (value / step) * step
-    }
-
     internal func adjustHotkey(param: String, direction: String, step: Int) {
         let delta = direction == "decrease" ? -step : step
         applyAdjustment(param: param, delta: delta, absolute: nil)
@@ -297,7 +290,7 @@ extension AppCoordinator {
             next = clamp(Int((Double(target) / Double(chiclets) * 100).rounded()), 1, 100)
         } else {
             let step = max(1, mediaBrightnessStep)
-            next = clamp(AppCoordinator.alignToStep(current, step: step, increasing: increase), 1, 100)
+            next = clamp(ControlStep.alignToStep(current, step: step, increasing: increase), 1, 100)
         }
         mediaBrightnessPreview = next
         currentValues["picture_backlight"] = String(next)
@@ -384,7 +377,7 @@ extension AppCoordinator {
             } else if alignToStep {
                 // 首次调整先对齐到步长的倍数，避免出现 6 → 16 这种「半格」起始值
                 let current = adjustPendingValues[param] ?? intValue(key, default: fallback)
-                base = AppCoordinator.alignToStep(current, step: abs(delta), increasing: delta > 0)
+                base = ControlStep.alignToStep(current, step: abs(delta), increasing: delta > 0)
             } else {
                 base = (adjustPendingValues[param] ?? intValue(key, default: fallback)) + delta
             }

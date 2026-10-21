@@ -2,14 +2,14 @@ import Foundation
 
 // MARK: - 快捷键配置模型
 
-package struct HotkeyConfig: Codable, Equatable {
+package struct HotkeyConfig: Codable, Equatable, Sendable {
     package init(modifier: String = "无", key: String = "无") { self.modifier = modifier; self.key = key }
     package var modifier: String = "无"
     package var key: String = "无"
     package var isEnabled: Bool { modifier != "无" && key != "无" }
 }
 
-package struct AdjustHotkeyConfig: Codable, Equatable {
+package struct AdjustHotkeyConfig: Codable, Equatable, Sendable {
     package init(param: String = "backlight", direction: String = "increase", step: Int = 5,
                  modifier: String = "无", key: String = "无") {
         self.param = param; self.direction = direction; self.step = step; self.modifier = modifier; self.key = key
@@ -57,4 +57,3 @@ package let adjustableParams: [(id: String, label: String, defaultStep: Int)] = 
     ("blue_gain", "蓝色增益", 10),
     ("atmosphere_illumination", "屏幕灯亮度", 1),
 ]
-
