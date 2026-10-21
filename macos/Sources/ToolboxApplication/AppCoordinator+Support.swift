@@ -6,6 +6,7 @@ import MimonitorPresetCore
 
 extension AppCoordinator {
     package func recoverAfterWake() {
+        environment.system.refreshOutput()
         guard connectionIntent.allowsAutomaticRecovery else { return }
         let request = connectionIntent.generation
         scheduleStartup(after: 1.5) { [weak self] in

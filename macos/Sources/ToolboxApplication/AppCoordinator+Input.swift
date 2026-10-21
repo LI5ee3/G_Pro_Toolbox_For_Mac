@@ -19,6 +19,7 @@ extension AppCoordinator {
     }
 
     package func refreshSystemStatus() {
+        environment.system.refreshOutput()
         refreshAccessibilityStatus()
         refreshLoginItem()
     }

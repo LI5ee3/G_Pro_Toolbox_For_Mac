@@ -5,29 +5,31 @@ import Foundation
 
 enum CoreAudioOutputReader {
     /// 默认输出设备的名称。查不到（无输出设备 / CoreAudio 异常）时返回 nil。
-    static func defaultOutputDeviceName() -> String? {
-        var deviceID = AudioDeviceID(kAudioObjectUnknown)
-        var deviceSize = UInt32(MemoryLayout<AudioDeviceID>.size)
-        var deviceAddress = AudioObjectPropertyAddress(
-            mSelector: kAudioHardwarePropertyDefaultOutputDevice,
-            mScope: kAudioObjectPropertyScopeGlobal,
-            mElement: kAudioObjectPropertyElementMain)
-        var status = AudioObjectGetPropertyData(AudioObjectID(kAudioObjectSystemObject),
-                                                &deviceAddress, 0, nil,
-                                                &deviceSize, &deviceID)
-        guard status == noErr, deviceID != AudioDeviceID(kAudioObjectUnknown) else { return nil }
-
-        var name: Unmanaged<CFString>?
-        var nameSize = UInt32(MemoryLayout<Unmanaged<CFString>?>.size)
-        var nameAddress = AudioObjectPropertyAddress(
-            mSelector: kAudioObjectPropertyName,
-            mScope: kAudioObjectPropertyScopeGlobal,
-            mElement: kAudioObjectPropertyElementMain)
-        status = withUnsafeMutablePointer(to: &name) { pointer in
-            AudioObjectGetPropertyData(deviceID, &nameAddress, 0, nil, &nameSize, pointer)
-        }
-        guard status == noErr, let name else { return nil }
-        return name.takeRetainedValue() as String
+    static func snapshot() -> AudioOutputSnapshot? {
+        guard let before = defaultDevice(),
+              let name = stringProperty(kAudioObjectPropertyName, device: before),
+              let uid = stringProperty(kAudioDevicePropertyDeviceUID, device: before),
+              !uid.isEmpty, !name.isEmpty, defaultDevice() == before else { return nil }
+        return AudioOutputSnapshot(uid: uid, name: name)
     }
-
+    private static func defaultDevice() -> AudioDeviceID? {
+        var device = AudioDeviceID(kAudioObjectUnknown)
+        var size = UInt32(MemoryLayout<AudioDeviceID>.size)
+        var address = AudioObjectPropertyAddress(mSelector: kAudioHardwarePropertyDefaultOutputDevice,
+            mScope: kAudioObjectPropertyScopeGlobal, mElement: kAudioObjectPropertyElementMain)
+        guard AudioObjectGetPropertyData(AudioObjectID(kAudioObjectSystemObject), &address, 0, nil, &size, &device) == noErr,
+              device != AudioDeviceID(kAudioObjectUnknown) else { return nil }
+        return device
+    }
+    private static func stringProperty(_ selector: AudioObjectPropertySelector, device: AudioDeviceID) -> String? {
+        var value: Unmanaged<CFString>?
+        var size = UInt32(MemoryLayout<Unmanaged<CFString>?>.size)
+        var address = AudioObjectPropertyAddress(mSelector: selector, mScope: kAudioObjectPropertyScopeGlobal,
+            mElement: kAudioObjectPropertyElementMain)
+        let status = withUnsafeMutablePointer(to: &value) {
+            AudioObjectGetPropertyData(device, &address, 0, nil, &size, $0)
+        }
+        guard status == noErr, let value else { return nil }
+        return value.takeRetainedValue() as String
+    }
 }

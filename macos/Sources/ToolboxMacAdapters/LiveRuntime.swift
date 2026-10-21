@@ -102,7 +102,7 @@ private final class LiveLogFile {
 
 extension AppEnvironment {
     /// Call only from the production composition root, after choosing the runtime mode.
-    static func live() -> AppEnvironment {
+    @MainActor static func live() -> AppEnvironment {
         precondition(ProcessInfo.processInfo.environment["XCODE_RUNNING_FOR_PREVIEWS"] != "1", "Use the ToolboxPreviewHost scheme for safe previews")
         let resources = RuntimeResources(adbPath: LiveResourceLocator.locateAdb(),
             serverPort: ProcessInfo.processInfo.environment["MIMONITOR_ADB_SERVER_PORT"] ?? "5038",
@@ -112,6 +112,7 @@ extension AppEnvironment {
         let adb = AdbClient(resources: resources, execute: SystemProcessRunner.run)
         let logFile = LiveLogFile()
         let loginItems = LiveLoginItems()
+        let output = DefaultOutputCache.live()
         var system = SystemActions()
         system.isTrusted = { AXIsProcessTrusted() }
         system.promptAccessibility = {
@@ -127,7 +128,10 @@ extension AppEnvironment {
                 object: nil, queue: .main) { _ in action() }
             return RuntimeCancellation { NotificationCenter.default.removeObserver(observer) }
         }
-        system.defaultOutput = CoreAudioOutputReader.defaultOutputDeviceName
+        system.defaultOutput = { output.snapshot()?.name }
+        system.startOutputMonitoring = output.start
+        system.refreshOutput = { output.refresh() }
+        system.stopOutputMonitoring = output.stop
         system.hostHDR = HDRDetector.hostSideHDR
         system.targetDisplay = { name in
             guard !name.isEmpty else { return nil }

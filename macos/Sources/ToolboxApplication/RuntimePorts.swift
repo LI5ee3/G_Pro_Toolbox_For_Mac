@@ -56,7 +56,10 @@ package struct SystemActions {
     package var openAutomation: () -> Void = {}
     package var openLocalNetwork: () -> Void = {}
     package var observeActivation: (@escaping () -> Void) -> RuntimeCancellation = { _ in RuntimeCancellation() }
-    package var defaultOutput: () -> String? = { nil }
+    package var defaultOutput: @MainActor () -> String? = { nil }
+    package var startOutputMonitoring: @MainActor () -> Void = {}
+    package var refreshOutput: @MainActor () -> Void = {}
+    package var stopOutputMonitoring: @MainActor () -> Void = {}
     package var hostHDR: () -> Bool = { false }
     package var targetDisplay: (String) -> CGDirectDisplayID? = { _ in nil }
     package var focusedDisplay: () -> CGDirectDisplayID? = { nil }

@@ -171,6 +171,7 @@ public final class AppCoordinator {
         guard !isRunning else { return }
         isRunning = true
         executionLifetime.begin()
+        environment.system.startOutputMonitoring()
         accessibilityTrusted = environment.system.isTrusted()
         refreshLoginItem(migrateLegacy: true)
         environment.system.applyTheme(theme)
@@ -260,6 +261,7 @@ public final class AppCoordinator {
         mediaBrightnessCommitInFlight = false
         hotkeyManager.stop()
         keyboard.listenerStatus = .stopped
+        environment.system.stopOutputMonitoring()
         settings.terminalBusy = false
         environment.feedback.stop()
         environment.system.stopLog()
