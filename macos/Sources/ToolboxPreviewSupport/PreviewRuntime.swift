@@ -180,7 +180,7 @@ package final class PreviewRuntime {
             system: system, now: { Date(timeIntervalSince1970: 1_800_000_000 + self.scheduler.time) },
             calendar: Calendar(identifier: .gregorian), presetDevice: { _, _ in self.display })
     }
-    package func makeState(_ scenario: Scenario = .connected) -> AppState {
+    @MainActor package func makeState(_ scenario: Scenario = .connected) -> AppState {
         let state = AppState(environment: environment())
         state.ipInput = display.identity
         display.failWrites = scenario == .failure

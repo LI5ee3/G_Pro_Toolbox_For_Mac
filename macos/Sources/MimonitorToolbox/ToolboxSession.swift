@@ -1,6 +1,7 @@
 import SwiftUI
 
 /// Public host API. Hardware construction remains in ToolboxMacAdapters.
+@MainActor
 public final class ToolboxSession: ObservableObject {
     package let state: AppState
     package init(environment: AppEnvironment) { state = AppState(environment: environment) }
@@ -23,12 +24,12 @@ public struct ToolboxWindowContent: View {
     private let screen: ToolboxScreen
     public init(session: ToolboxSession, screen: ToolboxScreen = .home) { self.session = session; self.screen = screen }
     public var body: some View {
-        ContentView(initialPage: screen.initialPage).environmentObject(session.state)
+        ContentView(initialPage: screen.initialPage).environmentObject(session.state).environment(session.state.settings).environment(session.state.logs)
     }
 }
 
 public struct ToolboxMenuBarContent: View {
     private let session: ToolboxSession
     public init(session: ToolboxSession) { self.session = session }
-    public var body: some View { MenuBarPanel().environmentObject(session.state) }
+    public var body: some View { MenuBarPanel().environmentObject(session.state).environment(session.state.settings).environment(session.state.logs) }
 }

@@ -1,0 +1,76 @@
+import Foundation
+import Observation
+import XCTest
+import MimonitorPresetCore
+@testable import MimonitorToolbox
+@testable import ToolboxPreviewSupport
+
+private final class ObservationCount: @unchecked Sendable {
+    private let lock = NSLock()
+    private var count = 0
+    func increment() { lock.lock(); defer { lock.unlock() }; count += 1 }
+    var value: Int { lock.lock(); defer { lock.unlock() }; return count }
+}
+
+@MainActor
+final class ObservationTests: XCTestCase {
+    func testSettingsConstructionLoadsExistingKeysWithoutApplyingTheme() {
+        let preferences = MemoryPreferences()
+        preferences.set("light", forKey: "theme")
+        preferences.set("exit", forKey: "close_behavior")
+        var themes: [String] = []
+        let model = SettingsModel(preferences: preferences, applyTheme: { themes.append($0) })
+        XCTAssertEqual(model.theme, "light")
+        XCTAssertEqual(model.closeBehavior, "exit")
+        XCTAssertTrue(themes.isEmpty)
+        model.theme = "dark"; model.closeBehavior = "tray"
+        XCTAssertEqual(themes, ["dark"])
+        XCTAssertEqual(preferences.string(forKey: "theme"), "dark")
+        XCTAssertEqual(preferences.string(forKey: "close_behavior"), "tray")
+    }
+
+    func testUnrelatedLogWritesDoNotInvalidateSettingsReaders() {
+        let runtime = PreviewRuntime(), state = runtime.makeState()
+        let changes = ObservationCount()
+        withObservationTracking { _ = state.settings.theme } onChange: { changes.increment() }
+        for i in 0..<500 { state.logs.append("\(i)") }
+        XCTAssertEqual(changes.value, 0)
+        state.settings.theme = "dark"
+        XCTAssertEqual(changes.value, 1)
+    }
+
+    func testCloseBehaviorDoesNotInvalidateThemeReader() {
+        let runtime = PreviewRuntime(), state = runtime.makeState()
+        let changes = ObservationCount()
+        withObservationTracking { _ = state.settings.theme } onChange: { changes.increment() }
+        state.settings.closeBehavior = "exit"
+        XCTAssertEqual(changes.value, 0)
+        state.settings.theme = "light"
+        XCTAssertEqual(changes.value, 1)
+    }
+
+    func testLogCapRetainsSequenceForAutoScroll() {
+        let model = LogModel()
+        for i in 0..<510 { model.append("line \(i)") }
+        XCTAssertEqual(model.lines.count, 500)
+        XCTAssertEqual(model.lines.first, "line 10")
+        XCTAssertEqual(model.sequence, 510)
+        let changes = ObservationCount()
+        withObservationTracking { _ = model.sequence } onChange: { changes.increment() }
+        model.append("next")
+        XCTAssertEqual(model.lines.count, 500)
+        XCTAssertEqual(model.sequence, 511)
+        XCTAssertEqual(changes.value, 1)
+    }
+
+    func testLegacyActionFacadeUsesSameLeafModelInstances() {
+        let runtime = PreviewRuntime(), state = runtime.makeState()
+        state.theme = "dark"
+        XCTAssertEqual(state.settings.theme, "dark")
+        state.settings.closeBehavior = "exit"
+        XCTAssertEqual(state.closeBehavior, "exit")
+        state.logToFileEnabled = true
+        XCTAssertTrue(state.logs.recordsToFile)
+        XCTAssertTrue(runtime.display.recordedCommands.isEmpty)
+    }
+}

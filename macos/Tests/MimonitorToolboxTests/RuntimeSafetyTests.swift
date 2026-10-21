@@ -3,6 +3,7 @@ import XCTest
 import MimonitorPresetCore
 @testable import MimonitorToolbox
 
+@MainActor
 final class RuntimeSafetyTests: XCTestCase {
     func testRepeatedConstructionHasNoCommandsTimersOrSystemActions() {
         for _ in 0..<20 {

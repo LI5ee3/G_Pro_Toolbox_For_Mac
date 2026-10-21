@@ -2,6 +2,7 @@ import SwiftUI
 
 struct ContentView: View {
     @EnvironmentObject var state: AppState
+    @Environment(SettingsModel.self) private var settings
     @Environment(\.scenePhase) private var scenePhase
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var selection: Page = .home
@@ -88,7 +89,7 @@ struct ContentView: View {
                 .offset(y: reduceMotion || appeared ? 0 : 6)
         }
         .preferredColorScheme(state.environment.mode == .simulation
-            ? (state.theme == "light" ? .light : state.theme == "dark" ? .dark : nil) : nil)
+            ? (settings.theme == "light" ? .light : settings.theme == "dark" ? .dark : nil) : nil)
         .font(.system(size: 14))
         .tint(Theme.accent)
         .accentColor(Theme.accent)

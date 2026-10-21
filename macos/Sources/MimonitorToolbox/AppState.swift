@@ -54,11 +54,12 @@ fileprivate struct GuardianStatus {
 
 /// 应用状态：连接状态、当前读取值、日志，以及所有显示器控制动作。
 /// 对应原版 App 类的职责（不含 UI 控件，UI 由各 View 负责）。
+@MainActor
 package final class AppState: ObservableObject {
-    package let adb: AdbClient
-    package let environment: AppEnvironment
-    let preferences: any PreferencesStore
-    private let executionLifetime = RuntimeGeneration()
+    package nonisolated let adb: AdbClient
+    package nonisolated let environment: AppEnvironment
+    nonisolated let preferences: any PreferencesStore
+    private nonisolated let executionLifetime = RuntimeGeneration()
     private var isConfiguring = true
     private(set) var isRunning = false
     private var runtimeTasks: [RuntimeCancellation] = []
@@ -67,8 +68,8 @@ package final class AppState: ObservableObject {
     var connectionIntent = ConnectionIntent()
     private var pageRefreshIntent = PageRefreshIntent()
     private let connectionQueue = DispatchQueue(label: "com.mimonitor.toolbox.connection")
-    let deviceQueue = DispatchQueue(label: "com.mimonitor.toolbox.device", qos: .userInitiated)
-    let presetEngine: PresetEngine
+    nonisolated let deviceQueue = DispatchQueue(label: "com.mimonitor.toolbox.device", qos: .userInitiated)
+    nonisolated let presetEngine: PresetEngine
     @Published var presetConfiguration = PresetConfiguration()
     @Published var isPresetBusy = false
     @Published var isPresetOperationInFlight = false
@@ -82,16 +83,17 @@ package final class AppState: ObservableObject {
     var pendingPresetSaveDevice: String?
     var pictureEditRevision = 0
     /// Only accessed on deviceQueue; native mode/reset commands may settle after ADB returns.
-    var pictureSettleUntil = Date.distantPast
+    nonisolated let deviceWorkState = DeviceWorkState()
     var lastAutomaticTaskError = ""
 
     @Published package var connectionStatus: ConnectionStatus = .disconnected
     @Published package var currentValues: [String: String] = [:]
-    @Published var logLines: [String] = []
+    let logs = LogModel()
+    var logLines: [String] { get { logs.lines } set { logs.lines = newValue } }
     /// 每写一行日志就自增。界面靠它触发自动滚动 ——
     /// 不能用 logLines.count：日志满 500 行后会 removeFirst，count 恒定不变，
     /// 于是滚动就再也不触发了。
-    @Published var logSeq: Int = 0
+    var logSeq: Int { get { logs.sequence } set { logs.sequence = newValue } }
     @Published var scannedDevices: [String] = []
     @Published var scannedDeviceModels: [String: String] = [:]
     @Published var selectedDevice: String = ""
@@ -104,7 +106,7 @@ package final class AppState: ObservableObject {
     @Published package var ipInput: String = ""
 
     // 工具页状态
-    @Published var logToFileEnabled = false
+    var logToFileEnabled: Bool { get { logs.recordsToFile } set { logs.recordsToFile = newValue } }
     @Published var guardianStatus = "状态：未检测"
     @Published var hdrMemoryEnabled = false
     /// 显示器当前是否处于 4K UI 模式（由 check4KState 检测得到）
@@ -217,16 +219,14 @@ package final class AppState: ObservableObject {
         return f
     }()
 
-    @Published var theme = "auto" {
-        didSet { guard !isConfiguring else { return }; preferences.set(theme, forKey: "theme"); environment.system.applyTheme(theme) }
-    }
-    @Published var closeBehavior = "tray" {
-        didSet { guard !isConfiguring else { return }; preferences.set(closeBehavior, forKey: "close_behavior") }
-    }
-    @Published var autostartEnabled = false
+    let settings: SettingsModel
+    var theme: String { get { settings.theme } set { settings.theme = newValue } }
+    var closeBehavior: String { get { settings.closeBehavior } set { settings.closeBehavior = newValue } }
+    var autostartEnabled: Bool { get { settings.autostartEnabled } set { settings.autostartEnabled = newValue } }
 
     package init(environment: AppEnvironment) {
         self.environment = environment
+        self.settings = SettingsModel(preferences: environment.preferences, applyTheme: environment.system.applyTheme)
         self.preferences = environment.preferences
         self.adb = environment.adb
         self.hotkeyManager = environment.hotkeys
@@ -253,8 +253,6 @@ package final class AppState: ObservableObject {
         self.menuBarItems = Self.loadMenuBarItems(preferences)
         self.hotkeyCountdownEnabled = preferences.object(forKey: "hotkey_countdown_enabled") as? Bool ?? true
         self.hotkeyCountdownSeconds = preferences.object(forKey: "hotkey_countdown_seconds") as? Double ?? 0.8
-        self.theme = preferences.string(forKey: "theme") ?? "auto"
-        self.closeBehavior = preferences.string(forKey: "close_behavior") ?? "tray"
         self.presetConfiguration = presetEngine.configuration
         self.presetError = presetEngine.loadError
         self.isConfiguring = false
@@ -537,19 +535,15 @@ package final class AppState: ObservableObject {
 
     private func clamp(_ v: Int, _ lo: Int, _ hi: Int) -> Int { max(lo, min(hi, v)) }
 
-    func log(_ message: String) {
-        let line = "[\(Self.timeFormatter.string(from: environment.now()))] \(message)"
+    nonisolated func log(_ message: String) {
         DispatchQueue.main.async {
-            self.logLines.append(line)
-            if self.logLines.count > 500 {
-                self.logLines.removeFirst(self.logLines.count - 500)
-            }
-            self.logSeq &+= 1
+            let line = "[\(Self.timeFormatter.string(from: self.environment.now()))] \(message)"
+            self.logs.append(line)
             if self.logToFileEnabled { self.environment.system.appendLog(line + "\n") }
         }
     }
 
-    func runBackground(_ work: @escaping () -> Void) {
+    func runBackground(_ work: @escaping @Sendable () -> Void) {
         guard isRunning || environment.mode == .simulation else { return }
         let token = executionLifetime.token()
         deviceQueue.async { [executionLifetime] in
@@ -557,7 +551,7 @@ package final class AppState: ObservableObject {
         }
     }
 
-    private func runConnectionTask(_ work: @escaping () -> Void) {
+    private func runConnectionTask(_ work: @escaping @Sendable () -> Void) {
         guard isRunning || environment.mode == .simulation else { return }
         let token = executionLifetime.token()
         connectionQueue.async { [executionLifetime] in
@@ -778,7 +772,7 @@ package final class AppState: ObservableObject {
     /// JNI 才是硬件真实状态，settings 会漂移（比如用户用显示器自带的 OSD 改过设置，
     /// 或上一次写入只成功了一半）。下面几项一律以 JNI 回读值为准，
     /// 否则界面会显示与硬件实际不符的值。移植自 device_features.py:1381-1418。
-    private func applyJniOverrides(_ values: inout [String: String]) {
+    nonisolated private func applyJniOverrides(_ values: inout [String: String]) {
         // 色域：MTK 值与 settings 值同域，直接覆盖主键和旧 OSD 键
         if let raw = values["g_video__vid_gamut_mapping_mode"], let v = Int(raw) {
             values["tv_picture_advanced_video_color_space"] = String(v)
@@ -818,7 +812,7 @@ package final class AppState: ObservableObject {
 
     /// 游戏页的 320Hz / FreeSync 开关没有直接的 settings 键，要由 EDID / 自适应同步
     /// 的 JNI 值推导（移植自 device_features.py:1420-1452）。DP 和 HDMI 走不同的键。
-    private func applyGameJniMode(_ values: inout [String: String]) {
+    nonisolated private func applyGameJniMode(_ values: inout [String: String]) {
         let src = Int(values["mitv.tvplayer.hdmi.last.source"] ?? "") ?? -1
         if src == 29 || src == 30 {
             let m = adb.jniBatchGet(keys: ["g_fusion_picture__dp_edid_version",
@@ -1310,7 +1304,7 @@ package final class AppState: ObservableObject {
         }
     }
 
-    private func refreshAfterEdidChange() {
+    nonisolated private func refreshAfterEdidChange() {
         DispatchQueue.main.async {
             self.scheduleCoalescedRefresh(delay: 1.5, pages: ["picture", "game"])
         }
@@ -1457,6 +1451,8 @@ package final class AppState: ObservableObject {
     /// 用于区分「网段不对」「显示器无线调试没开」「权限被拦」这几类问题。
     func runDiagnostics() {
         log("===== 网络诊断 =====")
+        let ip = ipInput.trimmingCharacters(in: .whitespaces)
+        let connected = isConnected
         runBackground {
             var lines: [String] = []
 
@@ -1467,7 +1463,6 @@ package final class AppState: ObservableObject {
             let subnets = self.environment.system.subnets()
             lines.append("本机网段: \(subnets.isEmpty ? "❌ 未识别" : "✅ " + subnets.joined(separator: ", "))")
 
-            let ip = self.ipInput.trimmingCharacters(in: .whitespaces)
             if ip.isEmpty {
                 lines.append("⚠️ 未填写显示器 IP，跳过连通性测试")
             } else {
@@ -1479,7 +1474,7 @@ package final class AppState: ObservableObject {
                 if !tcp {
                     lines.append("  → 设备在线但端口不通，通常是显示器的「无线调试」没开")
                 }
-                if self.isConnected {
+                if connected {
                     lines.append("adb 设备状态: \(self.adb.deviceState())")
                 }
             }
@@ -1658,7 +1653,7 @@ package final class AppState: ObservableObject {
         }
     }
 
-    private func enableGuardianAccessibility() {
+    nonisolated private func enableGuardianAccessibility() {
         let current = adb.shell("settings get secure enabled_accessibility_services 2>/dev/null")
             .trimmingCharacters(in: .whitespacesAndNewlines)
         let services: String
@@ -1673,12 +1668,12 @@ package final class AppState: ObservableObject {
         adb.shell("settings put secure accessibility_enabled 1")
     }
 
-    private func startGuardianCommands() {
+    nonisolated private func startGuardianCommands() {
         adb.shell("am start -n \(Guardian.mainActivity) >/dev/null")
         adb.shell("am broadcast -a \(Guardian.package).ACTION_KEEP_ALIVE -p \(Guardian.package) >/dev/null")
     }
 
-    private func readGuardianStatus() -> GuardianStatus {
+    nonisolated private func readGuardianStatus() -> GuardianStatus {
         let acc = adb.shell("settings get secure enabled_accessibility_services 2>/dev/null")
             .trimmingCharacters(in: .whitespacesAndNewlines)
         let path = adb.shell("pm path \(Guardian.package) 2>/dev/null")
@@ -2270,7 +2265,7 @@ package final class AppState: ObservableObject {
 
     /// 把值对齐到 `step` 的倍数：不在格点上时朝调整方向跳到最近的格点，
     /// 已经在格点上就正常加减一个 step。例：值 6、步长 10、调亮 → 10；再按 → 20。
-    static func alignToStep(_ value: Int, step: Int, increasing: Bool) -> Int {
+    nonisolated static func alignToStep(_ value: Int, step: Int, increasing: Bool) -> Int {
         guard step > 1 else { return value + (increasing ? step : -step) }
         if value % step == 0 { return value + (increasing ? step : -step) }
         return increasing ? ((value / step) + 1) * step : (value / step) * step

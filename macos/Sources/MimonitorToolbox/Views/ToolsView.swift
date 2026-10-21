@@ -3,6 +3,7 @@ import UniformTypeIdentifiers
 
 struct ToolsView: View {
     @EnvironmentObject var state: AppState
+    @Environment(SettingsModel.self) private var settings
     @State private var pending4K = false
     @State private var show4KConfirm = false
     @State private var showHotkeySheet = false
@@ -134,10 +135,11 @@ struct ToolsView: View {
     }
 
     private var appSettings: some View {
-        SettingsTaskSection(title: "应用偏好") {
+        @Bindable var settings = settings
+        return SettingsTaskSection(title: "应用偏好") {
             HStack(spacing: 16) {
                 Text("关闭窗口时").frame(width: 110, alignment: .leading)
-                Picker("关闭窗口时", selection: $state.closeBehavior) {
+                Picker("关闭窗口时", selection: $settings.closeBehavior) {
                     Text("在菜单栏继续运行").tag("tray")
                     Text("退出应用").tag("exit")
                 }
@@ -146,7 +148,7 @@ struct ToolsView: View {
             }
             HStack(spacing: 16) {
                 Text("外观").frame(width: 110, alignment: .leading)
-                Picker("外观", selection: $state.theme) {
+                Picker("外观", selection: $settings.theme) {
                     Text("跟随系统").tag("auto")
                     Text("深色").tag("dark")
                     Text("浅色").tag("light")
@@ -155,7 +157,7 @@ struct ToolsView: View {
                 Spacer(minLength: 0)
             }
             Divider().padding(.vertical, 2)
-            Toggle("登录后自动启动，仅显示菜单栏图标", isOn: Binding(get: { state.autostartEnabled }, set: { state.setAutostart($0) }))
+            Toggle("登录后自动启动，仅显示菜单栏图标", isOn: Binding(get: { settings.autostartEnabled }, set: { state.setAutostart($0) }))
         }
     }
 

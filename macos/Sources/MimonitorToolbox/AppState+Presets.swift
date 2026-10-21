@@ -33,7 +33,7 @@ extension AppState {
         updateAutomaticTaskStatus()
     }
 
-    private func currentMinute() -> Int {
+    nonisolated private func currentMinute() -> Int {
         let parts = environment.calendar.dateComponents([.hour, .minute], from: environment.now())
         return (parts.hour ?? 0) * 60 + (parts.minute ?? 0)
     }
@@ -133,7 +133,7 @@ extension AppState {
 
     /// Every picture write (including hotkeys and menu-bar controls) goes through this path.
     /// Capture the preset identity NOW, not when the delayed readback eventually runs.
-    func runPictureChange(delay: TimeInterval = 1.2, completion: (() -> Void)? = nil, _ work: @escaping () -> Void) {
+    func runPictureChange(delay: TimeInterval = 1.2, completion: (() -> Void)? = nil, _ work: @escaping @Sendable () -> Void) {
         guard isConnected, !isPresetBusy, !presetConfiguration.applicationIncomplete else { completion?(); return }
         let request = connectionIntent.generation
         let identity = adb.ip
@@ -149,7 +149,7 @@ extension AppState {
             }
             guard current else { DispatchQueue.main.async { completion?() }; return }
             self.adb.transaction(work)
-            self.pictureSettleUntil = Date().addingTimeInterval(delay)
+            self.deviceWorkState.pictureSettleUntil = Date().addingTimeInterval(delay)
             DispatchQueue.main.async {
                 if self.connectionIntent.isCurrent(request), self.adb.ip == identity,
                    self.activePresetID == presetID, self.pictureEditRevision == revision,
@@ -184,7 +184,7 @@ extension AppState {
     private func runPresetOperation(_ label: String, automatic: Bool = false, refresh: Bool = false,
                                     navigateToPicture: Bool = false, flushAutosave: Bool = true,
                                     switchHUDTitle: String? = nil,
-                                    operation: @escaping (PresetEngine, (any PresetDevice)?) throws -> Void) {
+                                    operation: @escaping @Sendable (PresetEngine, (any PresetDevice)?) throws -> Void) {
         guard !isPresetOperationInFlight else { return }
         let request = connectionIntent.generation
         let identity = adb.ip
@@ -216,8 +216,8 @@ extension AppState {
             var savedEdits = saveID == nil
             do {
                 try self.adb.transaction {
-                    if device != nil, Date() < self.pictureSettleUntil {
-                        Thread.sleep(until: self.pictureSettleUntil)
+                    if device != nil, Date() < self.deviceWorkState.pictureSettleUntil {
+                        Thread.sleep(until: self.deviceWorkState.pictureSettleUntil)
                     }
                     if flushAutosave, let saveID, let device {
                         // Never save mixed values from a failed application into the original preset.

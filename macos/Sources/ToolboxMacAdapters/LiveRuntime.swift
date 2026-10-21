@@ -173,5 +173,5 @@ extension AppEnvironment {
 
 /// The only public production composition factory. PreviewSupport never imports this module.
 public enum LiveToolboxRuntime {
-    public static func makeSession() -> ToolboxSession { ToolboxSession(environment: .live()) }
+    @MainActor public static func makeSession() -> ToolboxSession { ToolboxSession(environment: .live()) }
 }

@@ -113,7 +113,7 @@ package struct AppEnvironment {
 }
 
 /// A stopped/restarted lifetime cannot execute work queued by an older lifetime.
-package final class RuntimeGeneration {
+package final class RuntimeGeneration: @unchecked Sendable {
     private let lock = NSLock()
     private var revision = 0
     private var enabled = false
@@ -122,4 +122,9 @@ package final class RuntimeGeneration {
     package func end() { lock.lock(); defer { lock.unlock() }; revision &+= 1; enabled = false }
     package func token() -> Int { lock.lock(); defer { lock.unlock() }; return revision }
     package func allows(_ token: Int) -> Bool { lock.lock(); defer { lock.unlock() }; return enabled && revision == token }
+}
+
+/// Mutable protocol settling state, confined to the serial device queue; never observed by UI.
+final class DeviceWorkState {
+    var pictureSettleUntil = Date.distantPast
 }
