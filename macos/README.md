@@ -50,6 +50,12 @@ CI 已显式要求带 `toolbox-macos27` 标签的专用 macOS 27 ARM64 runner；
 
 本分支沿用原项目的网络 ADB 连接界面。
 
+### Type-C 有线 ADB 的硬件验证（2026-10-22）
+
+已实测「Mac 扩展坞 USB-A → A↔C 数据线 → 显示器 Type-C」有线 ADB 可用，撤回此前“Type-C 无法有线 ADB”的结论。5038 上唯一列出的设备为 `76226171600005770 device usb:51589120X`；使用 `-P 5038 -s 76226171600005770 shell 'dumpsys usb | head -n 20'` 成功返回 `connected=true`、`configured=true`、`kernel_state=CONFIGURED`。
+
+内部 RTS5411 Hub 的 Port 1/2 是机身 USB-A 下行口，Port 3 内部连接 ADB Gadget，Port 4 为 Billboard。RTS5445 / `usb2typec` 切换 Hub 上行口：`1` → 外部 Type-C，`0` → SoC Host。不要把历史测试结束时的路由 0 当成有线 ADB 的目标配置。此次文档更新未执行任何设备命令，也未新增 App USB 连接界面或验证其有线唤醒恢复行为。
+
 ## C 方向界面更新：屏幕即遥控器
 
 - 用顶部导航替代固定侧栏；画面、游戏、信号源、灯光、预设、自动任务和遥控器均保留独立入口，工具与菜单栏配置在右上角设置中。

@@ -28,6 +28,12 @@ Redmi G Pro 27U / 32U 显示器的原生 macOS 控制应用，使用 SwiftUI、A
 
 已在 Mac mini M4 + Redmi G Pro 32U 2026（P32UEA-RGP）上验证网络 ADB 与唤醒恢复。其他型号及固件的兼容性需实测。
 
+### Type-C 有线 ADB 实机纠正（2026-10-22）
+
+同一台 32U 已通过「Mac 扩展坞 USB-A → A↔C 数据线 → 显示器 Type-C」建立有线 ADB。内嵌 adb 在端口 5038 上唯一列出 `76226171600005770 device usb:51589120X`，指定序列号 shell 返回 `connected=true`、`configured=true`、`kernel_state=CONFIGURED`。此前“Type-C 无法有线 ADB”的结论错误。
+
+内部 RTS5411 Hub 的 Port 1/2 接外部两个 USB-A 下行口，Port 3 接 SoC ADB Gadget，Port 4 接 Billboard。`usb2typec=1` 将 Hub 上行口接外部 Type-C；`0` 接显示器自身 Host，不能将外部 USB-A 变成调试口。本次确认的是硬件和 adb 传输能力，不代表本分支网络连接界面已增加 USB 功能；本轮只更新文档，未修改显示器状态。
+
 ## 从源码构建
 
 使用 macOS 27 与 Xcode 27.1，在 `macos/Toolbox.xcodeproj` 选择 `ToolboxApp`（真实应用）或 `ToolboxPreviews`（安全预览）。详细隔离规则见 [开发说明](macos/README.md)。
