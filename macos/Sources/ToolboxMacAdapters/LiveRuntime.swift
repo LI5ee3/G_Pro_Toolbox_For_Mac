@@ -104,7 +104,11 @@ extension AppEnvironment {
             NSWorkspace.shared.open(URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility")!)
         }
         system.openAutomation = { NSWorkspace.shared.open(URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Automation")!) }
-        system.openLocalNetwork = { NSWorkspace.shared.open(URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_LocalNetwork")!) }
+        // macOS 27 accepts Privacy_LocalNetwork but stays on the privacy overview.
+        // Open that page explicitly; the UI gives the remaining "本地网络" step.
+        system.openLocalNetwork = {
+            NSWorkspace.shared.open(URL(string: "x-apple.systempreferences:com.apple.settings.PrivacySecurity.extension")!)
+        }
         system.observeActivation = { action in
             let observer = NotificationCenter.default.addObserver(forName: NSApplication.didBecomeActiveNotification,
                 object: nil, queue: .main) { _ in action() }

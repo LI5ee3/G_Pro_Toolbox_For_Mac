@@ -63,6 +63,32 @@ import ToolboxConcurrency
         state.stop(); XCTAssertNil(activate)
         await state.waitForPendingWork()
     }
+    func testNetworkSettingsFailureGivesManualPathWithoutClaimingSuccessOrGrant() async {
+        let runtime = PreviewRuntime()
+        var actions = runtime.environment().system
+        var opened = 0
+        actions.openLocalNetwork = { opened += 1; return false }
+        let state = state(runtime, system: actions, mode: .simulation)
+        state.openLocalNetworkSettings()
+        await state.waitForPendingWork()
+        XCTAssertEqual(opened, 1)
+        XCTAssertTrue(state.logLines.contains { $0.contains("无法打开系统设置") && $0.contains("隐私与安全 → 本地网络") })
+        XCTAssertFalse(state.logLines.contains { $0.contains("已请求打开") })
+        XCTAssertTrue(runtime.display.recordedCommands.isEmpty)
+        XCTAssertEqual(runtime.hotkeyDriver.starts, 0)
+        XCTAssertTrue(runtime.effects.isEmpty)
+    }
+    func testPreviewNetworkSettingsOnlyRecordsIntentAndExplainsRemainingStep() async {
+        let runtime = PreviewRuntime(), state = runtime.makeState(.permissionDenied)
+        state.openLocalNetworkSettings()
+        await state.waitForPendingWork()
+        XCTAssertEqual(runtime.effects, ["network.settings"])
+        XCTAssertTrue(state.logLines.contains { $0.contains("请选择“本地网络”") })
+        XCTAssertFalse(state.keyboard.accessibilityTrusted)
+        XCTAssertTrue(runtime.display.recordedCommands.isEmpty)
+        XCTAssertEqual(runtime.hotkeyDriver.starts, 0)
+        XCTAssertEqual(runtime.scheduler.pendingCount, 0)
+    }
     func testTapFailureIsDistinctFromAccessibilityDenialAndCanRetry() async {
         final class Driver: HotkeyDriving {
             var succeeds = false

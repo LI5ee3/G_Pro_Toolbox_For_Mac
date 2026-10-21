@@ -170,7 +170,7 @@ package final class PreviewRuntime {
         system.promptAccessibility = { record("permission.prompt"); return false }
         system.openAccessibility = { record("permission.settings") }
         system.openAutomation = { record("automation.settings") }
-        system.openLocalNetwork = { record("network.settings") }
+        system.openLocalNetwork = { record("network.settings"); return true }
         system.defaultOutput = { "Mi Monitor" }
         system.scan = { [self.display.identity] }; system.subnets = { ["192.0.2"] }
         func loginSnapshot() -> LoginItemSnapshot {

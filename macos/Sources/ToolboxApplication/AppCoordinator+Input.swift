@@ -33,8 +33,11 @@ extension AppCoordinator {
 
     package func openAutomationSettings() { environment.system.openAutomation() }
     package func openLocalNetworkSettings() {
-        environment.system.openLocalNetwork()
-        log("已请求打开局域网权限设置；连接失败也可能来自网络或设备，不能据此断言权限被拒绝")
+        if environment.system.openLocalNetwork() {
+            log("已请求打开“隐私与安全”；请选择“本地网络”，检查本应用开关。连接失败也可能来自网络或设备，不能据此断言权限被拒绝")
+        } else {
+            log("无法打开系统设置；请手动前往“系统设置 → 隐私与安全 → 本地网络”，检查本应用开关")
+        }
     }
 
     internal static func loadHotkeys(_ preferences: any PreferencesStore) -> [String: HotkeyConfig] {

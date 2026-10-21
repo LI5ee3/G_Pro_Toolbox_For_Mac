@@ -177,10 +177,14 @@ struct ToolsView: View {
                     .disabled(settings.loginItemBusy)
             }
             HStack {
-                Text("局域网权限由系统管理；网络或设备故障也可能导致连接失败。")
-                    .font(.system(size: 13)).foregroundStyle(Theme.secondaryText)
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("打开后选择“本地网络”，检查本应用开关。")
+                    Text("连接失败也可能来自网络或设备，不能据此判断权限被拒绝。")
+                }
+                .font(.system(size: 13)).foregroundStyle(Theme.secondaryText)
                 Spacer()
-                Button("网络权限设置") { state.openLocalNetworkSettings() }.toolboxAction()
+                Button("打开隐私设置") { state.openLocalNetworkSettings() }.toolboxAction()
+                    .help("系统设置 → 隐私与安全 → 本地网络")
             }
         }
     }

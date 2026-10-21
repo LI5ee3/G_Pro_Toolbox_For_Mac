@@ -55,7 +55,8 @@ package struct SystemActions {
     package var promptAccessibility: () -> Bool = { false }
     package var openAccessibility: () -> Void = {}
     package var openAutomation: () -> Void = {}
-    package var openLocalNetwork: () -> Void = {}
+    /// True only means the settings URL was accepted, not that permission is granted.
+    package var openLocalNetwork: () -> Bool = { false }
     package var observeActivation: (@escaping () -> Void) -> RuntimeCancellation = { _ in RuntimeCancellation() }
     package var defaultOutput: @MainActor () -> String? = { nil }
     package var startOutputMonitoring: @MainActor () -> Void = {}
