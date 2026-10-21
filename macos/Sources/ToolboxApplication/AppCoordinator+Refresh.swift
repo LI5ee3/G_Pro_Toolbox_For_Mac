@@ -108,7 +108,7 @@ extension AppCoordinator {
                 settingsVals = self.adb.settingsGetBatch(settingsKeys)
             }
             if !settingsVals.isEmpty {
-                DispatchQueue.main.async {
+                self.publish {
                     guard self.isConnected,
                           self.connectionIntent.isCurrent(connectionRequest),
                           self.pageRefreshIntent.isCurrent(page, pageRequest) else { return }
@@ -142,7 +142,7 @@ extension AppCoordinator {
                 corrections[k] = v
             }
 
-            DispatchQueue.main.async {
+            self.publish {
                 guard self.isConnected,
                       self.connectionIntent.isCurrent(connectionRequest),
                       self.pageRefreshIntent.isCurrent(page, pageRequest) else { return }

@@ -59,7 +59,7 @@ extension AppCoordinator {
             let raw = self.adb.settingsGet("picture_local_dimming")
                 .trimmingCharacters(in: .whitespacesAndNewlines)
             guard Int(raw) != value else { return }
-            DispatchQueue.main.async {
+            self.publish {
                 guard self.isConnected, !self.memoriesSuspendedByPreset else { return }
                 let valueName = ["关", "低", "中", "高"][value]
                 self.log("\(state ? "HDR" : "SDR") 精密控光记忆: \(valueName)")
@@ -189,7 +189,7 @@ extension AppCoordinator {
         runBackground {
             self.adb.settingsPut("front_sight_index", String(value))
             self.adb.refreshPq()
-            DispatchQueue.main.async {
+            self.publish {
                 self.log(message)
                 self.mergeValues(["front_sight_index": String(value)])
                 self.updateCrosshairModeStatus()

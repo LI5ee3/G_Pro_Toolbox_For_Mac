@@ -150,10 +150,10 @@ extension AppCoordinator {
             let current = DispatchQueue.main.sync {
                 self.isConnected && self.connectionIntent.isCurrent(request) && self.adb.ip == identity
             }
-            guard current else { DispatchQueue.main.async { completion?() }; return }
+            guard current else { self.publish { completion?() }; return }
             self.adb.transaction(work)
             self.deviceWorkState.pictureSettleUntil = Date().addingTimeInterval(delay)
-            DispatchQueue.main.async {
+            self.publish {
                 if self.connectionIntent.isCurrent(request), self.adb.ip == identity,
                    self.activePresetID == presetID, self.pictureEditRevision == revision,
                    !self.isPresetBusy, let presetID {
@@ -220,7 +220,7 @@ extension AppCoordinator {
             do {
                 try self.adb.transaction {
                     if device != nil, Date() < self.deviceWorkState.pictureSettleUntil {
-                        Thread.sleep(until: self.deviceWorkState.pictureSettleUntil)
+                        guard self.adb.pause(self.deviceWorkState.pictureSettleUntil.timeIntervalSinceNow) else { throw CancellationError() }
                     }
                     if flushAutosave, let saveID, let device {
                         // Never save mixed values from a failed application into the original preset.
@@ -229,6 +229,7 @@ extension AppCoordinator {
                         }
                         savedEdits = true
                     }
+                    try self.adb.checkCancellation()
                     try operation(self.presetEngine, device)
                     if !flushAutosave { savedEdits = true }
                 }
@@ -236,7 +237,7 @@ extension AppCoordinator {
             self.presetEngine.onReport = nil
             let configuration = self.presetEngine.configuration
 
-            DispatchQueue.main.async {
+            self.publishCompletion {
                 self.presetConfiguration = configuration
                 self.isPresetOperationInFlight = false
                 self.isPresetBusy = false

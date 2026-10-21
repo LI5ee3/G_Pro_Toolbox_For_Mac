@@ -59,7 +59,7 @@ extension AppCoordinator {
             lines.append("提示: 不同网段 → 显示器与 Mac 不在同一 Wi-Fi/VLAN")
             lines.append("===== 诊断结束 =====")
 
-            DispatchQueue.main.async { lines.forEach { self.log($0) } }
+            self.publish { lines.forEach { self.log($0) } }
         }
     }
 
@@ -69,7 +69,7 @@ extension AppCoordinator {
         log("正在安装: \(url.lastPathComponent) ...")
         runBackground {
             let r = self.adb.installApk(url.path)
-            DispatchQueue.main.async {
+            self.publish {
                 if r.contains("Success") {
                     self.log("APK 安装成功")
                 } else {
@@ -138,7 +138,7 @@ extension AppCoordinator {
         runBackground {
             let override = self.adb.getOverrideSize()
             let density = self.adb.getOverrideDensity()
-            DispatchQueue.main.async {
+            self.publish {
                 let is4k = override.map { $0.width > 1920 || $0.height > 1080 } ?? false
                 let changed = (self.is4KUI != is4k)
                 if changed { self.is4KUI = is4k }
@@ -174,7 +174,7 @@ extension AppCoordinator {
         guardianStatus = "状态：正在检测..."
         runBackground {
             let s = self.readGuardianStatus()
-            DispatchQueue.main.async {
+            self.publish {
                 self.guardianStatus = s.summary
                 // 把结论一起写进日志：只写"检测完成"的话，导出日志看不到守护到底正不正常
                 self.log("ADB 保活守护检测完成 —— \(s.summary)")
@@ -194,15 +194,15 @@ extension AppCoordinator {
                 self.adb.shell("cmd deviceidle whitelist +\(Guardian.package) 2>/dev/null || true")
                 self.enableGuardianAccessibility()
                 self.startGuardianCommands()
-                Thread.sleep(forTimeInterval: 3)
+                guard self.adb.pause(3) else { return }
                 _ = self.adb.reconnect()
                 let s = self.readGuardianStatus()
-                DispatchQueue.main.async {
+                self.publish {
                     self.guardianStatus = s.summary
                     self.log(s.ok ? "ADB 保活守护部署并回读验证完成" : "APK 已安装，但保活检查未通过：\(s.summary)")
                 }
             } else {
-                DispatchQueue.main.async {
+                self.publish {
                     self.guardianStatus = "状态：部署失败"
                     self.log("ADB 保活守护部署失败: \(r.trimmingCharacters(in: .whitespacesAndNewlines))")
                 }
@@ -216,9 +216,9 @@ extension AppCoordinator {
         runBackground {
             self.enableGuardianAccessibility()
             self.startGuardianCommands()
-            Thread.sleep(forTimeInterval: 2)
+            guard self.adb.pause(2) else { return }
             let s = self.readGuardianStatus()
-            DispatchQueue.main.async {
+            self.publish {
                 self.guardianStatus = s.summary
                 self.log(s.ok ? "ADB 保活守护已启动并通过检查" : "已请求启动保活，检查结果：\(s.summary)")
             }

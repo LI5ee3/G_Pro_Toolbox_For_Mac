@@ -89,7 +89,7 @@ package final class AdbPresetDevice: PresetDevice {
                 try adb.checkedShell(shell, target: target)
             }
             // TvService can return a successful Parcel despite a JNI failure. Verify actual values.
-            Thread.sleep(forTimeInterval: 1.8)
+            guard adb.pause(1.8) else { throw CancellationError() }
             do {
                 let actual = try capture()
                 for (label, keys) in Self.verificationKeys where report.applied.contains(label) {

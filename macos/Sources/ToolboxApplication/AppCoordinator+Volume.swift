@@ -48,7 +48,7 @@ extension AppCoordinator {
             guard DispatchQueue.main.sync(execute: { self.mediaSessionIsCurrent(request, target: target) }) else { return }
             let volume = self.adb.mediaVolume()
             let muted = self.adb.mediaMuted()
-            DispatchQueue.main.async {
+            self.publish {
                 guard self.mediaSessionIsCurrent(request, target: target) else { return }
                 if let volume {
                     self.mediaVolumePreview = volume
@@ -125,7 +125,7 @@ extension AppCoordinator {
         runBackground {
             guard DispatchQueue.main.sync(execute: { self.mediaSessionIsCurrent(request, target: target) }) else { return }
             let usedBinder = self.adb.setMediaVolume(value, unmuteFirst: unmute)
-            DispatchQueue.main.async {
+            self.publish {
                 guard self.mediaSessionIsCurrent(request, target: target) else { return }
                 self.mediaVolumeCommitInFlight = false
                 self.mediaVolumeHardware = value
@@ -148,7 +148,7 @@ extension AppCoordinator {
             runBackground {
                 guard DispatchQueue.main.sync(execute: { self.mediaSessionIsCurrent(request, target: target) }) else { return }
                 let current = self.adb.mediaMuted() ?? false
-                DispatchQueue.main.async {
+                self.publish {
                     guard self.mediaSessionIsCurrent(request, target: target) else { return }
                     self.applyMediaMute(!current)
                 }
@@ -171,7 +171,7 @@ extension AppCoordinator {
         runBackground {
             guard DispatchQueue.main.sync(execute: { self.mediaSessionIsCurrent(request, target: target) }) else { return }
             let usedBinder = self.adb.setMediaMuted(muted)
-            DispatchQueue.main.async {
+            self.publish {
                 guard self.mediaSessionIsCurrent(request, target: target) else { return }
                 if !usedBinder, !self.mediaVolumeFallbackLogged {
                     self.mediaVolumeFallbackLogged = true
@@ -217,7 +217,7 @@ extension AppCoordinator {
                 let next = !current
                 return (next, self.adb.setMediaMuted(next))
             }
-            DispatchQueue.main.async {
+            self.publish {
                 guard self.isConnected, self.connectionIntent.isCurrent(request),
                       self.adb.ip == target else { return }
                 guard let result else {

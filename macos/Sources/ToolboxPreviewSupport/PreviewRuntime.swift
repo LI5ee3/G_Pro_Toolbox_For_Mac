@@ -90,6 +90,7 @@ package final class PreviewDisplay: PresetDevice {
     }
     package func execute(_ request: CommandRequest) -> ProcessResult {
         lock.lock(); defer { lock.unlock() }
+        guard !request.cancellation.isCancelled else { return .cancelled }
         let args = request.arguments
         commands.append(args.joined(separator: " "))
         func result(_ value: String = "", _ code: Int32 = 0) -> ProcessResult { ProcessResult(output: value, exitCode: code) }

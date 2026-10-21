@@ -159,6 +159,7 @@ public final class AppCoordinator {
 
     /// The app lifetime owns live services; construction and previews never start them.
     package func start() {
+        adb.resumeSession()
         if environment.mode == .simulation { executionLifetime.resumeIfNeeded(); return }
         guard !isRunning else { return }
         isRunning = true
@@ -233,6 +234,7 @@ public final class AppCoordinator {
     }
 
     package func stop() {
+        adb.cancelSession()
         executionLifetime.end()
         isRunning = false
         connectionIntent.disconnect()
@@ -246,12 +248,17 @@ public final class AppCoordinator {
         adjustPendingWork.values.forEach { $0.cancel() }; adjustPendingWork.removeAll()
         mediaBrightnessCommit?.cancel(); mediaBrightnessCommit = nil
         resetMediaVolumeSession()
+        monitorChecking = false
+        crosshairReconcileBusy = false
+        isPresetOperationInFlight = false; isPresetBusy = false; presetOperationText = ""
+        mediaBrightnessCommitInFlight = false
         hotkeyManager.stop()
         environment.feedback.stop()
         environment.system.stopLog()
     }
 
     deinit {
+        adb.cancelSession()
         runtimeTasks.forEach { $0.invalidate() }
         startupWork.forEach { $0.cancel() }
         presetTimer?.invalidate(); sourcePollTimer?.invalidate()
@@ -293,12 +300,12 @@ public final class AppCoordinator {
         if adb.ip.isEmpty { adb.ip = target }
         monitorChecking = true
         runConnectionTask {
-            defer { DispatchQueue.main.async { self.monitorChecking = false } }
+            defer { self.publishCompletion { self.monitorChecking = false } }
 
             if wasConnected && self.adb.deviceState() == "device" && self.adb.transportWorks() {
                 // 唤醒时连接可能仍可用，但显示器的音量和保活设置已经变化。
                 if refreshState {
-                    DispatchQueue.main.async {
+                    self.publish {
                         guard self.connectionIntent.isCurrent(request),
                               self.connectionIntent.allowsAutomaticRecovery else { return }
                         self.refreshMediaVolumeState()
@@ -312,7 +319,7 @@ public final class AppCoordinator {
             let (ok, state) = self.adb.ensureConnected()
             let model = ok ? self.adb.getModel() : ""
 
-            DispatchQueue.main.async {
+            self.publish {
                 guard self.connectionIntent.isCurrent(request),
                       self.connectionIntent.allowsAutomaticRecovery else { return }
                 if ok {

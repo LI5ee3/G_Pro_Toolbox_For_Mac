@@ -13,7 +13,7 @@ extension AppCoordinator {
         reconcileCrosshairModeState()
         runPictureChange(delay: 1.5) {
             self.adb.settingsPut("picture_mode", String(value))
-            DispatchQueue.main.async {
+            self.publish {
                 self.scheduleCoalescedRefresh(delay: 1.2, pages: ["picture"])
             }
         }
@@ -28,7 +28,7 @@ extension AppCoordinator {
         runPictureChange(delay: 3.2) {
             self.adb.jniSet(key: "g_fusion_picture__pic_reset_def_bypicmode", value: "0")
             self.adb.refreshPq()
-            DispatchQueue.main.async {
+            self.publish {
                 self.scheduleCoalescedRefresh(delay: 3, pages: ["picture"])
             }
         }
@@ -243,7 +243,7 @@ extension AppCoordinator {
             let mode = self.adb.settingsGet("picture_mode")
             if RegisterMap.isGamePictureMode(mode) {
                 self.adb.settingsPut("picture_mode", "14")
-                Thread.sleep(forTimeInterval: 0.5)
+                guard self.adb.pause(0.5) else { return }
                 self.adb.settingsPut("picture_mode", "10")
             } else {
                 self.adb.refreshPq()
@@ -281,7 +281,7 @@ extension AppCoordinator {
             let key = isDP ? "g_video__dp_adaptive_sync" : "g_video__freesync_switch"
             let raw = Int(self.adb.jniBatchGet(keys: [key])[key] ?? "") ?? -1
             let isOn = isDP ? (raw == 1) : (raw == 3)
-            DispatchQueue.main.async { self.setFreesync(!isOn) }
+            self.publish { self.setFreesync(!isOn) }
         }
     }
 
@@ -317,12 +317,12 @@ extension AppCoordinator {
                     // 记下来再还原会很突兀 —— 而且它们在 FreeSync 开关时本来就会被自动切换。
                     if RegisterMap.modeNames[mode] != nil {
                         self.preferences.set(mode, forKey: "freesync_previous_mode")
-                        DispatchQueue.main.async {
+                        self.publish {
                             self.log("FreeSync 模式记忆: 记录开启前模式 \(RegisterMap.modeNames[mode] ?? "\(mode)")")
                         }
                     } else {
                         self.preferences.removeObject(forKey: "freesync_previous_mode")
-                        DispatchQueue.main.async {
+                        self.publish {
                             self.log("FreeSync 模式记忆: 当前是 \(RegisterMap.sceneNames[mode] ?? "未知模式")，非标准模式不记录")
                         }
                     }
@@ -339,7 +339,7 @@ extension AppCoordinator {
             }
             self.adb.refreshPq()
 
-            DispatchQueue.main.async {
+            self.publish {
                 if !on, let restoreMode {
                     self.currentValues["picture_mode"] = String(restoreMode)
                     self.log("FreeSync 模式记忆: 已切回 \(RegisterMap.sceneNames[restoreMode] ?? "\(restoreMode)")")
@@ -350,7 +350,7 @@ extension AppCoordinator {
     }
 
     nonisolated internal func refreshAfterEdidChange() {
-        DispatchQueue.main.async {
+        self.publish {
             self.scheduleCoalescedRefresh(delay: 1.5, pages: ["picture", "game"])
         }
     }

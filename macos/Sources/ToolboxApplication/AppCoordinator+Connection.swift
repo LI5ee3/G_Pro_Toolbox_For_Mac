@@ -24,7 +24,13 @@ extension AppCoordinator {
         guard !ip.isEmpty else { log("请输入显示器 IP 地址"); return }
         let request = connectionIntent.beginConnection()
         preferences.set(ip, forKey: "saved_ip")
-        adb.ip = ip
+        adb.beginSession(ip: ip)
+        resetMediaVolumeSession()
+        invalidatePictureRefreshesForPreset()
+        pendingPresetSave?.cancel(); pendingPresetSave = nil
+        mediaBrightnessCommit?.cancel(); mediaBrightnessCommit = nil
+        mediaBrightnessCommitInFlight = false
+        mediaBrightnessPreview = nil; mediaBrightnessHardware = nil
         connectionStatus = .connecting
         if !isAuto { log("正在连接 \(ip)...") }
 
@@ -36,7 +42,7 @@ extension AppCoordinator {
                 self.adb.ensureJars()
                 let model = self.adb.getModel()
                 let detail = model.isEmpty ? ip : "\(model) · \(ip)"
-                DispatchQueue.main.async {
+                self.publish {
                     guard self.connectionIntent.isCurrent(request) else { return }
                     self.connectionStatus = .connected(detail)
                     self.log(isAuto ? "启动自动连接成功: \(detail)" : "已连接: \(detail)")
@@ -66,7 +72,7 @@ extension AppCoordinator {
                     self.refreshMediaVolumeState()
                 }
             } else {
-                DispatchQueue.main.async {
+                self.publish {
                     guard self.connectionIntent.isCurrent(request) else { return }
                     self.connectionStatus = .disconnected
                     if isAuto {
@@ -108,7 +114,14 @@ extension AppCoordinator {
         // Keep dirty identity; reconnecting this same display can still save the edit safely.
         let ip = adb.ip
         connectionIntent.disconnect()
-        adb.ip = ""
+        adb.beginSession(ip: "")
+        mediaBrightnessCommit?.cancel(); mediaBrightnessCommit = nil
+        mediaBrightnessCommitInFlight = false
+        mediaBrightnessPreview = nil; mediaBrightnessHardware = nil
+        pendingRefreshWork?.cancel(); pendingRefreshWork = nil
+        cyclePending.values.forEach { $0.work.cancel() }; cyclePending.removeAll()
+        adjustPendingWork.values.forEach { $0.cancel() }; adjustPendingWork.removeAll()
+        adjustPendingValues.removeAll()
         connectionStatus = .disconnected
         currentValues = [:]
         loadedPages = []
@@ -139,7 +152,7 @@ extension AppCoordinator {
         runConnectionTask {
             guard DispatchQueue.main.sync(execute: { self.connectionIntent.isCurrent(request) }) else { return }
             let subnets = self.environment.system.subnets()
-            DispatchQueue.main.async {
+            self.publish {
                 self.log("本机网段: \(subnets.isEmpty ? "未识别" : subnets.joined(separator: ", "))")
             }
             let candidates = self.environment.system.scan()
@@ -152,7 +165,7 @@ extension AppCoordinator {
                     self.log("[扫描] 已识别 \(device.label)")
                 } else { self.log("[扫描] \(ip) 未通过 ADB 验证，已跳过") }
             }
-            DispatchQueue.main.async {
+            self.publish {
                 guard self.connectionIntent.isCurrent(request) else { return }
                 self.scannedDevices = found.map(\.ip)
                 self.scannedDeviceModels = Dictionary(uniqueKeysWithValues: found.map { ($0.ip, $0.model) })
@@ -188,10 +201,10 @@ extension AppCoordinator {
     package func startSourcePolling() {
         guard isConnected else { return }
         sourcePollArmed = true
-        DispatchQueue.main.async {
+        self.publish {
             guard self.sourcePollArmed else { return }
             self.sourcePollTimer?.invalidate()
-            self.sourcePollTimer = self.environment.scheduler.repeating(every: 2, commonModes: false) { [weak self] in
+            self.sourcePollTimer = self.environment.scheduler.repeating(every: 2, commonModes: false) { [weak self = self] in
                 self?.pollSourceState()
             }
         }
@@ -200,7 +213,7 @@ extension AppCoordinator {
     package func stopSourcePolling() {
         sourcePollArmed = false
         _ = pageRefreshIntent.begin("sourcePoll")
-        DispatchQueue.main.async {
+        self.publish {
             self.sourcePollTimer?.invalidate()
             self.sourcePollTimer = nil
         }
@@ -214,7 +227,7 @@ extension AppCoordinator {
             let raw = self.adb.settingsGet("mitv.tvplayer.hdmi.last.source")
                 .trimmingCharacters(in: .whitespacesAndNewlines)
             guard let n = Int(raw), let name = RegisterMap.sourceNames[n] else { return }
-            DispatchQueue.main.async {
+            self.publish {
                 guard self.sourcePollArmed, self.isConnected,
                       self.connectionIntent.isCurrent(connectionRequest),
                       self.pageRefreshIntent.isCurrent("sourcePoll", pollRequest) else { return }

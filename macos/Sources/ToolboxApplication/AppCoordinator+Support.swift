@@ -26,7 +26,7 @@ extension AppCoordinator {
     internal func clamp(_ v: Int, _ lo: Int, _ hi: Int) -> Int { max(lo, min(hi, v)) }
 
     package nonisolated func log(_ message: String) {
-        DispatchQueue.main.async {
+        self.publish {
             let line = "[\(Self.timeFormatter.string(from: self.environment.now()))] \(message)"
             self.logs.append(line)
             if self.logToFileEnabled { self.environment.system.appendLog(line + "\n") }
@@ -35,22 +35,46 @@ extension AppCoordinator {
 
     package func runBackground(_ work: @escaping @Sendable () -> Void) {
         guard isRunning || environment.mode == .simulation else { return }
-        let token = executionLifetime.token()
-        deviceQueue.async { [executionLifetime] in
-            guard executionLifetime.allows(token) else { return }; work()
+        let token = executionLifetime.token(), session = adb.session()
+        deviceQueue.async { [executionLifetime, adb] in
+            adb.withSession(session) {
+                guard executionLifetime.allows(token), !session.cancellation.isCancelled else { return }
+                work()
+            }
         }
     }
 
     internal func runConnectionTask(_ work: @escaping @Sendable () -> Void) {
         guard isRunning || environment.mode == .simulation else { return }
-        let token = executionLifetime.token()
-        connectionQueue.async { [executionLifetime] in
-            guard executionLifetime.allows(token) else { return }; work()
+        let token = executionLifetime.token(), session = adb.session()
+        connectionQueue.async { [executionLifetime, adb] in
+            adb.withSession(session) {
+                guard executionLifetime.allows(token), !session.cancellation.isCancelled else { return }
+                work()
+            }
+        }
+    }
+
+    /// Drop callbacks queued by a replaced session or a stopped/restarted app lifetime.
+    nonisolated internal func publish(_ work: @escaping @MainActor () -> Void) {
+        let cancellation = adb.operationSession?.cancellation
+        let lifetime = executionLifetime.token()
+        DispatchQueue.main.async { [executionLifetime] in
+            guard executionLifetime.allows(lifetime), cancellation?.isCancelled != true else { return }
+            work()
+        }
+    }
+
+    /// Completion bookkeeping must finish even when the target changed. Feature values still use publish.
+    nonisolated internal func publishCompletion(_ work: @escaping @MainActor () -> Void) {
+        let lifetime = executionLifetime.token()
+        DispatchQueue.main.async { [executionLifetime] in
+            guard executionLifetime.allows(lifetime) else { return }; work()
         }
     }
 
     internal func setValue(_ key: String, _ value: String) {
-        DispatchQueue.main.async { self.currentValues[key] = value }
+        self.publish { self.currentValues[key] = value }
     }
 
 

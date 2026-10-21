@@ -7,12 +7,55 @@ import MimonitorPresetCore
 package final class AdbClient {
     package let adbPath: String
     package let serverPort: String
-    package var ip: String = ""
+    private let stateLock = NSLock()
+    private var activeIP = ""
+    private var cancellation = CommandCancellation()
+    private let clientID = UUID()
+    package var ip: String {
+        get { stateLock.lock(); defer { stateLock.unlock() }; return activeIP }
+        set {
+            stateLock.lock(); defer { stateLock.unlock() }
+            if activeIP != newValue {
+                cancellation.cancel(); cancellation = CommandCancellation(); activeIP = newValue
+            }
+        }
+    }
+    package func beginSession(ip: String) {
+        stateLock.lock(); defer { stateLock.unlock() }
+        cancellation.cancel(); cancellation = CommandCancellation(); activeIP = ip
+    }
+    package func cancelSession() {
+        stateLock.lock(); defer { stateLock.unlock() }; cancellation.cancel()
+    }
+    package func resumeSession() {
+        stateLock.lock(); defer { stateLock.unlock() }
+        if cancellation.isCancelled { cancellation = CommandCancellation() }
+    }
+    package func session() -> AdbSession {
+        stateLock.lock(); defer { stateLock.unlock() }
+        return AdbSession(clientID: clientID, targetIP: activeIP, cancellation: cancellation)
+    }
+    package var operationSession: AdbSession? {
+        guard let current = AdbOperationContext.current, current.clientID == clientID else { return nil }
+        return current
+    }
+    package var operationCancelled: Bool { operationSession?.cancellation.isCancelled ?? false }
+    package func checkCancellation() throws {
+        if operationCancelled { throw CancellationError() }
+    }
+    @discardableResult package func pause(_ interval: TimeInterval) -> Bool {
+        (operationSession?.cancellation ?? session().cancellation).sleep(for: interval)
+    }
+    package func withSession<T>(_ session: AdbSession, _ work: () throws -> T) rethrows -> T {
+        precondition(session.clientID == clientID)
+        return try AdbOperationContext.$current.withValue(session) { try transaction(work) }
+    }
     private let channelLock = NSRecursiveLock()
 
     /// All ADB commands participate, including connection/recovery and JNI batch reads.
     /// A recursive lock permits a whole preset capture/apply to nest existing helpers.
     package func transaction<T>(_ work: () throws -> T) rethrows -> T {
+        if operationSession == nil { return try withSession(session(), work) }
         channelLock.lock()
         defer { channelLock.unlock() }
         return try work()
@@ -28,15 +71,20 @@ package final class AdbClient {
         self.execute = execute
     }
 
-    package var serial: String { ip.isEmpty ? "" : "\(ip):5555" }
+    package var serial: String { (operationSession ?? session()).serial }
 
     // MARK: - 进程执行
 
     @discardableResult
     package func run(_ args: [String], timeout: TimeInterval = 15) -> ProcessResult {
         transaction {
-            execute(CommandRequest(executable: adbPath, arguments: args,
-                serverPort: serverPort, timeout: timeout))
+            guard let session = operationSession, !session.cancellation.isCancelled else { return .cancelled }
+            if let index = args.firstIndex(of: "-s"), (index + 1 >= args.count || args[index + 1].isEmpty) {
+                return ProcessResult(output: "未连接显示器", exitCode: -1)
+            }
+            let result = execute(CommandRequest(executable: adbPath, arguments: args,
+                serverPort: serverPort, timeout: timeout, cancellation: session.cancellation))
+            return session.cancellation.isCancelled ? .cancelled : result
         }
     }
 
@@ -55,7 +103,7 @@ package final class AdbClient {
                 let state = result.output.trimmingCharacters(in: .whitespacesAndNewlines)
                 if result.exitCode == 0 && state == "device" { break }
                 if state.contains("unauthorized") || Date() >= deadline { return nil }
-                Thread.sleep(forTimeInterval: 0.25)
+                guard pause(0.25) else { return nil }
             }
             guard let model = try? checkedShell("getprop ro.product.model", target: target), !model.isEmpty else { return nil }
             return ScannedDevice(ip: targetIP, model: model)
@@ -64,8 +112,11 @@ package final class AdbClient {
 
     @discardableResult
     package func shell(_ command: String) -> String {
-        run(["-s", serial, "shell", command], timeout: 25)
-            .output.trimmingCharacters(in: .whitespacesAndNewlines)
+        let result = run(["-s", serial, "shell", command], timeout: 25)
+        guard result.outcome == .exited, !result.outputTruncated else {
+            return "error: ADB \(result.outcome)"
+        }
+        return result.output.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
     @discardableResult
@@ -74,7 +125,7 @@ package final class AdbClient {
         let result = run(["-s", target, "shell", command], timeout: 25)
         let output = result.output.trimmingCharacters(in: .whitespacesAndNewlines)
         let lower = output.lowercased()
-        guard result.exitCode == 0,
+        guard result.succeeded,
               !lower.contains("exception"), !lower.contains("error:"),
               !lower.contains("device offline"), !lower.contains("device not found"),
               !lower.contains("permission denial"), !lower.contains("permission denied") else {
@@ -85,13 +136,13 @@ package final class AdbClient {
 
     @discardableResult
     package func connect() -> String {
-        guard !ip.isEmpty else { return "" }
+        guard !serial.isEmpty, !operationCancelled else { return "" }
         return run(["connect", serial], timeout: 10).output
     }
 
     @discardableResult
     package func disconnect(ip: String) -> String {
-        guard !ip.isEmpty else { return "" }
+        guard !ip.isEmpty, !operationCancelled else { return "" }
         return run(["disconnect", "\(ip):5555"], timeout: 5).output
     }
 
@@ -101,14 +152,17 @@ package final class AdbClient {
     /// `offline`（adbd 握手还没完成）。只查一次就会把成功的连接误判成失败，
     /// 所以要轮询等它翻转。`unauthorized` 不会自愈，直接返回。
     package func waitForDevice(timeout: TimeInterval = 6) -> String {
+        return transaction {
         let deadline = Date().addingTimeInterval(timeout)
         var state = deviceState()
-        while state != "device" && Date() < deadline {
+        while state != "device" && Date() < deadline && !operationCancelled {
             if state == "unauthorized" { return state }
-            Thread.sleep(forTimeInterval: 0.4)
+            if !pause(0.4) { return "cancelled" }
             state = deviceState()
         }
         return state
+    
+        }
     }
 
     /// 重启 adb server。
@@ -119,16 +173,19 @@ package final class AdbClient {
     private var lastServerRestart = Date.distantPast
 
     package func restartServer() {
+        return transaction {
         lastServerRestart = Date()
         _ = run(["kill-server"], timeout: 5)
-        Thread.sleep(forTimeInterval: 0.8)
+        guard pause(0.8) else { return }
         _ = run(["start-server"], timeout: 10)
         // 等 server 真正开始监听再往下走：紧接着就 connect 的话很容易落到 offline
         for _ in 0..<10 {
             if isServerAlive() { break }
-            Thread.sleep(forTimeInterval: 0.3)
+            guard pause(0.3) else { return }
         }
-        Thread.sleep(forTimeInterval: 0.3)
+        guard pause(0.3) else { return }
+    
+        }
     }
 
     /// 距上次重启 server 是否已过冷却期。
@@ -145,7 +202,8 @@ package final class AdbClient {
     /// server 转入 "No route to host"，越修越坏；而 kill-server + start-server 才是
     /// 唯一能可靠治好的手段，所以失败后直接走重启 server 这条路。
     package func ensureConnected() -> (ok: Bool, state: String) {
-        guard !ip.isEmpty else { return (false, "unknown") }
+        return transaction {
+        guard !serial.isEmpty, !operationCancelled else { return (false, "unknown") }
 
         // get-state 说 device 还不够，要确认真能跑命令（可能是残留的死连接）
         var state = deviceState()
@@ -163,11 +221,13 @@ package final class AdbClient {
             state = waitForDevice(timeout: 10)
         }
         return (state == "device" && transportWorks(), state)
+    
+        }
     }
 
     /// server 是否还活着（能响应 version 查询）。
     package func isServerAlive() -> Bool {
-        run(["version"], timeout: 3).exitCode == 0
+        run(["version"], timeout: 3).succeeded
     }
 
     /// 预热：提前把 adb server 拉起来。
@@ -194,7 +254,7 @@ package final class AdbClient {
     }
 
     package func deviceState() -> String {
-        guard !ip.isEmpty else { return "unknown" }
+        guard !serial.isEmpty, !operationCancelled else { return "unknown" }
         return run(["-s", serial, "get-state"], timeout: 3)
             .output.trimmingCharacters(in: .whitespacesAndNewlines)
     }
@@ -232,6 +292,7 @@ package final class AdbClient {
     ///   - 合并成一条 shell 循环：21 次设备端进程 ≈ 0.94s
     ///   - `settings list global`：一次往返 ≈ 0.08s（快一个数量级）
     package func settingsGetBatch(_ keys: [String]) -> [String: String] {
+        return transaction {
         // 只允许安全字符，避免注入到 shell 命令里
         let safe = keys.filter { key in
             !key.isEmpty && key.allSatisfy { $0.isLetter || $0.isNumber || $0 == "_" || $0 == "." }
@@ -267,6 +328,8 @@ package final class AdbClient {
             values[key] = value
         }
         return values
+    
+        }
     }
 
     /// 解析 `wm size` 的 Override size（移植自原版 _check_4k_state）。
@@ -338,7 +401,11 @@ package final class AdbClient {
 
     /// nil = 尚未验证 binder 通道；true/false = 验证结果。
     /// 只在第一次写音量/静音时回读确认 transaction code 没被 ROM 改掉。
-    private var mediaVolumeBinderVerified: Bool?
+    private var binderVerification: [String: Bool] = [:]
+    private var mediaVolumeBinderVerified: Bool? {
+        get { transaction { binderVerification[serial] } }
+        set { transaction { binderVerification[serial] = newValue } }
+    }
 
     /// 读取媒体音量（0~100）。
     ///
@@ -348,6 +415,7 @@ package final class AdbClient {
     ///     （Settings 落盘/缓存有延迟），拿它做回读校验会被坑到。
     /// txn 不可用时回退 settings。
     package func mediaVolume() -> Int? {
+        return transaction {
         let output = shell("service call audio \(AudioServiceTxn.getStreamVolumeForMute) i32 \(Self.streamMusic)")
         if let value = Self.parseServiceCallInt(output), (0...100).contains(value) {
             return value
@@ -355,6 +423,8 @@ package final class AdbClient {
         let raw = shell("settings get system volume_music_speaker")
             .trimmingCharacters(in: .whitespacesAndNewlines)
         return Int(raw)
+    
+        }
     }
 
     /// 媒体流当前是否静音。
@@ -368,6 +438,7 @@ package final class AdbClient {
     /// binder 不可用时退回 `input keyevent` 逐级调整（先读当前值再补差值）。
     @discardableResult
     package func setMediaVolume(_ value: Int, unmuteFirst: Bool = false) -> Bool {
+        return transaction {
         let target = max(0, min(100, value))
         if unmuteFirst { _ = setMediaMuted(false) }
         if mediaVolumeBinderVerified != false {
@@ -388,11 +459,14 @@ package final class AdbClient {
         }
         applyMediaVolumeByKeyEvent(target)
         return false
+    
+        }
     }
 
     /// 设置/解除媒体流静音。返回是否走了 binder 快速通道。
     @discardableResult
     package func setMediaMuted(_ muted: Bool) -> Bool {
+        return transaction {
         if mediaVolumeBinderVerified != false {
             let direction = muted ? Self.adjustMute : Self.adjustUnmute
             let output = shell("service call audio \(AudioServiceTxn.adjustStreamVolume) i32 \(Self.streamMusic) i32 \(direction) i32 0 s16 \(Self.binderShellPackage)")
@@ -411,6 +485,8 @@ package final class AdbClient {
         // keyevent 的静音键是 toggle：调用方刚把目标状态算成当前状态的反面，正好对上。
         shell("input keyevent KEYCODE_VOLUME_MUTE")
         return false
+    
+        }
     }
 
     /// binder 不可用时的退路：先读当前值，再用 `input keyevent` 逐级补齐差值。
@@ -563,8 +639,11 @@ package final class AdbClient {
     // MARK: - Jar 部署
 
     package func ensureJars() {
+        return transaction {
         healJar("MtkDirectTool.jar")
         healJar("ColorfulLedTool.jar")
+    
+        }
     }
 
     private func healJar(_ filename: String) {
