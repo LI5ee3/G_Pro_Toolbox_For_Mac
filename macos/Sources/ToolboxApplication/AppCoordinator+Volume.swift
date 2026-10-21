@@ -45,7 +45,7 @@ extension AppCoordinator {
         guard mediaVolumePreview == nil || mediaVolumePreview == mediaVolumeHardware else { return }
         let request = connectionIntent.generation, target = adb.ip
         runBackground {
-            guard DispatchQueue.main.sync(execute: { self.mediaSessionIsCurrent(request, target: target) }) else { return }
+            guard !self.adb.operationCancelled else { return }
             let volume = self.adb.mediaVolume()
             let muted = self.adb.mediaMuted()
             self.publish {
@@ -123,7 +123,7 @@ extension AppCoordinator {
         mediaVolumeCommitInFlight = true
         let request = connectionIntent.generation, target = adb.ip
         runBackground {
-            guard DispatchQueue.main.sync(execute: { self.mediaSessionIsCurrent(request, target: target) }) else { return }
+            guard !self.adb.operationCancelled else { return }
             let usedBinder = self.adb.setMediaVolume(value, unmuteFirst: unmute)
             self.publish {
                 guard self.mediaSessionIsCurrent(request, target: target) else { return }
@@ -146,7 +146,7 @@ extension AppCoordinator {
             // 状态未知（刚连接/被外部改过）：先回读再切换
             let request = connectionIntent.generation, target = adb.ip
             runBackground {
-                guard DispatchQueue.main.sync(execute: { self.mediaSessionIsCurrent(request, target: target) }) else { return }
+                guard !self.adb.operationCancelled else { return }
                 let current = self.adb.mediaMuted() ?? false
                 self.publish {
                     guard self.mediaSessionIsCurrent(request, target: target) else { return }
@@ -169,7 +169,7 @@ extension AppCoordinator {
         guard writeToDevice else { return }
         let request = connectionIntent.generation, target = adb.ip
         runBackground {
-            guard DispatchQueue.main.sync(execute: { self.mediaSessionIsCurrent(request, target: target) }) else { return }
+            guard !self.adb.operationCancelled else { return }
             let usedBinder = self.adb.setMediaMuted(muted)
             self.publish {
                 guard self.mediaSessionIsCurrent(request, target: target) else { return }
@@ -205,15 +205,11 @@ extension AppCoordinator {
         let target = adb.ip
         dashboardVolumeError = nil
         runBackground {
-            guard DispatchQueue.main.sync(execute: {
-                self.isConnected && self.connectionIntent.isCurrent(request) && self.adb.ip == target
-            }) else { return }
+            guard !self.adb.operationCancelled else { return }
             // Keep the read and mutation together: two rapid clicks must toggle twice.
             let result: (muted: Bool, usedBinder: Bool)? = self.adb.transaction {
                 guard let current = self.adb.mediaMuted() else { return nil }
-                guard DispatchQueue.main.sync(execute: {
-                    self.isConnected && self.connectionIntent.isCurrent(request) && self.adb.ip == target
-                }) else { return nil }
+                guard !self.adb.operationCancelled else { return nil }
                 let next = !current
                 return (next, self.adb.setMediaMuted(next))
             }

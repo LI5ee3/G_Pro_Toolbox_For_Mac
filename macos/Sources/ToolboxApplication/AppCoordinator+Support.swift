@@ -68,6 +68,9 @@ extension AppCoordinator {
         }
     }
 
+    /// Deterministic test/readiness barrier for typed async completions; never blocks MainActor.
+    package func waitForPendingWork() async { await workTasks.waitForAll() }
+
     /// Drop callbacks queued by a replaced session or a stopped/restarted app lifetime.
     nonisolated internal func publish(_ work: @escaping @MainActor () -> Void) {
         let cancellation = adb.operationSession?.cancellation

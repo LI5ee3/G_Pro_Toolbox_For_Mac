@@ -150,9 +150,7 @@ extension AppCoordinator {
         pendingPresetSave?.cancel()
         pendingPresetSave = nil
         runBackground {
-            let current = DispatchQueue.main.sync {
-                self.isConnected && self.connectionIntent.isCurrent(request) && self.adb.ip == identity
-            }
+            let current = !self.adb.operationCancelled
             guard current else { self.publish { completion?() }; return }
             self.adb.transaction(work)
             self.deviceWorkState.pictureSettleUntil = Date().addingTimeInterval(delay)
@@ -220,9 +218,7 @@ extension AppCoordinator {
             self.updateHdrMemoryStatus(); self.updateFreesyncMemoryStatus(); self.updateAutomaticTaskStatus()
             if let hudToken { self.environment.feedback.finishOperation(token: hudToken, result: .cancelled, title: nil) }
         }) {
-            let current = DispatchQueue.main.sync {
-                self.isConnected && self.connectionIntent.isCurrent(request) && self.adb.ip == identity
-            }
+            let current = !self.adb.operationCancelled
             let device = connected && current ? self.environment.presetDevice(self.adb, identity) : nil
             let (reports, errorText, savedEdits, configuration) = self.presetWorker.withEngine { engine in
             var reports: [PresetApplyReport] = []

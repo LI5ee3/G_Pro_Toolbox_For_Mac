@@ -43,6 +43,8 @@ for source in (root / 'Sources' / 'ToolboxDomain').glob('*.swift'):
 for source in (root / 'Sources' / 'ToolboxApplication').rglob('*.swift'):
     text = source.read_text()
     assert 'import SwiftUI' not in text and 'import ToolboxMacAdapters' not in text, source
+    assert 'DispatchQueue.main.sync' not in text and 'waitUntilExit()' not in text, source
+    assert '@unchecked Sendable' not in text, source
     assert 'ObservableObject' not in text and '@Published' not in text, source
 for source in (root / 'Sources' / 'MimonitorToolbox').rglob('*.swift'):
     text = source.read_text()

@@ -53,6 +53,12 @@ package struct BlockingExecutor: Sendable {
             completion(result)
         }
     }
+    package func waitForAll() async {
+        while !tasks.isEmpty {
+            let batch = Array(tasks.values)
+            for task in batch { await task.value }
+        }
+    }
     package func cancelAll() {
         tasks.values.forEach { $0.cancel() }; tasks.removeAll()
     }

@@ -347,6 +347,7 @@ public final class AppCoordinator {
                     self.refreshMediaVolumeState()
                     self.checkGuardian()
                 } else if self.isConnected {
+                    self.adb.beginSession(ip: target)
                     self.connectionStatus = .disconnected
                     self.log("ADB 链路恢复失败: \(state)")
                 } else if self.lastMonitorFailState != state {
