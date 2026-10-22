@@ -61,17 +61,30 @@ extension AppCoordinator {
     /// 游戏页的 320Hz / FreeSync 开关没有直接的 settings 键，要由 EDID / 自适应同步
     /// 的 JNI 值推导（移植自 device_features.py:1420-1452）。DP 和 HDMI 走不同的键。
     nonisolated internal func applyGameJniMode(_ values: inout [String: String]) {
-        let src = Int(values["mitv.tvplayer.hdmi.last.source"] ?? "") ?? -1
-        if src == 29 || src == 30 {
-            let m = adb.jniBatchGet(keys: ["g_fusion_picture__dp_edid_version",
-                                           "g_video__dp_adaptive_sync"])
-            values["mode_320"] = (Int(m["g_fusion_picture__dp_edid_version"] ?? "") == 3) ? "1" : "0"
-            values["freesync"] = (Int(m["g_video__dp_adaptive_sync"] ?? "") == 1) ? "1" : "0"
-        } else {
-            let m = adb.jniBatchGet(keys: ["g_fusion_picture__hdmi_edid_version",
-                                           "g_video__freesync_switch"])
-            values["mode_320"] = (Int(m["g_fusion_picture__hdmi_edid_version"] ?? "") == 6) ? "1" : "0"
-            values["freesync"] = (Int(m["g_video__freesync_switch"] ?? "") == 3) ? "1" : "0"
+        // Publish unknown explicitly so a failed refresh cannot preserve an old on/off value.
+        values["mode_320"] = "-1"
+        values["freesync"] = "-1"
+        let modeKey: String, syncKey: String, modeOff: Int, modeOn: Int, syncOn: Int
+        switch Int(values["mitv.tvplayer.hdmi.last.source"] ?? "") {
+        case 29, 30:
+            modeKey = "g_fusion_picture__dp_edid_version"; syncKey = "g_video__dp_adaptive_sync"
+            modeOff = 2; modeOn = 3; syncOn = 1
+        case 23, 24:
+            modeKey = "g_fusion_picture__hdmi_edid_version"; syncKey = "g_video__freesync_switch"
+            modeOff = 1; modeOn = 6; syncOn = 3
+        default: return
+        }
+        // Reuse the strict existing batch contract, including complete process success.
+        guard let readings = try? adb.jniBatchGetChecked(keys: [modeKey, syncKey], target: adb.serial) else { return }
+        switch Int(readings[modeKey] ?? "") {
+        case modeOff: values["mode_320"] = "0"
+        case modeOn: values["mode_320"] = "1"
+        default: break
+        }
+        switch Int(readings[syncKey] ?? "") {
+        case 0: values["freesync"] = "0"
+        case syncOn: values["freesync"] = "1"
+        default: break
         }
     }
 

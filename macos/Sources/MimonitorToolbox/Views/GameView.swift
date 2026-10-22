@@ -15,14 +15,14 @@ struct GameView: View {
                     HStack(spacing: 24) {
                         gameOptionRow(title: "320Hz 竞技模式", options: OptionLists.mode320,
                                       followsGameMode: false,
-                                      selectedValue: picture.intValue("mode_320", default: 0)) { v in
+                                      selectedValue: picture.intValue("mode_320", default: -1)) { v in
                             state.setMode320(v == 1)
                         }
 
                         Divider().overlay(Theme.stroke.opacity(0.6)).frame(height: 34)
                         gameOptionRow(title: "FreeSync Premium Pro", options: OptionLists.freesync,
                                       followsGameMode: false,
-                                      selectedValue: picture.intValue("freesync", default: 0)) { v in
+                                      selectedValue: picture.intValue("freesync", default: -1)) { v in
                             state.setFreesync(v == 1)
                         }
                     }
@@ -133,6 +133,12 @@ struct GameView: View {
                 .font(.system(size: 13, weight: .medium))
                 .frame(width: 184, alignment: .leading)
             HStack(spacing: 7) {
+                if !followsGameMode && !options.contains(where: { $0.value == selectedValue }) {
+                    Text("未知")
+                        .font(.system(size: 12))
+                        .foregroundColor(Theme.secondaryText)
+                        .accessibilityLabel("\(title)状态未知")
+                }
                 ForEach(options) { option in
                     if followsGameMode && picture.gameModeState != .active {
                         rememberedOption(option, isSelected: option.value == selectedValue) {

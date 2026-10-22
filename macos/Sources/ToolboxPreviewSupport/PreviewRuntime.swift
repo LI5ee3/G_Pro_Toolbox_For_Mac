@@ -75,7 +75,7 @@ package final class PreviewDisplay: PresetDevice {
         "picture_saturation": "50", "picture_hue": "50", "picture_sharpness": "30",
         "picture_color_temperature": "1", "picture_red_gain": "1024", "picture_green_gain": "1024",
         "picture_blue_gain": "1024", "picture_local_dimming": "3", "picture_dynamic_definition": "0",
-        "picture_response_time": "2", "tv_picture_advanced_video_color_space": "6", "freesync": "0",
+        "picture_response_time": "2", "tv_picture_advanced_video_color_space": "6", "freesync": "0", "mode_320": "0",
         "mitv.tvplayer.hdmi.last.source": "29", "front_sight_index": "0", "game_mode": "0",
         "atmosphere_light_switcher_pm2": "4", "atmosphere_light_illumination": "9",
         "atmosphere_light_color_temp": "1", "atmosphere_light_color_value": "0"
@@ -122,11 +122,13 @@ package final class PreviewDisplay: PresetDevice {
         }
         if failWrites && (shell.contains("settings put") || shell.contains("TvService")) { return result("error: simulated failure", 1) }
         if shell.contains("batchGet") {
+            if unknownReadings && shell.contains("edid_version") { return result("") }
             var jni = Dictionary(uniqueKeysWithValues: PicturePresetPlan.jniKeys.map { ($0, "0") })
             jni.merge(["g_disp__disp_back_light": values["picture_backlight"] ?? "45", "g_video__clr_temp": "2",
                        "g_video__vid_gamut_mapping_mode": "6", "g_video__vid_local_dimming": "3",
                        "g_video__vid_od_response_time": "2", "g_video__dp_adaptive_sync": "0",
-                       "g_video__freesync_switch": "0"]) { _, new in new }
+                       "g_video__freesync_switch": "0", "g_fusion_picture__dp_edid_version": "2",
+                       "g_fusion_picture__hdmi_edid_version": "1"]) { _, new in new }
             return result(jni.map { "\($0.key)=\($0.value)" }.joined(separator: "\n"))
         }
         // Apply settings in compound commands too; no shell evaluation takes place.
@@ -228,6 +230,10 @@ package final class PreviewRuntime {
             state.adb.ip = display.identity
             state.connectionStatus = .connected("MiTV Preview · \(display.identity)")
             state.currentValues = (try? display.capture()) ?? [:]
+            if scenario == .unknown {
+                state.currentValues["mode_320"] = "-1"
+                state.currentValues["freesync"] = "-1"
+            }
             state.loadedPages = AppCoordinator.refreshablePages
             state.seedSimulationReadings(volume: scenario == .unknown ? nil : 10, muted: scenario == .unknown ? nil : false)
         }
