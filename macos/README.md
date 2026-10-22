@@ -1,41 +1,40 @@
 # 红米G Pro ToolBox — macOS (SwiftUI)
 
 Redmi G Pro 27U / 32U 显示器的原生 macOS 控制工具，使用 SwiftUI、AppKit 和 CoreAudio。
-仅支持 macOS 13 及以上的 Apple Silicon Mac（M 系列芯片）。本仓库仅维护 Mac 应用；设备端协议与实现源自 [原项目](https://github.com/YiHoooong/Mimonitor_Toolbox)，在此基础上继续开发。
+仅支持 macOS 27 及以上的 Apple Silicon Mac（M 系列芯片）。本仓库仅维护 Mac 应用；设备端协议与实现源自 [原项目](https://github.com/YiHoooong/Mimonitor_Toolbox)，在此基础上继续开发。
 
-## 蓝牙优先的键盘音量控制
+## Xcode 开发与安全 Preview（R0–R6）
 
-已配对并连接的蓝牙音频设备可以用于控制显示器音量，无需网络 ADB，也无需把 Mac 默认音频输出从 DP/HDMI 切到蓝牙。
+开发与运行均要求 macOS 27 或更新的 Apple Silicon Mac，使用本机已验证的 Xcode 27.1 工具链。
 
-在「工具与设置 → 配置快捷键…」中：
+打开 `Toolbox.xcodeproj`，两个共享 scheme：
 
-1. 打开「音量调节键调显示器音量」，完成已有的 macOS 辅助功能授权。
-2. 打开「优先通过蓝牙控制音量」（默认开启），填入 macOS 中显示的完整蓝牙音频设备名。默认是 `REDMI G Pro 32U 2026`，其他型号需改成自己的名称。
-3. 保留默认音频输出限制时，DP 输出 `Mi Monitor` 或指定的蓝牙设备作为默认输出均可接管；切到其他耳机或扬声器后，音量键交回系统。
-4. 要让每次短按准确加减 1，关闭「使用 macOS 原生音量提示（OSD）」并把步长设为 1；开启原生 OSD 的 16 格模式仍按格调节。
+- **ToolboxApp**：真实应用；运行会启动现有网络 ADB、快捷键和后台任务。
+- **ToolboxPreviews**：隔离的 App Target；不链接 `ToolboxMacAdapters` / `ToolboxProcessExecution`，不包含 adb/JAR/APK。
 
-路由顺序为：指定且可写音量的蓝牙设备 → 已连接的网络 ADB → 不接管。不会选择其他蓝牙耳机；同名设备不唯一时也不会猜测目标。蓝牙写入失败后暂缓重试 5 秒，有可用 ADB 才回退。蓝牙使用独立队列，不会等待离线 ADB 请求。主窗口的 ADB 状态可以显示未连接，键盘蓝牙音量仍可使用；其他画面、背光等控制仍需 ADB。
-
-开启原生 OSD 时仍使用 16 格音量刻度，每次约 6～7 点；关闭后沿用可调步长。蓝牙静音通过把音量设为 0 实现，再按静音恢复本次 App 运行中记住的原音量；刚启动时若设备已经为 0、尚无可恢复的音量，则从 6 开始。蓝牙声道音量同时更新，不切换默认音频输出。
-
-验证：114 项常规 Swift 测试通过；2 项实机蓝牙测试已在 Mac mini M4 + Redmi G Pro 32U 2026 上单独运行通过。测试直接使用生产蓝牙代码，确认加减、静音/恢复、无 ADB 的按键接管条件及默认音频输出保持不变。
-
-实体键盘复测也已通过：ToolBox 主动断开 ADB、暂停自动重连且自身 adb server 无设备时，捕获到音量加、音量减和静音按键，App 日志确认走蓝牙；独立只读回读观察到显示器音量 `8 → 9 → 0（静音）→ 9（恢复）→ 8`，设备日志调用方为 `com.android.bluetooth`。旧版曾在此测试中出现约 1 点取整差异，现已通过下面的整数映射修复。
-
-### 精确的 1 点步进
-
-原来直接把 10 写成 CoreAudio 的 0.10，在本机链路上会先截断为蓝牙档位 12，再被显示器换算成 9。现在先为目标整数选择 AVRCP 0～127 中的对应档位，再把控制值放进该档位的稳定区间，避免浮点边界截断；读取也按相同链路解码。因此 Mac 系统蓝牙音量百分比与显示器整数值可以不同，ToolBox 以显示器的整数值为准。
-
-已用独立只读 ADB 验证生产代码从 **0 → 1 → … → 20 → 19 → … → 0** 每步精确命中，静音及恢复也正确；测试控制全程通过蓝牙。0～100 的全部 101 个目标值、128 个蓝牙通知档位及全范围连续加减均有单元测试。高音量区间没有逐点实机测试。
+选 **ToolboxPreviews**，打开 `Sources/ToolboxPreviewSupport/PreviewGallery.swift`，刷新 Canvas。也可以直接运行该 scheme 得到独立预览窗口。顶部选择页面与场景，底部按钮推进虚拟时间；所有权限、文件、终端、登录项和设备动作均为内存模拟。不要用真实 App scheme 预览：生产组合根会检测并拒绝 Xcode Preview 运行上下文。
 
 ```sh
 swift test
-# 可选：已配对显示器、当前音量不超过 25% 时运行，结束会恢复原音量。
-MIMONITOR_TEST_BLUETOOTH=1 swift test --filter BluetoothHardwareTests
-# 其他设备名称可通过 MIMONITOR_BLUETOOTH_NAME 指定。
-# 可选只读显示器回读验证：同时指定 MIMONITOR_VERIFY_ADB_IP 和
-# MIMONITOR_TEST_ADB_PATH（adb 完整路径）；观察连接使用独立端口 5041。
+python3 scripts/validate_architecture.py
+python3 scripts/validate_preview_boundary.py
+xcodebuild -project Toolbox.xcodeproj -scheme ToolboxPreviews -configuration Debug -destination 'platform=macOS,arch=arm64' build
+xcodebuild -project Toolbox.xcodeproj -scheme ToolboxApp -configuration Release -destination 'platform=macOS,arch=arm64' build
 ```
+
+生产 App 的 Xcode 资源复制阶段只使用已有 `assets/runtime/adb` 或 `.cache/platform-tools/adb`，不在 Preview 或编译期间下载程序。首次准备运行资源请显式执行 `python3 scripts/runtime_assets.py prepare`，只下载锁定版本并验证摘要；必需的 JAR/APK、图标及 NOTICE 缺失时 Xcode 构建失败。CLI `swift build --product MimonitorToolbox` 入口继续保留，应用实现与 Xcode 宿主共享同一库。
+
+当前模块：`ToolboxDomain`（Swift 6 纯规则）、`MimonitorPresetCore`（预设引擎）、`ToolboxApplication`（九个 MainActor Observation 模型与动作协调）、`MimonitorToolbox`（共享 UI）、`ToolboxMacAdapters`（真实平台实现）、`ToolboxPreviewSupport`（内存模拟）。旧 AppState 已移除；架构、阶段验证和回滚见 [R3-ARCHITECTURE.md](R3-ARCHITECTURE.md)。R4 已加入 `ToolboxConcurrency`、`ToolboxProcessExecution` 和预设核心 Swift 6；会话、取消、异步所有权与过渡边界见 [R4-CONCURRENCY.md](R4-CONCURRENCY.md)。
+
+R5 已迁移到 `SMAppService.mainApp`，按系统读回显示登录项状态，并对可识别旧 LaunchAgent 先备份再迁移。权限返回检测、Terminal 实际执行结果、后台日志、音频输出缓存及 OSD 失败回退见 [R5-SYSTEM-SERVICES.md](R5-SYSTEM-SERVICES.md)。Preview 另有「权限拒绝」「登录待批准」场景，全部仍为内存模拟。
+
+CI 已显式要求带 `toolbox-macos27` 标签的专用 macOS 27 ARM64 runner；未注册该 runner 时任务会排队。本批未配置远端 runner 或触发远端 CI。同仓库受信任分支可运行，外部 fork PR 不自动在该自托管 runner 上执行。
+
+构建产物不自动替换已安装/正在运行的应用。R6 已加入严格构建/签名/DMG/ZIP 门禁及正式公证流程；当前仍需正式凭据和签名安装验收，详见 [R6-RELEASE.md](R6-RELEASE.md)。
+
+## ADB 音量控制
+
+键盘音量加减和静音通过已连接的网络 ADB 控制显示器，声音可继续通过 DP/HDMI 输出。保留辅助功能授权、默认音频输出限制、自定义步长和原生 OSD 16 格。ADB 离线时不接管系统音量键；CoreAudio 只读取默认输出设备，不写入音量。原蓝牙控制已移除，系统配对不受影响。
 
 ## 本分支更新：唤醒恢复与保活状态验证
 
@@ -51,6 +50,25 @@ MIMONITOR_TEST_BLUETOOTH=1 swift test --filter BluetoothHardwareTests
 
 本分支沿用原项目的网络 ADB 连接界面。
 
+### Type-C 有线 ADB 的硬件验证（2026-10-22）
+
+已实测「Mac 扩展坞 USB-A → A↔C 数据线 → 显示器 Type-C」有线 ADB 可用，撤回此前“Type-C 无法有线 ADB”的结论。5038 上唯一列出的设备为 `76226171600005770 device usb:51589120X`；使用 `-P 5038 -s 76226171600005770 shell 'dumpsys usb | head -n 20'` 成功返回 `connected=true`、`configured=true`、`kernel_state=CONFIGURED`。
+
+内部 RTS5411 Hub 的 Port 1/2 是机身 USB-A 下行口，Port 3 内部连接 ADB Gadget，Port 4 为 Billboard。RTS5445 / `usb2typec` 切换 Hub 上行口：`1` → 外部 Type-C，`0` → SoC Host。不要把历史测试结束时的路由 0 当成有线 ADB 的目标配置。此次文档更新未执行任何设备命令，也未新增 App USB 连接界面或验证其有线唤醒恢复行为。
+
+## C 方向界面更新：屏幕即遥控器
+
+- 用顶部导航替代固定侧栏；画面、游戏、信号源、灯光、预设、自动任务和遥控器均保留独立入口，工具与菜单栏配置在右上角设置中。
+- 首页以显示器轮廓呈现连接、输入源和画面模式，下方集中放置音量、静音、背光与常用模式。未知读数显示「—」，断开时禁用设备控制。
+- 音量滑块和静音复用现有媒体音量提交逻辑；键盘音量键仍保留原来的输出设备过滤、步长、OSD 与权限设置。
+- 统一浅色/深色配色、分组和选中状态，重排长页面与快捷键配置；高级系统操作保持可访问，部署保活前明确说明权限与影响。
+- 提供按压反馈、导航选中块过渡和首次进入淡入；响应系统「减少动态效果」。自绘滑块支持辅助功能增减操作。
+
+<img src="assets/screenshots/ui-c-home.png" width="800" alt="C 方向控制台">
+<img src="assets/screenshots/ui-c-remote.png" width="800" alt="C 方向遥控器">
+
+本轮通过 Swift debug 构建、全部页面原生界面检查，以及隔离模拟设备上的音量/静音、断开重连、预设创建/重命名/收藏、自动任务保存和重启读回检查。没有向真实显示器发送 UI 测试指令，也没有重复测试真实键盘拦截或显示器待机/重启。下方旧版截图保留作历史参考。
+
 ## 命名
 
 对外的名字是「红米G Pro ToolBox」，但两个内部标识**保持英文、不要改**：
@@ -60,16 +78,16 @@ MIMONITOR_TEST_BLUETOOTH=1 swift test --filter BluetoothHardwareTests
 | bundle id | `com.mimonitor.toolbox` | 权限、保存的 IP、快捷键配置都挂在它上面 |
 | 可执行文件名 | `MimonitorToolbox` | 必须与 `Package.swift` 产物名、`CFBundleExecutable` 三者一致 |
 
-`.app` 的目录名可以用中文（系统不看目录名）。唯一副作用：改名后已授权的机器会重新
-问一次权限，重新允许即可 —— bundle id 和签名身份没变。
+`.app` 的目录名可以用中文。更新时应保持安装路径和签名身份稳定；移动路径或更换
+ad-hoc 签名可能要求重新绑定辅助功能等授权。Bundle ID 不变不保证 TCC 授权继承，应以系统和应用实际读回为准。
 
 **分发文件（DMG / zip）的文件名必须是 ASCII**：GitHub Release 会改写非 ASCII 名
 （实测 `红米G Pro ToolBox.dmg` → `G.Pro.ToolBox.dmg`，中文被剥掉、空格变点）。
 由 `PACKAGE_NAME` 控制，CI 有白名单校验。DMG 的**卷标**和包内的 `.app` 不受影响，仍是中文。
 
-## 软件截图
+## 旧版软件截图
 
-均为深色模式（`assets/screenshots/`）。
+以下为改版前截图，均为深色模式（`assets/screenshots/`）。
 
 | | |
 | --- | --- |
@@ -84,8 +102,7 @@ MIMONITOR_TEST_BLUETOOTH=1 swift test --filter BluetoothHardwareTests
 
 ## 运行前提
 
-最终用户双击 .app 即可，**不需要装任何东西**。从源码构建只需要 **Xcode 命令行工具**
-（`xcode-select -p` 能返回路径）。adb 在打包时自动下载并内嵌。显示器需已开启无线 ADB（端口 5555）。
+最终用户双击 .app 即可，**不需要装任何东西**。发行构建需要 **完整 Xcode 27.1 或更新工具链及 macOS 27 SDK**。adb 通过显式 prepare 命令下载锁定版本后内嵌；构建阶段不联网下载。显示器需已开启无线 ADB（端口 5555）。
 
 ## 应用图标
 
@@ -104,72 +121,51 @@ swift run MimonitorToolbox     # 开发调试
 
 ```bash
 ./build_app.sh
-open "红米G Pro ToolBox.app"
+open ".build/artifacts/development/红米G Pro ToolBox.app"
 ```
 
-产物：`红米G Pro ToolBox.app`（约 20MB，自包含、零外部依赖）+ `MimonitorToolbox-macos-arm64.dmg`。
+产物默认位于 `.build/artifacts/development/红米G Pro ToolBox.app`，明确使用开发 ad-hoc 签名。原 `macos/` 下现用 App 和旧 DMG 不覆盖。打包独立执行 `./make_dmg.sh`，开发 DMG/ZIP 输出 `.build/artifacts/packages-development/`，名称带 `-development`；已有目录拒绝覆盖，可用 `--output` 指定新目录。
 
-构建固定使用 `--arch arm64`，不提供其他架构或通用包。主程序和内嵌 adb 都只包含 arm64；从官方 platform-tools 获取的多架构 adb 在打包时提取 arm64，原始缓存保持不变。
+构建使用原生 Xcode Release App Target，统一权限用途声明和 entitlements。运行时资源版本/摘要固定，缺失或签名失败非零退出。正式分发要求 Developer ID、timestamp、公证、staple 和 Gatekeeper 验证；没有凭据不会降级为成功。完整参数、CI 和回滚见 [R6-RELEASE.md](R6-RELEASE.md)。
 
-脚本会内嵌 adb（仓库里没有就从 Google 官方下载，缓存在 `macos/.cache/`）、两个 jar、
-保活 apk，生成 `Info.plist`，签名，最后打 DMG。想固定 adb 版本就把 macOS 版 adb
-放到仓库根的 `assets/runtime/adb`。
-
-```bash
-./reinstall.sh --no-build      # 本机安装到 /Applications 并重启
-```
-
-### 签名与分发
-
-用 `setup_signing_cert.sh` 创建的自签名证书签名。**不能用 ad-hoc**：macOS 15 起
-「本地网络」权限要靠稳定的代码身份才能记住授权，而 ad-hoc 的身份是内容哈希、每次编译
-都变，系统认不出会**静默拒绝**（连弹窗都不给）—— 表现就是「连不上、也搜不到显示器」，
-界面上没有任何提示。固定证书的身份是「bundle id + 证书指纹」，跨编译稳定。
-
-```bash
-./setup_signing_cert.sh            # 本机：创建固定证书
-./export_signing_cert.sh --write   # CI：导出并写进 GitHub Secrets（需 gh 已登录）
-```
-
-CI 用 `MACOS_CERT_P12` / `MACOS_CERT_PASSWORD` 两个 Secret。没配时回退 ad-hoc
-（fork 提的 PR 走这条路），但校验步骤会在「配了证书却仍打出 ad-hoc 包」时**直接失败**。
-
-别人拿到 DMG 后首次打开会被 Gatekeeper 拦一次，需到 **系统设置 → 隐私与安全性**
-点「仍要打开」。要彻底消除提示需要 Apple Developer ID（$99/年）+ 公证。
+`reinstall.sh` 是显式安装/重启操作，本轮没有执行。旧自签名只可作为可选 local 开发身份，不承诺权限连续性；整登录钥匙串导出脚本已停用。
 
 ## 首次使用注意
 
 - **全局快捷键**需要辅助功能权限：系统设置 → 隐私与安全性 → 辅助功能。
-  **授权后必须重启 app** —— TCC 的授权结果是进程启动时读取的。
-- **开机自启动**（LaunchAgent）写入后需重新登录才生效。
+  本机 macOS 27 将该页面显示为“设备控制和数据访问”。应用在返回前台时重新检测；更换 ad-hoc 签名后若旧授权记录失效，需重新绑定当前安装 App，必要时退出再打开应用。
+- **登录后自动启动**使用 `SMAppService.mainApp`，设置页展示系统读回状态；旧 LaunchAgent 经过归属校验、备份及新服务启用确认后才退役。注册成功不代表已完成下一次真实登录验收，详情见 [系统服务说明](R5-SYSTEM-SERVICES.md)。
+- **本地网络**入口打开“隐私与安全”首页，再选择“本地网络”检查应用开关。连接失败不等于权限被拒绝；本机回归和回滚记录见 [R6c 收尾说明](R6-CLOSEOUT.md)。
 
 ## 目录结构
 
 ```
 macos/
-├─ Package.swift                  # SPM 清单
-├─ build_app.sh                   # 一键打包 .app + DMG
-├─ make_dmg.sh / make_icon.sh     # DMG 打包 / 图标生成
-├─ setup_signing_cert.sh          # 创建本机固定签名证书
-├─ export_signing_cert.sh         # 把证书导出成 GitHub Secrets
-├─ reinstall.sh                   # 装到 /Applications 并重启
-└─ Sources/MimonitorToolbox/
-   ├─ App.swift                   # @main 入口、菜单栏、Dock 图标显隐
-   ├─ ContentView.swift           # 侧边栏导航外壳
-   ├─ Models.swift                # 寄存器映射表 + 选项表
-   ├─ AppState.swift              # 连接状态 / 当前值 / 日志 / 全部控制动作
-   ├─ NetworkScan.swift           # 内网 5555 扫描
-   ├─ Backend/AdbClient.swift     # ADB 协议层（settings / JNI / 灯效 / jar 部署 / apk）
-   ├─ Platform/                   # 快捷键 / HDR 检测 / 自启动
-   └─ Views/                      # 各页面 + 通用控件
+├─ Toolbox.xcodeproj/             # 原生 App / 安全 Preview App Target
+├─ Config/                       # Info.plist、开发签名权限
+├─ Package.swift                 # 共享模块与 CLI 兼容宿主
+├─ prepare_runtime.sh            # Xcode 生产 Target 的离线资源准备
+├─ build_app.sh / make_dmg.sh     # 保留的 CLI 打包与 DMG 流程
+├─ scripts/validate_preview_boundary.py
+└─ Sources/
+   ├─ ToolboxApp/                # 生产组合根、AppDelegate、Dock 生命周期
+   ├─ ToolboxPreviewHost/        # 独立安全预览 App 入口
+   ├─ ToolboxPreviewSupport/     # #Preview 画廊、内存设备和虚拟时间
+   ├─ ToolboxMacAdapters/        # Process、tap、CoreAudio 读取、HUD、资源、登录项
+   ├─ ToolboxDomain/             # 独立 Swift 6、映射、范围、步进和纯值规则
+   ├─ MimonitorPresetCore/       # 预设模型、计划、迁移、存储接口
+   ├─ ToolboxApplication/       # Observation 模型、动作协调、无 Process 的命令门面
+   └─ MimonitorToolbox/          # 共享 UI、环境注入和主题
 ```
+
+首批改造的范围、验证与限制见 [REFACTORING.md](REFACTORING.md)。
 
 ## Mac 功能
 
 | 功能 | 实现 |
 | --- | --- |
 | 画面 / 游戏 / 信号源 / 屏幕灯 / 遥控器 | 网络 ADB、settings 与显示器端 JNI |
-| 键盘音量键 | 蓝牙优先，回退至已连接的 ADB；支持精确 1 点步进 |
+| 键盘音量键 | 网络 ADB；支持自定义步长及 16 格 OSD |
 | 全局快捷键与亮度键 | CGEventTap，需辅助功能权限 |
 | HDR/SDR 分区控光记忆 | 主机 EDR 与显示器画面模式综合判断 |
 | 登录后自动启动 | LaunchAgent |
@@ -217,7 +213,7 @@ macos/
 - **`CGEventTap` 回调太慢会被系统静默 disable**（tap 还在，只是收不到事件），要处理 `tapDisabledByTimeout` 并重新 enable。`tapCreate` 失败会返回 nil 且不报错，所以 `start()` 返回 Bool 并把结果写进日志。
 - **亮度调节键有多种到达形式，要全覆盖**：`NX_SYSDEFINED`（事件类型 14、subtype 8、data1 高 16 位是键类型 2/3）、普通 keyDown 的 keyCode 144/145（Apple 内置键盘常见）、以及开了「功能键当标准功能键」后发出的普通功能键 keyDown。前两种要在 tap 回调里 `return nil` 把事件吞掉，否则内置屏幕会跟着变亮度。见「自定义全局快捷键」面板里的「亮度调节键调显示器背光」。
 - **亮度键：反馈立即，写入去抖**。OSD/HUD 立刻跟着手走，但真正写显示器只在停手后合并；每个中间值都触发写会造成来回闪。约一个原生 OSD 格（6–7%）只做一次 JNI 写入，不拆成多个 1% 小步；更大的变化保留渐变。另外**背光写入不发 `refreshPq`**：`PIC_MODE_CHANGED` 广播会让显示器重载画面参数、背光闪一下；`settings put`（ContentObserver 立即生效）+ `JNI set`（直接改硬件）已经足够。基准值也要「粘住」，不能中途读设备回读值。预览由所有写背光的路径共同维护，只在应用预设时清空。
-- **步进首次对齐**：亮度值不在步长格点上时，第一次按键先跳到方向上的最近格点（6、步长 10 → 10），之后按步长增减。见 `AppState.alignToStep`。
+- **步进首次对齐**：亮度值不在步长格点上时，第一次按键先跳到方向上的最近格点（6、步长 10 → 10），之后按步长增减。见 `ControlStep.alignToStep`。
 - **原生亮度 OSD** 走私有 `com.apple.OSDUIHelper`（macOS 26/27 的 mach service），和系统亮度键弹出的提示条是同一套；调用失败就回退到自绘 HUD。开原生 OSD 时步长固定为「16 格、每按一次一格」——否则用户步长（如 10）和 16 格对不齐，会出现按一下走一格、再按走两格的抖动。
 - **多屏鼠标门**：亮度键只在鼠标位于目标显示器（默认按系统名 `Mi Monitor` 匹配，可在面板改）上时拦截，否则原样放行给系统；找不到目标显示器时不过滤。
 - **音量调节键**：同样覆盖 `NX_SYSDEFINED`（键类型 0/1/7）和普通 keyDown（keyCode 72/73/74），开了「功能键当标准功能键」时兜底 F12/F11/F10。与亮度键不同，**只有当前默认音频输出（CoreAudio）的名字匹配目标时**才拦截（默认关键字 `Mi Monitor`；eqMac 转发出来的「Mi Monitor (eqMac)」也能命中），其余情况原样交给系统去调内置扬声器 / AirPods。读不到输出设备名时也不拦截。
@@ -249,12 +245,4 @@ EDID / FreeSync 这类会改变显示器输入信号格式（可能黑屏或改�
 
 ## CI
 
-`.github/workflows/macos.yml` 是本项目唯一的应用构建与发布流程：
-
-- **触发**：主分支的 push / PR（包含共享资源的变动）、`v*` 标签，以及手动运行
-- **build**：debug 编译 → 单元测试 → 导入签名证书 → Apple Silicon 打包 → 校验产物 → 上传 artifact
-- **release**：仅标签触发，把 DMG 和 zip 附到 GitHub Release
-
-校验步骤逐项确认：可执行文件存在、内嵌 adb / 两个 jar / 保活 apk 齐全、**确实是
-仅含 arm64 的主程序与内嵌 adb**、签名有效且**不是 ad-hoc**、`LSUIElement` 未被设置、
-分发包文件名只含 `[A-Za-z0-9._-]`、内嵌的 adb 真的能跑起来。
+`.github/workflows/macos.yml` 默认仅验证并上传 development artifact，不注入签名秘密。外部 fork PR 不在自托管 runner 执行。正式签名、公证及草稿 Release 需显式从版本标签触发，并配置受保护的 `macos-release` environment 与隔离 release runner；本机未触发远端 CI 或发布。配置、凭据与尚未解决的版权来源见 [R6-RELEASE.md](R6-RELEASE.md)。

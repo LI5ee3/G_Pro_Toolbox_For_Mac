@@ -1,14 +1,7 @@
 #!/bin/bash
-# 创建一个固定的自签名代码签名证书，导入登录钥匙串。
-#
-# 为什么需要它：
-#   macOS 15 起，app 访问局域网需要「本地网络」权限，而系统要靠 **稳定的代码身份**
-#   才能记住授权。ad-hoc 签名（codesign -s -）的身份就是文件内容的哈希，每次编译都变，
-#   系统无法识别，于是直接静默拒绝、连弹窗都不给。
-#   换成固定证书后，身份变成「bundle id + 证书指纹」，跨编译保持稳定，权限才能被记住。
-#
-# 用法： ./setup_signing_cert.sh
-# 卸载： security delete-identity -c "MimonitorToolbox Local Signing"
+# Optional historical local-development identity setup, never used by CI or formal release.
+# Self-signing does not substitute for Developer ID/notarization or guarantee TCC continuity.
+# This script changes the user's keychain only when explicitly invoked; packaging never calls it.
 set -euo pipefail
 
 CERT_NAME="MimonitorToolbox Local Signing"
@@ -64,7 +57,7 @@ if [[ "$VALID_ID" == *"$CERT_NAME"* ]]; then
     echo "✅ 完成！证书已就绪："
     printf '%s\n' "$VALID_ID" | grep "$CERT_NAME"
     echo ""
-    echo "接下来重新打包：./build_app.sh"
+    echo "后续使用 local 模式，并显式选择该身份的 SHA1；参见 R6-RELEASE.md"
     echo "（首次签名时 macOS 可能弹窗问是否允许 codesign 使用密钥，点「始终允许」即可）"
 else
     echo "❌ 证书未能成为有效签名身份，请检查钥匙串是否被锁定"

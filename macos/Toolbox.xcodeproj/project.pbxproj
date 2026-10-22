@@ -1,0 +1,429 @@
+// !$*UTF8*$!
+{
+	"archiveVersion" = 1;
+	"classes" = {
+	};
+	"objectVersion" = 56;
+	"objects" = {
+		"BE9AD54601022DCC6177AF8B" = {
+			"isa" = "XCLocalSwiftPackageReference";
+			"relativePath" = ".";
+		};
+		"2F8772A0A285788CF8EC6B0B" = {
+			"isa" = "PBXFileReference";
+			"lastKnownFileType" = "sourcecode.swift";
+			"path" = "Sources/ToolboxApp/App.swift";
+			"sourceTree" = "<group>";
+		};
+		"07CEBC24B3E5CE216238CF11" = {
+			"isa" = "PBXBuildFile";
+			"fileRef" = "2F8772A0A285788CF8EC6B0B";
+		};
+		"2FE0ABD5EDE4D0DACDC44BEC" = {
+			"isa" = "PBXSourcesBuildPhase";
+			"buildActionMask" = 2147483647;
+			"files" = (
+				"07CEBC24B3E5CE216238CF11",
+			);
+			"runOnlyForDeploymentPostprocessing" = 0;
+		};
+		"71BCA1548CD8BEB3E03097D4" = {
+			"isa" = "XCSwiftPackageProductDependency";
+			"productName" = "ToolboxUI";
+		};
+		"F36039E15493503136E710BA" = {
+			"isa" = "PBXBuildFile";
+			"productRef" = "71BCA1548CD8BEB3E03097D4";
+		};
+		"48A230808BCF833F0B40D58C" = {
+			"isa" = "XCSwiftPackageProductDependency";
+			"productName" = "ToolboxMacAdapters";
+		};
+		"A128EBB3BB6CEE354A2F6CB2" = {
+			"isa" = "PBXBuildFile";
+			"productRef" = "48A230808BCF833F0B40D58C";
+		};
+		"F126A0F6DEEEFCAE3C58478E" = {
+			"isa" = "PBXFrameworksBuildPhase";
+			"buildActionMask" = 2147483647;
+			"files" = (
+				"F36039E15493503136E710BA",
+				"A128EBB3BB6CEE354A2F6CB2",
+			);
+			"runOnlyForDeploymentPostprocessing" = 0;
+		};
+		"EF07DEAE30FA222F53E4106C" = {
+			"isa" = "PBXFileReference";
+			"explicitFileType" = "wrapper.application";
+			"includeInIndex" = 0;
+			"path" = "红米G Pro ToolBox.app";
+			"sourceTree" = "BUILT_PRODUCTS_DIR";
+		};
+		"EE4E687BE1DE1E9CD23A04E1" = {
+			"isa" = "PBXShellScriptBuildPhase";
+			"alwaysOutOfDate" = 1;
+			"buildActionMask" = 2147483647;
+			"files" = (
+			);
+			"inputPaths" = (
+				"$(SRCROOT)/Config/RuntimeAssets.lock.json",
+				"$(SRCROOT)/scripts/runtime_assets.py",
+				"$(SRCROOT)/prepare_runtime.sh",
+			);
+			"outputPaths" = (
+				"$(TARGET_BUILD_DIR)/$(UNLOCALIZED_RESOURCES_FOLDER_PATH)/runtime/adb",
+				"$(TARGET_BUILD_DIR)/$(UNLOCALIZED_RESOURCES_FOLDER_PATH)/runtime/MtkDirectTool.jar",
+				"$(TARGET_BUILD_DIR)/$(UNLOCALIZED_RESOURCES_FOLDER_PATH)/runtime/ColorfulLedTool.jar",
+				"$(TARGET_BUILD_DIR)/$(UNLOCALIZED_RESOURCES_FOLDER_PATH)/runtime/NOTICE-platform-tools.txt",
+				"$(TARGET_BUILD_DIR)/$(UNLOCALIZED_RESOURCES_FOLDER_PATH)/adb_guardian/adbguardian-signed.apk",
+				"$(TARGET_BUILD_DIR)/$(UNLOCALIZED_RESOURCES_FOLDER_PATH)/AppIcon.icns",
+				"$(TARGET_BUILD_DIR)/$(UNLOCALIZED_RESOURCES_FOLDER_PATH)/Acknowledgements.txt",
+			);
+			"runOnlyForDeploymentPostprocessing" = 0;
+			"shellPath" = "/bin/bash";
+			"shellScript" = "\"${SRCROOT}/prepare_runtime.sh\"\n";
+		};
+		"01EA0C198D328CF10EF1C6BF" = {
+			"isa" = "XCBuildConfiguration";
+			"buildSettings" = {
+				"ARCHS" = "arm64";
+				"ALWAYS_SEARCH_USER_PATHS" = "NO";
+				"MACOSX_DEPLOYMENT_TARGET" = "27.0";
+				"SDKROOT" = "macosx";
+				"SUPPORTED_PLATFORMS" = "macosx";
+				"SWIFT_VERSION" = "5.0";
+				"CODE_SIGN_STYLE" = "Manual";
+				"CODE_SIGN_IDENTITY" = "-";
+				"ENABLE_APP_SANDBOX" = "NO";
+				"ENABLE_USER_SCRIPT_SANDBOXING" = "NO";
+				"MARKETING_VERSION" = "0.1.0";
+				"CURRENT_PROJECT_VERSION" = "20261021.4";
+				"PRODUCT_NAME" = "红米G Pro ToolBox";
+				"PRODUCT_BUNDLE_IDENTIFIER" = "com.mimonitor.toolbox";
+				"EXECUTABLE_NAME" = "MimonitorToolbox";
+				"LD_RUNPATH_SEARCH_PATHS" = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+				);
+				"GENERATE_INFOPLIST_FILE" = "NO";
+				"ENABLE_PREVIEWS" = "YES";
+				"ENABLE_HARDENED_RUNTIME" = "NO";
+				"INFOPLIST_FILE" = "Config/App-Info.plist";
+				"CODE_SIGN_ENTITLEMENTS" = "Config/App.entitlements";
+				"SWIFT_OPTIMIZATION_LEVEL" = "-Onone";
+				"ONLY_ACTIVE_ARCH" = "YES";
+				"SWIFT_ACTIVE_COMPILATION_CONDITIONS" = "DEBUG";
+			};
+			"name" = "Debug";
+		};
+		"9CB947058F6564D246985E14" = {
+			"isa" = "XCBuildConfiguration";
+			"buildSettings" = {
+				"ARCHS" = "arm64";
+				"ALWAYS_SEARCH_USER_PATHS" = "NO";
+				"MACOSX_DEPLOYMENT_TARGET" = "27.0";
+				"SDKROOT" = "macosx";
+				"SUPPORTED_PLATFORMS" = "macosx";
+				"SWIFT_VERSION" = "5.0";
+				"CODE_SIGN_STYLE" = "Manual";
+				"CODE_SIGN_IDENTITY" = "-";
+				"ENABLE_APP_SANDBOX" = "NO";
+				"ENABLE_USER_SCRIPT_SANDBOXING" = "NO";
+				"MARKETING_VERSION" = "0.1.0";
+				"CURRENT_PROJECT_VERSION" = "20261021.4";
+				"PRODUCT_NAME" = "红米G Pro ToolBox";
+				"PRODUCT_BUNDLE_IDENTIFIER" = "com.mimonitor.toolbox";
+				"EXECUTABLE_NAME" = "MimonitorToolbox";
+				"LD_RUNPATH_SEARCH_PATHS" = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+				);
+				"GENERATE_INFOPLIST_FILE" = "NO";
+				"ENABLE_PREVIEWS" = "YES";
+				"ENABLE_HARDENED_RUNTIME" = "YES";
+				"INFOPLIST_FILE" = "Config/App-Info.plist";
+				"CODE_SIGN_ENTITLEMENTS" = "Config/App.entitlements";
+				"SWIFT_OPTIMIZATION_LEVEL" = "-O";
+				"ONLY_ACTIVE_ARCH" = "NO";
+				"SWIFT_ACTIVE_COMPILATION_CONDITIONS" = "";
+			};
+			"name" = "Release";
+		};
+		"9FEC1FF0F09E9BC5D885BDEA" = {
+			"isa" = "XCConfigurationList";
+			"buildConfigurations" = (
+				"01EA0C198D328CF10EF1C6BF",
+				"9CB947058F6564D246985E14",
+			);
+			"defaultConfigurationIsVisible" = 0;
+			"defaultConfigurationName" = "Debug";
+		};
+		"EC6B44C1C765DB4341E7F9B0" = {
+			"isa" = "PBXNativeTarget";
+			"buildConfigurationList" = "9FEC1FF0F09E9BC5D885BDEA";
+			"buildPhases" = (
+				"2FE0ABD5EDE4D0DACDC44BEC",
+				"F126A0F6DEEEFCAE3C58478E",
+				"EE4E687BE1DE1E9CD23A04E1",
+			);
+			"buildRules" = (
+			);
+			"dependencies" = (
+			);
+			"name" = "MimonitorToolbox";
+			"packageProductDependencies" = (
+				"71BCA1548CD8BEB3E03097D4",
+				"48A230808BCF833F0B40D58C",
+			);
+			"productName" = "红米G Pro ToolBox";
+			"productReference" = "EF07DEAE30FA222F53E4106C";
+			"productType" = "com.apple.product-type.application";
+		};
+		"24AF4056BC2D62AEEFF13F54" = {
+			"isa" = "PBXFileReference";
+			"lastKnownFileType" = "sourcecode.swift";
+			"path" = "Sources/ToolboxPreviewHost/App.swift";
+			"sourceTree" = "<group>";
+		};
+		"88DCA7C41ABA47F9BDA9EF1B" = {
+			"isa" = "PBXBuildFile";
+			"fileRef" = "24AF4056BC2D62AEEFF13F54";
+		};
+		"24E81729B25884C73FFDAB96" = {
+			"isa" = "PBXSourcesBuildPhase";
+			"buildActionMask" = 2147483647;
+			"files" = (
+				"88DCA7C41ABA47F9BDA9EF1B",
+			);
+			"runOnlyForDeploymentPostprocessing" = 0;
+		};
+		"B4E9036CEAF9002BE164B240" = {
+			"isa" = "XCSwiftPackageProductDependency";
+			"productName" = "ToolboxPreviewSupport";
+		};
+		"DBDA4E53E2D2206824E5534F" = {
+			"isa" = "PBXBuildFile";
+			"productRef" = "B4E9036CEAF9002BE164B240";
+		};
+		"60F54FCECDC5B39E446A1C61" = {
+			"isa" = "PBXFrameworksBuildPhase";
+			"buildActionMask" = 2147483647;
+			"files" = (
+				"DBDA4E53E2D2206824E5534F",
+			);
+			"runOnlyForDeploymentPostprocessing" = 0;
+		};
+		"6EEC2461BF41DD8C5313DF04" = {
+			"isa" = "PBXFileReference";
+			"explicitFileType" = "wrapper.application";
+			"includeInIndex" = 0;
+			"path" = "ToolboxPreviewHost.app";
+			"sourceTree" = "BUILT_PRODUCTS_DIR";
+		};
+		"43638BCF3CAE22C05CB78DFD" = {
+			"isa" = "XCBuildConfiguration";
+			"buildSettings" = {
+				"ARCHS" = "arm64";
+				"ALWAYS_SEARCH_USER_PATHS" = "NO";
+				"MACOSX_DEPLOYMENT_TARGET" = "27.0";
+				"SDKROOT" = "macosx";
+				"SUPPORTED_PLATFORMS" = "macosx";
+				"SWIFT_VERSION" = "5.0";
+				"CODE_SIGN_STYLE" = "Manual";
+				"CODE_SIGN_IDENTITY" = "-";
+				"ENABLE_APP_SANDBOX" = "NO";
+				"ENABLE_USER_SCRIPT_SANDBOXING" = "NO";
+				"MARKETING_VERSION" = "0.1.0";
+				"CURRENT_PROJECT_VERSION" = "20261021.4";
+				"PRODUCT_NAME" = "ToolboxPreviewHost";
+				"PRODUCT_BUNDLE_IDENTIFIER" = "com.mimonitor.toolbox.preview";
+				"EXECUTABLE_NAME" = "ToolboxPreviewHost";
+				"LD_RUNPATH_SEARCH_PATHS" = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+				);
+				"GENERATE_INFOPLIST_FILE" = "YES";
+				"ENABLE_PREVIEWS" = "YES";
+				"ENABLE_HARDENED_RUNTIME" = "NO";
+				"INFOPLIST_KEY_CFBundleDisplayName" = "ToolBox 安全预览";
+				"INFOPLIST_KEY_LSApplicationCategoryType" = "public.app-category.developer-tools";
+				"SWIFT_OPTIMIZATION_LEVEL" = "-Onone";
+				"ONLY_ACTIVE_ARCH" = "YES";
+				"SWIFT_ACTIVE_COMPILATION_CONDITIONS" = "DEBUG";
+			};
+			"name" = "Debug";
+		};
+		"241307F8D991E71AA6C3D030" = {
+			"isa" = "XCBuildConfiguration";
+			"buildSettings" = {
+				"ARCHS" = "arm64";
+				"ALWAYS_SEARCH_USER_PATHS" = "NO";
+				"MACOSX_DEPLOYMENT_TARGET" = "27.0";
+				"SDKROOT" = "macosx";
+				"SUPPORTED_PLATFORMS" = "macosx";
+				"SWIFT_VERSION" = "5.0";
+				"CODE_SIGN_STYLE" = "Manual";
+				"CODE_SIGN_IDENTITY" = "-";
+				"ENABLE_APP_SANDBOX" = "NO";
+				"ENABLE_USER_SCRIPT_SANDBOXING" = "NO";
+				"MARKETING_VERSION" = "0.1.0";
+				"CURRENT_PROJECT_VERSION" = "20261021.4";
+				"PRODUCT_NAME" = "ToolboxPreviewHost";
+				"PRODUCT_BUNDLE_IDENTIFIER" = "com.mimonitor.toolbox.preview";
+				"EXECUTABLE_NAME" = "ToolboxPreviewHost";
+				"LD_RUNPATH_SEARCH_PATHS" = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+				);
+				"GENERATE_INFOPLIST_FILE" = "YES";
+				"ENABLE_PREVIEWS" = "YES";
+				"ENABLE_HARDENED_RUNTIME" = "NO";
+				"INFOPLIST_KEY_CFBundleDisplayName" = "ToolBox 安全预览";
+				"INFOPLIST_KEY_LSApplicationCategoryType" = "public.app-category.developer-tools";
+				"SWIFT_OPTIMIZATION_LEVEL" = "-O";
+				"ONLY_ACTIVE_ARCH" = "NO";
+				"SWIFT_ACTIVE_COMPILATION_CONDITIONS" = "";
+			};
+			"name" = "Release";
+		};
+		"ED9668041FC53187EC6B93EC" = {
+			"isa" = "XCConfigurationList";
+			"buildConfigurations" = (
+				"43638BCF3CAE22C05CB78DFD",
+				"241307F8D991E71AA6C3D030",
+			);
+			"defaultConfigurationIsVisible" = 0;
+			"defaultConfigurationName" = "Debug";
+		};
+		"752E64DE4F5B08892329E913" = {
+			"isa" = "PBXNativeTarget";
+			"buildConfigurationList" = "ED9668041FC53187EC6B93EC";
+			"buildPhases" = (
+				"24E81729B25884C73FFDAB96",
+				"60F54FCECDC5B39E446A1C61",
+			);
+			"buildRules" = (
+			);
+			"dependencies" = (
+			);
+			"name" = "ToolboxPreviewHost";
+			"packageProductDependencies" = (
+				"B4E9036CEAF9002BE164B240",
+			);
+			"productName" = "ToolboxPreviewHost";
+			"productReference" = "6EEC2461BF41DD8C5313DF04";
+			"productType" = "com.apple.product-type.application";
+		};
+		"4EDC8BFAFC6BD936B849F38C" = {
+			"isa" = "PBXGroup";
+			"children" = (
+				"EF07DEAE30FA222F53E4106C",
+				"6EEC2461BF41DD8C5313DF04",
+			);
+			"name" = "Products";
+			"sourceTree" = "<group>";
+		};
+		"4BD87D58A0980793B9C6D31B" = {
+			"isa" = "PBXFileReference";
+			"lastKnownFileType" = "sourcecode.swift";
+			"path" = "Sources/ToolboxPreviewSupport/PreviewGallery.swift";
+			"sourceTree" = "<group>";
+		};
+		"F913940C58E8744A2AF1C68B" = {
+			"isa" = "PBXFileReference";
+			"lastKnownFileType" = "text";
+			"path" = "Package.swift";
+			"sourceTree" = "<group>";
+		};
+		"9F1C542B10A779EB6C6C5E71" = {
+			"isa" = "PBXFileReference";
+			"lastKnownFileType" = "text";
+			"path" = "Config/App-Info.plist";
+			"sourceTree" = "<group>";
+		};
+		"A67D62E8DB1DC8FBCDAF9B63" = {
+			"isa" = "PBXFileReference";
+			"lastKnownFileType" = "text";
+			"path" = "Config/App.entitlements";
+			"sourceTree" = "<group>";
+		};
+		"CA4AE2466BB917951E199C3D" = {
+			"isa" = "PBXFileReference";
+			"lastKnownFileType" = "text";
+			"path" = "prepare_runtime.sh";
+			"sourceTree" = "<group>";
+		};
+		"1E7EC68E24D28B488C4B3DFC" = {
+			"isa" = "PBXGroup";
+			"children" = (
+				"2F8772A0A285788CF8EC6B0B",
+				"24AF4056BC2D62AEEFF13F54",
+				"4BD87D58A0980793B9C6D31B",
+				"F913940C58E8744A2AF1C68B",
+				"9F1C542B10A779EB6C6C5E71",
+				"A67D62E8DB1DC8FBCDAF9B63",
+				"CA4AE2466BB917951E199C3D",
+				"4EDC8BFAFC6BD936B849F38C",
+			);
+			"sourceTree" = "<group>";
+		};
+		"433548979C024CC63B5F3B8D" = {
+			"isa" = "XCBuildConfiguration";
+			"buildSettings" = {
+				"MACOSX_DEPLOYMENT_TARGET" = "27.0";
+				"SDKROOT" = "macosx";
+				"SWIFT_OPTIMIZATION_LEVEL" = "-Onone";
+				"ONLY_ACTIVE_ARCH" = "YES";
+				"SWIFT_ACTIVE_COMPILATION_CONDITIONS" = "DEBUG";
+			};
+			"name" = "Debug";
+		};
+		"B800A40FDE6F0A0218D9BCD2" = {
+			"isa" = "XCBuildConfiguration";
+			"buildSettings" = {
+				"MACOSX_DEPLOYMENT_TARGET" = "27.0";
+				"SDKROOT" = "macosx";
+				"SWIFT_OPTIMIZATION_LEVEL" = "-O";
+				"ONLY_ACTIVE_ARCH" = "NO";
+				"SWIFT_ACTIVE_COMPILATION_CONDITIONS" = "";
+			};
+			"name" = "Release";
+		};
+		"67F98A53B3601D59AC990BA8" = {
+			"isa" = "XCConfigurationList";
+			"buildConfigurations" = (
+				"433548979C024CC63B5F3B8D",
+				"B800A40FDE6F0A0218D9BCD2",
+			);
+			"defaultConfigurationIsVisible" = 0;
+			"defaultConfigurationName" = "Debug";
+		};
+		"985959785319747668373CC6" = {
+			"isa" = "PBXProject";
+			"attributes" = {
+				"BuildIndependentTargetsInParallel" = "YES";
+				"LastUpgradeCheck" = "2710";
+			};
+			"buildConfigurationList" = "67F98A53B3601D59AC990BA8";
+			"compatibilityVersion" = "Xcode 14.0";
+			"developmentRegion" = "en";
+			"hasScannedForEncodings" = 0;
+			"knownRegions" = (
+				"en",
+				"Base",
+			);
+			"mainGroup" = "1E7EC68E24D28B488C4B3DFC";
+			"packageReferences" = (
+				"BE9AD54601022DCC6177AF8B",
+			);
+			"productRefGroup" = "4EDC8BFAFC6BD936B849F38C";
+			"projectDirPath" = "";
+			"projectRoot" = "";
+			"targets" = (
+				"EC6B44C1C765DB4341E7F9B0",
+				"752E64DE4F5B08892329E913",
+			);
+		};
+	};
+	"rootObject" = "985959785319747668373CC6";
+}

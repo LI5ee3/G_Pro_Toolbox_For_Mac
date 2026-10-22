@@ -1,243 +1,118 @@
 name: macOS Build
-
 on:
   push:
-    branches:
-      - master
-    # 所有源码及共享运行资源的变动都验证 macOS 构建。
-    tags:
-      - 'v*'
+    branches: [master]
+    tags: ['v*']
   pull_request:
-    branches:
-      - master
-  # 手动触发：Actions 页面点「Run workflow」，可选任意分支或标签。
-  # 注意选标签时，用的是**那个标签里**的工作流文件 —— 老标签如果本身就是坏的，
-  # 手动跑同样会失败，这时选 master 拿产物即可。
+    branches: [master]
   workflow_dispatch:
-
+    inputs:
+      distribute:
+        description: 'Build, notarize and draft a release from a version tag (requires macos-release environment)'
+        type: boolean
+        default: false
 permissions:
   contents: read
-
 concurrency:
-  group: macos-${{ github.ref }}
-  cancel-in-progress: true
-
+  group: macos-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
 jobs:
   build:
-    runs-on: macos-14
+    # No fork PR execution on self-hosted machines. No signing secrets in this job.
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: [self-hosted, macOS, ARM64, toolbox-macos27]
+    timeout-minutes: 45
     steps:
-      - uses: actions/checkout@v4
-
-      # 这个坑在本项目已经踩了五次（$DMG_NAME（、$LSUI（ …）。
-      # bash 在 UTF-8 locale 下会把紧跟变量之后的全角标点当成变量名的一部分，
-      # 而脚本都开了 set -u，于是直接 `xxx（: unbound variable` 中止 ——
-      # 前面所有步骤都过了，最后一步倒在一条 echo 上。
-      #
-      # 之前靠人工 grep 自查，但范围只写了 macos/*.sh，**漏掉 workflow 自己的
-      # run: 块**（那里也是 shell），结果 $LSUI（ 又漏过去了。
-      # 放进 CI 就不会再漏。
-      - name: 自查 shell 中文变量陷阱
-        run: |
-          set -euo pipefail
-          # ^[^#]* 用来跳过注释行（说明这个坑本身的注释里就带着示例）
-          BAD=$(grep -rnP '^[^#]*\$[A-Za-z_][A-Za-z0-9_]*[^\x00-\x7F]' \
-                  macos/*.sh .github/workflows/*.yml 2>/dev/null || true)
-          if [ -n "$BAD" ]; then
-            echo "❌ 变量后面紧跟中文/全角字符，必须写成 \${VAR}："
-            printf '%s\n' "$BAD"
-            exit 1
-          fi
-          echo "✅ 没有变量名被中文吞掉的地方"
-
-      - name: 工具链版本
-        run: |
-          test "$(uname -m)" = "arm64" || { echo "需要 Apple Silicon runner"; exit 1; }
-          swift --version
-          sw_vers
-
-      - name: 编译（debug，先过一遍语法检查）
-        working-directory: macos
-        run: swift build
-
-      - name: 单元测试
-        working-directory: macos
-        run: swift test
-
-      # 把发布用的自签名证书从 Secrets 导进来。
-      #
-      # 为什么必须做：没有证书时 build_app.sh 会回退 ad-hoc 签名，而 ad-hoc 的
-      # 身份是文件内容哈希、每次都不同，macOS 的「本地网络」权限认不出它，
-      # 会**静默拒绝** —— 发布出去的包在别人机器上搜不到显示器。
-      #
-      # 没配 Secrets 时（比如 fork 提的 PR）跳过，只警告不失败：那种构建本来就
-      # 只用于验证能不能编译。
-      - name: 导入签名证书
-        env:
-          CERT_P12: ${{ secrets.MACOS_CERT_P12 }}
-          CERT_PW: ${{ secrets.MACOS_CERT_PASSWORD }}
-        run: |
-          set -euo pipefail
-          if [ -z "${CERT_P12:-}" ] || [ -z "${CERT_PW:-}" ]; then
-            echo "::warning::未配置 MACOS_CERT_P12 / MACOS_CERT_PASSWORD，本次构建回退 ad-hoc 签名（这种包在别人机器上无法授权本地网络）"
-            echo "SIGNED_WITH_CERT=0" >> "$GITHUB_ENV"
-            exit 0
-          fi
-
-          KEYCHAIN="$RUNNER_TEMP/signing.keychain-db"
-          KPW="$(openssl rand -hex 16)"
-          security create-keychain -p "$KPW" "$KEYCHAIN"
-          security set-keychain-settings -lut 21600 "$KEYCHAIN"
-          security unlock-keychain -p "$KPW" "$KEYCHAIN"
-
-          # 注意 base64 --decode 而不是 -d：macOS 的 base64 把 -d 当别的东西
-          printf '%s' "$CERT_P12" | base64 --decode > "$RUNNER_TEMP/cert.p12"
-          security import "$RUNNER_TEMP/cert.p12" -k "$KEYCHAIN" -P "$CERT_PW" \
-              -T /usr/bin/codesign -T /usr/bin/security >/dev/null
-
-          # 省了这条 codesign 会弹 GUI 授权框，在 CI 上等于永久挂起
-          security set-key-partition-list -S apple-tool:,apple:,codesign: \
-              -s -k "$KPW" "$KEYCHAIN" >/dev/null
-
-          # 自签名证书默认「不受信任」，而不受信任就不算有效签名身份 ——
-          # `security find-identity -v` 里看不到它，build_app.sh 照样回退 ad-hoc。
-          # runner 是一次性的，加进系统钥匙串即可，不用清理。
-          openssl pkcs12 -in "$RUNNER_TEMP/cert.p12" -clcerts -nokeys \
-              -passin "pass:$CERT_PW" -out "$RUNNER_TEMP/cert.pem" 2>/dev/null
-          sudo security add-trusted-cert -d -r trustRoot \
-              -k /Library/Keychains/System.keychain "$RUNNER_TEMP/cert.pem"
-
-          security list-keychains -d user -s "$KEYCHAIN" $(security list-keychains -d user | sed 's/"//g')
-          rm -f "$RUNNER_TEMP/cert.p12" "$RUNNER_TEMP/cert.pem"
-
-          echo "已导入的签名身份："
-          security find-identity -v -p codesigning | grep "MimonitorToolbox" | sed 's/^/  /'
-          echo "SIGNED_WITH_CERT=1" >> "$GITHUB_ENV"
-
-      - name: 打包 .app（Apple Silicon arm64）
-        working-directory: macos
-        run: ./build_app.sh
-
-      - name: 校验产物
-        working-directory: macos
-        run: |
-          set -euo pipefail
-          # .app 的目录名就是产品名（中文，含空格），所以必须加引号；
-          # 包内的可执行文件名仍是 MimonitorToolbox，跟 Package.swift 一致。
-          APP="红米G Pro ToolBox.app"
-          M="$APP/Contents/MacOS/MimonitorToolbox"
-          R="$APP/Contents/Resources"
-
-          test -x "$M"                || { echo "缺可执行文件"; exit 1; }
-          test -x "$R/runtime/adb"    || { echo "缺内嵌 adb"; exit 1; }
-          test -f "$R/runtime/MtkDirectTool.jar"     || { echo "缺 MtkDirectTool.jar"; exit 1; }
-          test -f "$R/runtime/ColorfulLedTool.jar"   || { echo "缺 ColorfulLedTool.jar"; exit 1; }
-          test -f "$R/adb_guardian/adbguardian-signed.apk" || { echo "缺保活 apk"; exit 1; }
-          test -f "$R/AppIcon.icns"   || { echo "缺应用图标"; exit 1; }
-          # LSUIElement 必须**不是** true：设了会变成「后台型 app」，
-          # 启动台 / Dock / Cmd+Tab 全看不到，用户装完找不到入口。
-          # 菜单栏常驻 + 关窗后收起 Dock 图标由运行时的 DockVisibility 负责。
-          # PlistBuddy 读不到这个键会返回非零，这里兜一下。
-          LSUI=$(/usr/libexec/PlistBuddy -c 'Print :LSUIElement' "$APP/Contents/Info.plist" 2>/dev/null || echo "未设置")
-          [ "$LSUI" != "true" ] || { echo "❌ LSUIElement=true 会让 app 在启动台和 Dock 里消失"; exit 1; }
-          # ${LSUI} 的大括号不能省：后面紧跟全角「（」，bash 在 UTF-8 locale 下
-          # 会把它吃进变量名，报 `LSUI（: unbound variable`，set -u 直接中止。
-          echo "LSUIElement: ${LSUI}（应为「未设置」）"
-          test "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIconFile' "$APP/Contents/Info.plist")" = "AppIcon" \
-              || { echo "Info.plist 未引用图标"; exit 1; }
-          iconutil -c iconset "$R/AppIcon.icns" -o /tmp/iconcheck.iconset \
-              || { echo "icns 无法解析"; exit 1; }
-          ICON_COUNT=$(ls /tmp/iconcheck.iconset | wc -l)
-          [ "$ICON_COUNT" -eq 10 ] || { echo "icns 尺寸不全（$ICON_COUNT 个）"; exit 1; }
-
-          # 注意这里都避免用管道：脚本开了 pipefail，
-          # `... | head -1` / `... | grep -q` 会因为读端提前退出让写端收到 SIGPIPE，
-          # 把整条流水线判成失败 —— 校验明明通过了却报错。
-          ARCH_MAIN=$(lipo -archs "$M")
-          echo "主程序架构: $ARCH_MAIN"
-          echo "内嵌 adb 架构: $(lipo -archs "$R/runtime/adb")"
-          [ "$ARCH_MAIN" = "arm64" ] \
-              || { echo "主程序必须仅包含 arm64"; exit 1; }
-          [ "$(lipo -archs "$R/runtime/adb")" = "arm64" ] \
-              || { echo "内嵌 adb 必须仅包含 arm64"; exit 1; }
-
-          codesign --verify --strict "$APP" || { echo "签名校验失败"; exit 1; }
-
-          # 导了证书就必须真的用上。否则发布包带着 ad-hoc 身份出去，
-          # 别人装完搜不到显示器 —— TCC 的「本地网络」权限认不出 ad-hoc 身份，
-          # 会静默拒绝，而且界面上什么提示都没有，极难排查。
-          # 用 case 而不是 `| grep -q`：脚本开了 pipefail，管道写法会误判。
-          SIGN_INFO=$(codesign -dv "$APP" 2>&1)
-          if [ "${SIGNED_WITH_CERT:-0}" = "1" ]; then
-            case "$SIGN_INFO" in
-              *"Signature=adhoc"*)
-                echo "❌ 已导入证书，但产物仍是 ad-hoc 签名"; exit 1 ;;
-            esac
-            echo "✅ 已用固定证书签名"
-          else
-            echo "⚠️ ad-hoc 签名（本次未配置证书，只适合验证编译）"
-          fi
-
-          echo "本地网络权限声明: $(/usr/libexec/PlistBuddy -c 'Print :NSLocalNetworkUsageDescription' "$APP/Contents/Info.plist")"
-
-          # 内嵌的 adb 必须真的能跑（版本号会打到 stderr，一并捕获）
-          ADB_OUT=$("$R/runtime/adb" version 2>&1)
-          echo "${ADB_OUT%%$'\n'*}"
-
-          du -sh "$APP"
-
-      # build_app.sh 最后一步已经生成 DMG，这里再补一个 zip：
-      # DMG 给普通用户（挂载后拖进 Applications），zip 给习惯解压的人。
-      # 分发包用 ASCII 名（MimonitorToolbox-macos-arm64.zip），但里面装的仍是
-      # 中文名的 .app —— GitHub Release 会改写非 ASCII 的**文件名**，
-      # 实测「红米G Pro ToolBox.dmg」上传后变成「G.Pro.ToolBox.dmg」。
-      - name: 补一个 zip（ditto 保留符号链接与权限）
-        working-directory: macos
-        run: |
-          set -euo pipefail
-          test -d "红米G Pro ToolBox.app" || { echo "❌ 缺 .app"; exit 1; }
-          ditto -c -k --sequesterRsrc --keepParent "红米G Pro ToolBox.app" "MimonitorToolbox-macos-arm64.zip"
-
-      - name: 确认分发包都在
-        working-directory: macos
-        run: |
-          set -euo pipefail
-          test -f "MimonitorToolbox-macos-arm64.dmg" || { echo "缺 DMG"; exit 1; }
-          test -f "MimonitorToolbox-macos-arm64.zip" || { echo "缺 zip"; exit 1; }
-          # 分发文件名必须只含 [A-Za-z0-9._-]，否则 GitHub 上传时会改写它：
-          # 实测「红米G Pro ToolBox.dmg」变成了「G.Pro.ToolBox.dmg」
-          # （中文被剥掉、空格还变成了点）。白名单比「排除非 ASCII」严 ——
-          # 空格是 ASCII，但照样会被 GitHub 换掉。
-          for f in MimonitorToolbox-macos-arm64.dmg MimonitorToolbox-macos-arm64.zip; do
-            case "$f" in
-              *[!A-Za-z0-9._-]*) echo "❌ $f 含 GitHub 会改写的字符"; exit 1 ;;
-            esac
-          done
-          ls -lh MimonitorToolbox-macos-arm64.dmg MimonitorToolbox-macos-arm64.zip
-
-      # 仅上传本次架构对应的包，避免旧构建残留混入。
-      - uses: actions/upload-artifact@v4
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
         with:
-          name: mimonitor-macos-arm64
+          persist-credentials: false
+          clean: true
+      - name: Validate, test and build isolated development artifacts
+        run: |
+          set -euo pipefail
+          python3 macos/scripts/runtime_assets.py prepare
+          python3 macos/scripts/runtime_assets.py check
+          python3 -m unittest discover -s macos/scripts/tests -v
+          swift test --package-path macos
+          python3 macos/scripts/validate_architecture.py
+          python3 macos/scripts/validate_preview_boundary.py
+          xcodebuild -project macos/Toolbox.xcodeproj -scheme ToolboxPreviews -configuration Debug -derivedDataPath "$RUNNER_TEMP/preview-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}" -destination 'platform=macOS,arch=arm64' CODE_SIGN_IDENTITY=- build
+          python3 macos/scripts/validate_preview_boundary.py "$RUNNER_TEMP/preview-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}/Build/Products/Debug/ToolboxPreviewHost.app"
+          ./macos/build_app.sh --output "$RUNNER_TEMP/toolbox-build-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}" --build "$GITHUB_RUN_NUMBER"
+          ./macos/make_dmg.sh --app "$RUNNER_TEMP/toolbox-build-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}/红米G Pro ToolBox.app" --output "$RUNNER_TEMP/toolbox-packages-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: mimonitor-development-arm64
           path: |
-            macos/MimonitorToolbox-macos-arm64.dmg
-            macos/MimonitorToolbox-macos-arm64.zip
+            ${{ runner.temp }}/toolbox-packages-${{ github.run_id }}-${{ github.run_attempt }}/*.dmg
+            ${{ runner.temp }}/toolbox-packages-${{ github.run_id }}-${{ github.run_attempt }}/*.zip
+            ${{ runner.temp }}/toolbox-packages-${{ github.run_id }}-${{ github.run_attempt }}/release-manifest.json
+            ${{ runner.temp }}/toolbox-packages-${{ github.run_id }}-${{ github.run_attempt }}/SHA256SUMS
+          if-no-files-found: error
+          retention-days: 14
+  distribution:
+    needs: build
+    # No automatic tag release; only an explicit run on a tag can enter the protected environment.
+    if: github.event_name == 'workflow_dispatch' && inputs.distribute && startsWith(github.ref, 'refs/tags/v')
+    environment: macos-release
+    runs-on: [self-hosted, macOS, ARM64, toolbox-macos27, toolbox-release]
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+        with:
+          persist-credentials: false
+          clean: true
+      - name: Create scoped temporary signing keychain
+        env:
+          DEVELOPER_ID_P12_BASE64: ${{ secrets.DEVELOPER_ID_P12_BASE64 }}
+          DEVELOPER_ID_P12_PASSWORD: ${{ secrets.DEVELOPER_ID_P12_PASSWORD }}
+          DEVELOPER_TEAM_ID: ${{ vars.DEVELOPER_TEAM_ID }}
+          NOTARY_KEY_P8_BASE64: ${{ secrets.NOTARY_KEY_P8_BASE64 }}
+          NOTARY_KEY_ID: ${{ vars.NOTARY_KEY_ID }}
+          NOTARY_ISSUER_ID: ${{ vars.NOTARY_ISSUER_ID }}
+        run: python3 macos/scripts/ci_credentials.py setup "$RUNNER_TEMP/toolbox-credential-state-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}.json"
+      - name: Build and notarize official artifacts
+        env:
+          DEVELOPER_TEAM_ID: ${{ vars.DEVELOPER_TEAM_ID }}
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+          VERSION="${RELEASE_TAG#v}"
+          python3 macos/scripts/runtime_assets.py prepare
+          ./macos/build_app.sh --mode distribution --identity "$TOOLBOX_SIGNING_IDENTITY" --team "$DEVELOPER_TEAM_ID" --version "$VERSION" --build "$GITHUB_RUN_NUMBER" --output "$RUNNER_TEMP/toolbox-official-build-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          ./macos/make_dmg.sh --mode distribution --identity "$TOOLBOX_SIGNING_IDENTITY" --team "$DEVELOPER_TEAM_ID" --profile "$TOOLBOX_NOTARY_PROFILE" --keychain "$TOOLBOX_SIGNING_KEYCHAIN" --app "$RUNNER_TEMP/toolbox-official-build-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}/红米G Pro ToolBox.app" --output "$RUNNER_TEMP/toolbox-official-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+      - name: Always remove temporary credentials
+        if: always()
+        run: python3 macos/scripts/ci_credentials.py clean "$RUNNER_TEMP/toolbox-credential-state-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}.json"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: mimonitor-notarized-arm64
+          path: |
+            ${{ runner.temp }}/toolbox-official-${{ github.run_id }}-${{ github.run_attempt }}/*.dmg
+            ${{ runner.temp }}/toolbox-official-${{ github.run_id }}-${{ github.run_attempt }}/*.zip
+            ${{ runner.temp }}/toolbox-official-${{ github.run_id }}-${{ github.run_attempt }}/*.json
+            ${{ runner.temp }}/toolbox-official-${{ github.run_id }}-${{ github.run_attempt }}/SHA256SUMS
           if-no-files-found: error
           retention-days: 30
-
   release:
-    needs: build
-    if: startsWith(github.ref, 'refs/tags/v')
+    needs: distribution
+    if: github.event_name == 'workflow_dispatch' && inputs.distribute && startsWith(github.ref, 'refs/tags/v')
+    environment: macos-release
     runs-on: ubuntu-latest
     permissions:
-      contents: write   # 只有这一步需要写权限
+      contents: write
     steps:
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
         with:
-          name: mimonitor-macos-arm64
-
-      - uses: softprops/action-gh-release@v2
+          name: mimonitor-notarized-arm64
+      - name: Verify downloaded checksums
+        run: sha256sum -c SHA256SUMS
+      - uses: softprops/action-gh-release@6cbd405e2c4e67a21c47fa9e383d020e4e28b836 # v2.3.3
         with:
-          # DMG 是主推的（拖进 Applications 即安装），zip 作为备选。
+          draft: true
           files: |
             MimonitorToolbox-macos-arm64.dmg
             MimonitorToolbox-macos-arm64.zip
+            release-manifest.json
+            SHA256SUMS
+          fail_on_unmatched_files: true

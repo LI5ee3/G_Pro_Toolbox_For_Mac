@@ -1,12 +1,14 @@
 # 红米G Pro ToolBox for Mac
 
-Redmi G Pro 27U / 32U 显示器的原生 macOS 控制应用，使用 SwiftUI、AppKit 和 CoreAudio。仅支持运行 macOS 13 及以上的 Apple Silicon Mac（M 系列芯片）。
+Redmi G Pro 27U / 32U 显示器的原生 macOS 控制应用，使用 SwiftUI、AppKit 和 CoreAudio。仅支持运行 macOS 27 及以上的 Apple Silicon Mac（M 系列芯片）。
 
 本项目基于 [YiHoooong/Mimonitor_Toolbox](https://github.com/YiHoooong/Mimonitor_Toolbox) 的设备协议与 macOS 实现继续开发，保留原作者贡献。当前仓库仅维护 Mac 应用。
 
+当前界面采用「屏幕即遥控器」布局：首页集中控制音量、背光和画面模式，其余功能通过顶部导航进入。
+
 ## 功能
 
-- **蓝牙优先的键盘音量控制**：无需网络 ADB，声音仍可走 DP/HDMI；步长设为 1 并关闭原生音量 OSD 后，每次短按按显示器整数音量加减 1。蓝牙不可用时回退至已连接的网络 ADB。
+- **ADB 键盘音量控制**：音量加减与静音通过网络 ADB 操作显示器，保留步长、原生 OSD 及默认音频输出限制。
 - **画面与游戏设置**：画面模式、背光、色温、色域、精密控光、FreeSync、准星等；具体选项取决于显示器型号与固件。
 - **信号源、屏幕灯与遥控器**：切换输入源、调节灯效，并使用虚拟遥控器。
 - **Mac 集成**：菜单栏快捷控制、全局快捷键、自定义悬浮提示、亮度键控制背光、登录后自动启动、深浅色主题。
@@ -14,40 +16,52 @@ Redmi G Pro 27U / 32U 显示器的原生 macOS 控制应用，使用 SwiftUI、A
 - **网络 ADB 恢复**：Mac 唤醒后检查实际连接并自动重连，刷新音量与保活状态。
 - **AdbGuardian 部署与回读验证**：安装显示器端保活组件后确认实际运行、端口和权限状态。
 
-<img src="macos/assets/screenshots/home.png" width="700" alt="Mac 应用主页">
+<img src="macos/assets/screenshots/ui-c-home.png" width="700" alt="Mac 应用控制台">
 
 更多截图、配置和实测范围见 [Mac 使用与开发说明](macos/README.md)。
 
 ## 使用条件
 
-- Apple Silicon Mac（M1 或更新的 M 系列芯片），运行 macOS 13 或更高版本。
+- Apple Silicon Mac（M1 或更新的 M 系列芯片），运行 macOS 27 或更高版本。
 - 网络 ADB 功能需要显示器开启 ADB，且 Mac 与显示器可通过网络互通（TCP 5555）。视频线本身不提供网络连接。
-- 蓝牙音量控制需要先在 macOS 中配对并连接显示器的蓝牙音频设备；无需网络 ADB。其他显示器设置仍通过 ADB 完成。
 - 全局键盘控制需要 macOS 辅助功能授权。
 
-已在 Mac mini M4 + Redmi G Pro 32U 2026（P32UEA-RGP）上验证蓝牙音量、网络 ADB 与唤醒恢复。其他型号及固件的兼容性需实测。
+已在 Mac mini M4 + Redmi G Pro 32U 2026（P32UEA-RGP）上验证网络 ADB 与唤醒恢复。其他型号及固件的兼容性需实测。
+
+### Type-C 有线 ADB 实机纠正（2026-10-22）
+
+同一台 32U 已通过「Mac 扩展坞 USB-A → A↔C 数据线 → 显示器 Type-C」建立有线 ADB。内嵌 adb 在端口 5038 上唯一列出 `76226171600005770 device usb:51589120X`，指定序列号 shell 返回 `connected=true`、`configured=true`、`kernel_state=CONFIGURED`。此前“Type-C 无法有线 ADB”的结论错误。
+
+内部 RTS5411 Hub 的 Port 1/2 接外部两个 USB-A 下行口，Port 3 接 SoC ADB Gadget，Port 4 接 Billboard。`usb2typec=1` 将 Hub 上行口接外部 Type-C；`0` 接显示器自身 Host，不能将外部 USB-A 变成调试口。本次确认的是硬件和 adb 传输能力，不代表本分支网络连接界面已增加 USB 功能；本轮只更新文档，未修改显示器状态。
 
 ## 从源码构建
 
-安装 Xcode 命令行工具后，在仓库根目录运行：
+使用 macOS 27 与 Xcode 27.1，在 `macos/Toolbox.xcodeproj` 选择 `ToolboxApp`（真实应用）或 `ToolboxPreviews`（安全预览）。详细隔离规则见 [开发说明](macos/README.md)。
+
+命令行入口继续可用，在仓库根目录运行：
 
 ```sh
 cd macos
-swift build
+python3 scripts/runtime_assets.py prepare
 swift test
 ./build_app.sh
-open "红米G Pro ToolBox.app"
+open ".build/artifacts/development/红米G Pro ToolBox.app"
+# 可选：创建开发 DMG / ZIP
+./make_dmg.sh
 ```
 
-生成仅含 arm64 的应用及 `MimonitorToolbox-macos-arm64.dmg`。主程序和内嵌 adb 都仅保留 Apple Silicon 架构。
+App 默认输出到 `macos/.build/artifacts/development/`；打包产物位于 `macos/.build/artifacts/packages-development/`，文件名带 `-development`。两步独立执行，已有输出目录不会覆盖；再次构建请使用新的 `--output` 目录。主程序和内嵌 adb 都仅含 arm64。
 
-打包会从 Google 官方获取 macOS 版 adb 并缓存，内嵌 adb、显示器端 JAR 与 AdbGuardian APK。最终用户无需安装 Python、Java 或 adb。使用 DMG 时，将应用拖入 Applications 即可。
+显式 `prepare` 从 Google 官方下载锁定版本的 macOS adb 并校验摘要；构建阶段只使用已准备的资源，不联网下载。开发包使用 ad-hoc 签名，内嵌 adb、显示器端 JAR、AdbGuardian APK 和必要致谢。最终用户无需安装 Python、Java 或 adb。
+
+架构、原生 Xcode Target 和安全 Preview 说明见 [开发文档](macos/README.md)；本机回归结果、权限入口的实际边界和回滚说明见 [R6c 收尾记录](macos/R6-CLOSEOUT.md)。正式签名、公证与公开发行流程见 [R6 发布说明](macos/R6-RELEASE.md)。
+
+已验证阶段的源码回滚点同时保留为 `refactor/日期/阶段` 标签，例如 `refactor/20261022/R6c`。这些标签对应原本机检查点，不是正式版本标签，也不触发正式发布。
 
 ## 通信与资源
 
 ```text
 Mac 原生应用
-├─ CoreAudio / 蓝牙 AVRCP → 显示器音量
 └─ 网络 ADB（TCP 5555）→ 显示器 Android 系统
    ├─ settings / AudioService → 设置与媒体音量
    ├─ MtkDirectTool.jar → MTK 画面控制
@@ -75,4 +89,6 @@ Mimonitor_Toolbox/
 
 ## 持续集成
 
-主分支 push / PR 执行 macOS 构建和 Swift 测试，随后打包、检查资源与签名、上传 DMG / ZIP。`v*` 标签触发 Mac Release 发布；签名与分发要求见 [开发说明](macos/README.md#签名与分发)。
+工作流需要自行配置带 `toolbox-macos27` 标签的 Apple Silicon / macOS 27 runner，目前未配置远端 runner。主分支 push、同仓库 PR 或版本标签运行开发包检查，成功后上传 development artifact；标签不会自动发布正式 Release。
+
+正式签名、公证和草稿 Release 只接受版本标签上的显式分发请求，并要求保护环境、Developer ID 与公证凭据。当前不进行正式分发，具体门禁见 [R6 发布说明](macos/R6-RELEASE.md)。

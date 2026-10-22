@@ -1,3 +1,5 @@
+import ToolboxDomain
+import ToolboxApplication
 #if canImport(Cocoa)
 import XCTest
 @testable import MimonitorToolbox
@@ -5,25 +7,25 @@ import XCTest
 /// 亮度步进的「首次对齐」逻辑：不在格点上时先跳到方向上的最近格点。
 final class StepAlignTests: XCTestCase {
     func testAlignsUpToNextMultipleOnIncrease() {
-        XCTAssertEqual(AppState.alignToStep(6, step: 10, increasing: true), 10)
+        XCTAssertEqual(ControlStep.alignToStep(6, step: 10, increasing: true), 10)
     }
 
     func testStepsNormallyWhenAlreadyOnGrid() {
-        XCTAssertEqual(AppState.alignToStep(10, step: 10, increasing: true), 20)
+        XCTAssertEqual(ControlStep.alignToStep(10, step: 10, increasing: true), 20)
     }
 
     func testAlignsDownToPreviousMultipleOnDecrease() {
-        XCTAssertEqual(AppState.alignToStep(15, step: 10, increasing: false), 10)
-        XCTAssertEqual(AppState.alignToStep(6, step: 10, increasing: false), 0)
+        XCTAssertEqual(ControlStep.alignToStep(15, step: 10, increasing: false), 10)
+        XCTAssertEqual(ControlStep.alignToStep(6, step: 10, increasing: false), 0)
     }
 
     func testZeroIsOnGrid() {
-        XCTAssertEqual(AppState.alignToStep(0, step: 10, increasing: true), 10)
+        XCTAssertEqual(ControlStep.alignToStep(0, step: 10, increasing: true), 10)
     }
 
     func testStepOneAlwaysSteps() {
-        XCTAssertEqual(AppState.alignToStep(6, step: 1, increasing: true), 7)
-        XCTAssertEqual(AppState.alignToStep(6, step: 1, increasing: false), 5)
+        XCTAssertEqual(ControlStep.alignToStep(6, step: 1, increasing: true), 7)
+        XCTAssertEqual(ControlStep.alignToStep(6, step: 1, increasing: false), 5)
     }
 }
 #endif

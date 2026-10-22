@@ -1,6 +1,6 @@
 import Foundation
 
-public struct PicturePreset: Codable, Equatable, Identifiable {
+public struct PicturePreset: Codable, Equatable, Identifiable, Sendable {
     public static let baselineID = "__baseline__"
     public var id: String
     public var name: String
@@ -10,7 +10,7 @@ public struct PicturePreset: Codable, Equatable, Identifiable {
     }
 }
 
-public struct ScheduledPresetTask: Codable, Equatable, Identifiable {
+public struct ScheduledPresetTask: Codable, Equatable, Identifiable, Sendable {
     public var id: String
     public var presetID: String
     public var start: String
@@ -68,13 +68,13 @@ public enum PresetSchedule {
 }
 
 /// The ordinary, non-preset state. This is NOT an automatic task snapshot.
-public struct PresetBaseline: Codable, Equatable {
+public struct PresetBaseline: Codable, Equatable, Sendable {
     public var deviceIdentity: String
     public var values: [String: String]
 }
 
 /// Scheduling remembers identity only; returning uses the preset's latest values.
-public struct PresetTaskSession: Codable, Equatable {
+public struct PresetTaskSession: Codable, Equatable, Sendable {
     public var previousPresetID: String?
     public var deviceIdentity: String
     public var taskID: String
@@ -82,7 +82,7 @@ public struct PresetTaskSession: Codable, Equatable {
     public var occurrenceStart: Date?
 }
 
-public struct PresetConfiguration: Codable, Equatable {
+public struct PresetConfiguration: Codable, Equatable, Sendable {
     public static let menuBarPresetLimit = 4
     public var normalizedMenuBarPresetIDs: [String] {
         let valid = Set(presets.map(\.id)).union([PicturePreset.baselineID])
@@ -130,7 +130,7 @@ public struct PresetConfiguration: Codable, Equatable {
     }
 }
 
-public struct PresetApplyReport: Equatable {
+public struct PresetApplyReport: Equatable, Sendable {
     public var applied: [String]
     public var failed: [String]
     public var skipped: [String]
@@ -157,11 +157,11 @@ public protocol PresetDevice {
 
 /// Accessed on the same serial queue as PresetEngine. Failed decode never overwrites saved data.
 public final class PresetStore {
-    public let defaults: UserDefaults
+    public let defaults: any PreferencesStore
     public private(set) var configuration = PresetConfiguration()
     public private(set) var loadError: String?
     private let key = "picture_presets_v1"
-    public init(defaults: UserDefaults = .standard) {
+    public init(defaults: any PreferencesStore = UserDefaults.standard) {
         self.defaults = defaults
         if let data = defaults.data(forKey: key) {
             do { configuration = try JSONDecoder().decode(PresetConfiguration.self, from: data) }

@@ -1,0 +1,4 @@
+self-hosted-runner:
+  labels:
+    - toolbox-macos27
+    - toolbox-release

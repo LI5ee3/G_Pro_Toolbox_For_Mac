@@ -1,0 +1,48 @@
+{
+  "schema": 1,
+  "platform_tools": {
+    "version": "37.0.1-15733141",
+    "url": "https://dl.google.com/android/repository/platform-tools_r37.0.1-darwin.zip",
+    "archive_sha256": "ee39ad5967e95c2a07f04dbcbde96b1a0c916ba376096db5d2f498b7727a5d1d",
+    "adb_sha256": "1811e253b21b12cbfda7201ebaf86c10e7ddcb5c606a7a81f7c82b4c429c2d3b",
+    "notice_sha256": "356cc66516060e4da6bdc53e6f0bbb8e8101673f326b73c68d535eddd04dd7b1",
+    "arm64_unsigned_sha256": "5d1715ccb4bda31a33fa48980c7401cced544cc6e38fb469c555a3b1b06ec067"
+  },
+  "resources": [
+    {
+      "path": "assets/runtime/MtkDirectTool.jar",
+      "destination": "runtime/MtkDirectTool.jar",
+      "sha256": "ecd70d5202257ae43eaebfd64c660bcd2324a4c3120a424b4416bb26517a6604",
+      "source_reference": "tools/mtk_direct/MtkDirectTool.java"
+    },
+    {
+      "path": "assets/runtime/ColorfulLedTool.jar",
+      "destination": "runtime/ColorfulLedTool.jar",
+      "sha256": "89e9fc93d57a84e4967e0dbd91f3210e786a5e2d72058db45cc1a8fc8617ed40",
+      "source_reference": "tools/colorful_led/ColorfulLedTool.java"
+    },
+    {
+      "path": "assets/adb_guardian/adbguardian-signed.apk",
+      "destination": "adb_guardian/adbguardian-signed.apk",
+      "sha256": "b910dab254ce4fd9b806a0f57693850c23bc0e8a566a41f808acc283f125a083",
+      "source_reference": "assets/adb_guardian/README.md"
+    },
+    {
+      "path": "macos/assets/AppIcon.icns",
+      "destination": "AppIcon.icns",
+      "sha256": "05664d98d0f11db2c72a71e8f79ab1f471d9f15ddaa5f0a0ca82c8580c6dab0b",
+      "source_reference": "macos/assets/AppIcon.png"
+    },
+    {
+      "path": "macos/assets/Acknowledgements.txt",
+      "destination": "Acknowledgements.txt",
+      "sha256": "3fb3ce52993ad9b03af67f292ea271a29f692bc1f95ffc2ab374999445e0d17b",
+      "source_reference": "upstream README and runtime READMEs; unresolved rights explicitly recorded"
+    }
+  ],
+  "provenance_notes": [
+    "JAR sources retained in repository; no project-wide license grant inferred.",
+    "Guardian README cites unavailable /home/hq/mitv/adb_guardian; reproducible source and redistribution rights unverified.",
+    "AppIcon licensing not established by a content hash."
+  ]
+}

@@ -10,8 +10,13 @@ These JAR files run on the display's Android system. They do not require a Java
 runtime on the Mac. Their sources are in `tools/mtk_direct/` and
 `tools/colorful_led/` respectively.
 
-`macos/build_app.sh` downloads the macOS adb client from Google's official
-platform-tools distribution and caches it under `macos/.cache/`. To use a fixed
-version instead, place a macOS adb binary containing arm64 at `assets/runtime/adb`
-before building. The packaged adb contains only arm64; a multi-architecture source
-binary is thinned during packaging without changing the cache.
+Runtime inputs are pinned in `macos/Config/RuntimeAssets.lock.json`, including
+Platform-Tools 37.0.1-15733141, its official versioned archive SHA-256, adb and NOTICE.
+Run `python3 macos/scripts/runtime_assets.py prepare` explicitly to prepare a missing
+cache. Building and Preview never download programs. A repository adb requires its own
+matching `NOTICE-platform-tools.txt`; arbitrary substitutions fail the digest gate.
+Only arm64 is packaged; the original binary/cache stays untouched. JAR/APK bytes are
+preserved. Pin changes require deliberate provenance and regression review.
+
+The bundled `Acknowledgements.txt` records upstream attribution and unresolved license /
+Guardian source provenance; checksums do not establish redistribution rights.

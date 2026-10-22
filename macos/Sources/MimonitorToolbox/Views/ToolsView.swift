@@ -1,267 +1,301 @@
+import ToolboxDomain
+import ToolboxApplication
 import SwiftUI
 import UniformTypeIdentifiers
 
 struct ToolsView: View {
-    @EnvironmentObject var state: AppState
-    @AppStorage("theme") private var theme: String = "dark"
-    @AppStorage("close_behavior") private var closeBehavior: String = "tray"
-    @State private var autostart = Autostart.isEnabled()
-    @State private var pending4K: Bool = false
+    @ToolboxActions var state
+    @Environment(ConnectionModel.self) private var connection
+    @Environment(ToolsModel.self) private var tools
+    @Environment(HotkeysModel.self) private var keyboard
+    @Environment(SettingsModel.self) private var settings
+    @State private var pending4K = false
     @State private var show4KConfirm = false
-    @State private var showApkImporter = false
-    @State private var showLogExporter = false
     @State private var showHotkeySheet = false
+    @State private var showAdvancedTools = false
+    @State private var showGuardianConfirm = false
 
     private var configuredHotkeyCount: Int {
-        state.hotkeys.values.filter { $0.isEnabled }.count
-            + state.adjustHotkeys.filter { $0.isEnabled }.count
+        keyboard.hotkeys.values.filter { $0.isEnabled }.count
+            + keyboard.adjustHotkeys.filter { $0.isEnabled }.count
     }
 
     var body: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 20) {
-                Text("工具与设置").font(.title2.bold())
-
-                // 软件设置
-                SectionCard(title: "软件设置") {
-                    HStack(spacing: 16) {
-                        Text("窗口关闭行为:").frame(width: 120, alignment: .leading)
-                        // 对应 AppDelegate.applicationShouldTerminateAfterLastWindowClosed。
-                        // 关闭窗口后可继续在菜单栏运行。
-                        Picker("", selection: $closeBehavior) {
-                            Text("隐藏窗口（继续在菜单栏运行）").tag("tray")
-                            Text("退出应用").tag("exit")
+            VStack(alignment: .leading, spacing: 26) {
+                VStack(alignment: .leading, spacing: 6) {
+                    Text("工具与设置").font(.system(size: 23, weight: .semibold))
+                }
+                keyboardSettings
+                Divider()
+                appSettings
+                Divider()
+                memorySettings
+                Divider()
+                guardianSettings
+                Divider()
+                SettingsTaskSection(title: "高级工具") {
+                    DisclosureGroup(isExpanded: $showAdvancedTools) {
+                        VStack(alignment: .leading, spacing: 20) {
+                            displayResolutionSettings
+                            Divider()
+                            installationTools
+                            Divider()
+                            terminalTools
                         }
-                        .pickerStyle(.segmented)
-                        .frame(width: 260)
-                        Spacer()
+                        .padding(.top, 16)
+                    } label: {
+                        Label("显示器系统、应用安装与 ADB 调试", systemImage: "wrench.and.screwdriver")
                     }
-                    HStack(spacing: 16) {
-                        Text("应用主题:").frame(width: 120, alignment: .leading)
-                        Picker("", selection: $theme) {
-                            Text("跟随系统").tag("auto")
-                            Text("深色模式").tag("dark")
-                            Text("浅色模式").tag("light")
-                        }
-                        .frame(width: 220)
-                        .onChange(of: theme) { AppTheme.apply($0) }
-                        Spacer()
-                    }
-                    Toggle("开机自动启动并隐藏窗口（仅菜单栏）", isOn: $autostart)
-                        .onChange(of: autostart) { v in state.setAutostart(v) }
-
-                    Divider()
-
-                    // 快捷键生效前的等待。开着时按一下会先走一段倒计时再下发，
-                    // 连按只落最后一个值；关掉就每次立即下发（更跟手，但连按会把命令堆起来）。
-                    Toggle("快捷键松手后生效（倒计时）", isOn: Binding(
-                        get: { state.hotkeyCountdownEnabled },
-                        set: { state.hotkeyCountdownEnabled = $0 }
-                    ))
-
-                    HStack(spacing: 12) {
-                        Text("倒计时时长")
-                            .frame(width: 120, alignment: .leading)
-                        FastSlider(
-                            value: Binding(
-                                get: { state.hotkeyCountdownSeconds },
-                                set: { state.hotkeyCountdownSeconds = $0 }
-                            ),
-                            range: 0.2...3.0,
-                            step: 0.1
-                        ) { _ in }
-                        .disabled(!state.hotkeyCountdownEnabled)
-                        Text(String(format: "%.1f 秒", state.hotkeyCountdownSeconds))
-                            .font(.callout.monospacedDigit())
-                            .foregroundColor(state.hotkeyCountdownEnabled ? .primary : .secondary)
-                            .frame(width: 60, alignment: .trailing)
-                        Spacer()
-                    }
-                    .opacity(state.hotkeyCountdownEnabled ? 1 : 0.4)
-
-                    Text(state.hotkeyCountdownEnabled
-                         ? "按一下快捷键后，进度条走完才真正下发；连按只保留最后一个值。"
-                         : "已关闭：每次按键立即下发。连按会把 ADB 命令堆起来，可能变慢。")
-                        .font(.caption)
-                        .foregroundColor(.secondary)
+                    .tint(Theme.accent)
+                    Text("4K UI 会重启显示器；安装与部署会修改显示器系统。")
+                        .font(.system(size: 13))
+                        .foregroundStyle(Theme.secondaryText)
                 }
-
-                // 4K UI
-                SectionCard(title: "4K UI 模式") {
-                    Text("将显示器 UI 分辨率提升至 3840×2160，DPI 设为 640。开启或关闭后显示器将自动重启。")
-                        .foregroundColor(.secondary)
-                    Text("当前状态：\(state.is4KUI ? "已开启" : "未开启（1080p）")")
-                        .font(.callout)
-                        .foregroundColor(state.is4KUI ? .green : .secondary)
-                    HStack(spacing: 10) {
-                        // 开关反映的是显示器实测状态；点击只发起切换请求，不直接改本地值
-                        Toggle("启用 4K UI", isOn: Binding(
-                            get: { state.is4KUI },
-                            set: { newValue in
-                                pending4K = newValue
-                                show4KConfirm = true
-                            }
-                        ))
-                        Button("重新检测") { state.check4KState() }
-                        Spacer()
-                    }
+                HStack(spacing: 6) {
+                    Image(systemName: "chevron.left.forwardslash.chevron.right")
+                    Button("项目源代码") { state.openProjectSource() }
+                    Spacer()
+                    Button("原项目") { state.openProjectSource(upstream: true) }
                 }
-
-                // ADB 保活守护
-                SectionCard(title: "ADB 保活守护") {
-                    Text("部署显示器端 AdbGuardian，尝试在重启、待机或唤醒后恢复 ADB。具体恢复效果需经过实际待机和重启测试确认。")
-                        .foregroundColor(.secondary)
-                    Text("此操作会安装项目自带 APK，授予修改调试设置和无障碍权限，并开启网络 ADB 5555。深度待机期间服务可能停止，恢复时间取决于显示器系统。")
-                        .font(.caption).foregroundColor(.secondary)
-                    Text(state.guardianStatus).foregroundColor(.secondary)
-                    HStack(spacing: 8) {
-                        Button("检测状态") { state.checkGuardian() }
-                        Button("部署/修复") { state.deployGuardian() }.buttonStyle(.borderedProminent)
-                        Button("启动保活") { state.startGuardian() }
-                    }
-                }
-
-                // HDR / SDR 分区控光记忆
-                SectionCard(title: "HDR/SDR 分区控光记忆") {
-                    Toggle("按信号分别记忆精密控光（基于 macOS EDR 判断 HDR）", isOn: Binding(
-                        get: { state.effectiveHdrMemoryEnabled },
-                        set: { state.toggleHdrMemory($0) }
-                    ))
-                    .disabled(state.memoriesSuspendedByPreset)
-                    Text(state.hdrMemoryStatusText).font(.callout).foregroundColor(.secondary)
-                    if state.memoriesSuspendedByPreset {
-                        Label("使用预设期间已锁定，返回无预设后恢复原设置。", systemImage: "lock.fill")
-                            .font(.caption).foregroundColor(.secondary)
-                    }
-                }
-
-                // FreeSync Pro 模式记忆
-                SectionCard(title: "FreeSync Pro 模式记忆") {
-                    Toggle("开启 FreeSync 时记住画面模式，关闭后自动恢复", isOn: Binding(
-                        get: { state.effectiveFreesyncMemoryEnabled },
-                        set: { state.toggleFreesyncMemory($0) }
-                    ))
-                    .disabled(state.memoriesSuspendedByPreset)
-                    Text(state.freesyncMemoryStatusText).font(.callout).foregroundColor(.secondary)
-                    if state.memoriesSuspendedByPreset {
-                        Label("使用预设期间已锁定，返回无预设后恢复原设置。", systemImage: "lock.fill")
-                            .font(.caption).foregroundColor(.secondary)
-                    }
-                }
-
-                // 准星模式联动
-                SectionCard(title: "准星模式联动") {
-                    Toggle("准星仅在游戏模式下生效", isOn: Binding(
-                        get: { state.crosshairGameModeOnly },
-                        set: { state.toggleCrosshairGameModeOnly($0) }
-                    ))
-                    Text(state.crosshairModeStatusText).font(.callout).foregroundColor(.secondary)
-                }
-
-                // APK 安装
-                SectionCard(title: "APK 安装") {
-                    Text("选择本地 .apk 文件，通过 adb install -r -d 安装到显示器。")
-                        .foregroundColor(.secondary)
-                    HStack(spacing: 8) {
-                        Button("选择 APK 并安装") { showApkImporter = true }
-                        if state.isConnected {
-                            Text("已连接").font(.callout).foregroundColor(.green)
-                        }
-                    }
-                }
-
-                // ADB 命令行
-                SectionCard(title: "ADB 命令行") {
-                    Text("在终端打开独立 adb server（端口 5038）的 shell，便于手动调试。")
-                        .foregroundColor(.secondary)
-                    HStack(spacing: 8) {
-                        Button("打开 ADB CMD") { state.openAdbCmd() }
-                        Button("进入 ADB Shell") { state.openAdbShell() }
-                    }
-                }
-
-                // 全局快捷键
-                SectionCard(title: "自定义全局快捷键") {
-                    Text("全局快捷键基于 CGEventTap 实现，需要辅助功能权限。")
-                        .foregroundColor(.secondary)
-                    if state.accessibilityTrusted {
-                        Label("辅助功能权限已授予", systemImage: "checkmark.seal.fill")
-                            .font(.callout)
-                            .foregroundColor(.green)
-                    } else {
-                        VStack(alignment: .leading, spacing: 8) {
-                            Label("尚未授予辅助功能权限，全局快捷键不会生效", systemImage: "exclamationmark.triangle.fill")
-                                .font(.callout)
-                                .foregroundColor(.orange)
-                            HStack(spacing: 10) {
-                                Button("前往授权") { state.requestAccessibilityPermission() }
-                                    .buttonStyle(.borderedProminent)
-                                Button("重新检测") { state.refreshAccessibilityStatus() }
-                                // TCC 的授权结果要重启进程才会生效，光切回窗口不够
-                                // （实测：切回前台刷新仍是未授权，重启后立刻生效）
-                                Text("授权后请重启本应用")
-                                    .font(.caption)
-                                    .foregroundColor(.secondary)
-                            }
-                        }
-                    }
-                    // 配置面板放进独立 sheet，而不是内联折叠。
-                    // 内联展开会改变整页高度 → 工具页上十个卡片全部重新布局，
-                    // 实测要 850ms（采样显示是 SwiftUI 依赖图全量重算）。
-                    // 放进 sheet 后只影响那个小面板，展开是瞬时的。
-                    HStack(spacing: 10) {
-                        Button("配置快捷键…") { showHotkeySheet = true }
-                            .buttonStyle(.borderedProminent)
-                        Text("已配置 \(configuredHotkeyCount) 个")
-                            .font(.caption)
-                            .foregroundColor(.secondary)
-                        Spacer()
-                    }
-                }
-
-                Link("仓库地址：https://github.com/YiHoooong/Mimonitor_Toolbox",
-                     destination: URL(string: "https://github.com/YiHoooong/Mimonitor_Toolbox")!)
-                    .font(.callout)
-                    .foregroundColor(Color(red: 0.45, green: 0.31, blue: 1.0))
-                    .frame(maxWidth: .infinity)
+                .font(.system(size: 13))
+                .foregroundStyle(Theme.secondaryText)
             }
-            .padding(30)
+            .padding(28)
+            .frame(maxWidth: 1000)
+            .frame(maxWidth: .infinity)
         }
+        .font(.system(size: 14))
+        .tint(Theme.accent)
         .onAppear { state.check4KState() }
         .sheet(isPresented: $showHotkeySheet) {
-            HotkeyConfigSheet()
-                .environmentObject(state)
+            HotkeyConfigSheet().environment(\.toolboxActions, state)
         }
         .alert("切换 4K UI 会重启显示器，继续？", isPresented: $show4KConfirm) {
             Button("取消", role: .cancel) { }
-            Button("确认") { state.toggle4K(pending4K) }
+            Button("确认并重启") { state.toggle4K(pending4K) }
         } message: {
             Text(pending4K
                  ? "将设置 wm size 3840x2160 / density 640 并重启显示器。"
                  : "将恢复 wm size 1920x1080 / density 320 并重启显示器。")
         }
-        .fileImporter(isPresented: $showApkImporter,
-                      allowedContentTypes: [UTType(filenameExtension: "apk") ?? .item]) { result in
-            if case .success(let url) = result {
-                state.installApk(url)
+        .alert("部署或修复 AdbGuardian？", isPresented: $showGuardianConfirm) {
+            Button("取消", role: .cancel) { }
+            Button("部署或修复") { state.deployGuardian() }
+        } message: {
+            Text("将安装项目自带 APK，授予修改调试设置和无障碍权限，并开启网络 ADB 5555。完成后会回读实际状态。")
+        }
+
+    }
+
+    private var keyboardSettings: some View {
+        SettingsTaskSection(title: "键盘控制") {
+            HStack(alignment: .top, spacing: 18) {
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("用组合键、系统音量键与亮度键控制显示器。")
+                        .foregroundStyle(Theme.secondaryText)
+                    Label(keyboard.accessibilityTrusted ? "辅助功能权限已授予" : "尚未授权，键盘控制暂不生效",
+                          systemImage: keyboard.accessibilityTrusted ? "checkmark.seal" : "exclamationmark.triangle")
+                        .foregroundStyle(keyboard.accessibilityTrusted ? Theme.success : Theme.warning)
+                }
+                Spacer(minLength: 12)
+                VStack(alignment: .trailing, spacing: 8) {
+                    Button("配置快捷键…") { showHotkeySheet = true }
+                        .toolboxAction(prominent: true)
+                    Text("已配置 \(configuredHotkeyCount) 个")
+                        .font(.system(size: 13)).foregroundStyle(Theme.secondaryText)
+                }
+            }
+            if !keyboard.accessibilityTrusted {
+                HStack(spacing: 10) {
+                    Button("前往授权") { state.requestAccessibilityPermission() }
+                        .toolboxAction()
+                    Button("重新检测") { state.refreshAccessibilityStatus() }
+                        .toolboxAction()
+                    Text("授权后返回应用会自动重新检测。")
+                        .font(.system(size: 13)).foregroundStyle(Theme.secondaryText)
+                }
+            }
+            if keyboard.listenerStatus == .failed {
+                Text("辅助功能已允许，但监听尚未启动。请重新检测权限或重启应用。")
+                    .font(.system(size: 13)).foregroundStyle(Theme.warning)
+            }
+            Divider().padding(.vertical, 2)
+            Toggle("快捷键松手后生效", isOn: Binding(
+                get: { keyboard.hotkeyCountdownEnabled },
+                set: { state.hotkeyCountdownEnabled = $0 }
+            ))
+            HStack(spacing: 16) {
+                Text("等待时长").frame(width: 92, alignment: .leading)
+                FastSlider(value: Binding(
+                    get: { keyboard.hotkeyCountdownSeconds },
+                    set: { state.hotkeyCountdownSeconds = $0 }
+                ), range: 0.2...3.0, step: 0.1) { _ in }
+                .disabled(!keyboard.hotkeyCountdownEnabled)
+                Text(String(format: "%.1f 秒", keyboard.hotkeyCountdownSeconds))
+                    .monospacedDigit().frame(width: 60, alignment: .trailing)
+            }
+            .opacity(keyboard.hotkeyCountdownEnabled ? 1 : 0.4)
+            Text(keyboard.hotkeyCountdownEnabled
+                 ? "倒计时结束后提交，连续按键只保留最后一个值。"
+                 : "每次按键立即提交；连续按键可能使 ADB 命令排队。")
+                .font(.system(size: 13)).foregroundStyle(Theme.secondaryText)
+        }
+    }
+
+    private var appSettings: some View {
+        @Bindable var settings = settings
+        return SettingsTaskSection(title: "应用偏好") {
+            HStack(spacing: 16) {
+                Text("关闭窗口时").frame(width: 110, alignment: .leading)
+                Picker("关闭窗口时", selection: $settings.closeBehavior) {
+                    Text("在菜单栏继续运行").tag("tray")
+                    Text("退出应用").tag("exit")
+                }
+                .labelsHidden().pickerStyle(.segmented).frame(maxWidth: 360)
+                Spacer(minLength: 0)
+            }
+            HStack(spacing: 16) {
+                Text("外观").frame(width: 110, alignment: .leading)
+                Picker("外观", selection: $settings.theme) {
+                    Text("跟随系统").tag("auto")
+                    Text("深色").tag("dark")
+                    Text("浅色").tag("light")
+                }
+                .labelsHidden().pickerStyle(.segmented).frame(maxWidth: 360)
+                Spacer(minLength: 0)
+            }
+            Divider().padding(.vertical, 2)
+            Toggle("登录后自动启动，仅显示菜单栏图标", isOn: Binding(get: { settings.autostartEnabled }, set: { state.setAutostart($0) }))
+                .disabled(settings.loginItemBusy)
+            HStack(spacing: 12) {
+                Text(settings.loginItemBusy ? "正在读取系统登录项…" : settings.loginItem.detail)
+                    .font(.system(size: 13)).foregroundStyle(settings.loginItem.needsAttention ? Theme.warning : Theme.secondaryText)
+                Spacer()
+                Button("登录项设置") { state.openLoginItemSettings() }.toolboxAction()
+                Button("重新检测") { state.refreshLoginItem() }.toolboxAction()
+                    .disabled(settings.loginItemBusy)
+            }
+            HStack {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("打开后选择“本地网络”，检查本应用开关。")
+                    Text("连接失败也可能来自网络或设备，不能据此判断权限被拒绝。")
+                }
+                .font(.system(size: 13)).foregroundStyle(Theme.secondaryText)
+                Spacer()
+                Button("打开隐私设置") { state.openLocalNetworkSettings() }.toolboxAction()
+                    .help("系统设置 → 隐私与安全 → 本地网络")
             }
         }
     }
 
-    private func hotkeyBinding(_ action: String) -> Binding<HotkeyConfig> {
-        Binding(
-            get: { state.hotkeys[action] ?? HotkeyConfig() },
-            set: { state.hotkeys[action] = $0 }
-        )
+    private var guardianSettings: some View {
+        SettingsTaskSection(title: "连接保活") {
+            HStack(alignment: .top, spacing: 16) {
+                Image(systemName: "shield.lefthalf.filled")
+                    .font(.system(size: 25, weight: .light)).foregroundStyle(Theme.accent)
+                    .frame(width: 40, height: 38)
+                VStack(alignment: .leading, spacing: 8) {
+                    Text(tools.guardianStatus).textSelection(.enabled)
+                    Text("显示器端 AdbGuardian 尝试在重启、待机或唤醒后恢复 ADB。深度待机时服务可能停止，恢复时间由显示器系统决定。")
+                        .font(.system(size: 13)).foregroundStyle(Theme.secondaryText)
+                }
+            }
+            HStack(spacing: 10) {
+                Button("检测状态") { state.checkGuardian() }
+                    .toolboxAction()
+                Button("启动保活") { state.startGuardian() }
+                    .toolboxAction()
+                Spacer()
+                Button("部署或修复…") { showGuardianConfirm = true }
+                    .toolboxAction()
+            }
+            Text("部署会安装自带 APK，授予修改调试设置和无障碍权限，并开启网络 ADB 5555。恢复效果需以实际待机和重启测试为准。")
+                .font(.system(size: 13)).foregroundStyle(Theme.secondaryText)
+        }
     }
 
-    private func adjustBinding(_ index: Int) -> Binding<AdjustHotkeyConfig> {
-        Binding(
-            // 删除行时 SwiftUI 可能还会短暂持有旧下标的 binding，越界要兜住，
-            // 否则会 "Index out of range" 直接 SIGTRAP（崩溃日志里出现过）。
-            get: { index < state.adjustHotkeys.count ? state.adjustHotkeys[index] : AdjustHotkeyConfig() },
-            set: { if index < state.adjustHotkeys.count { state.adjustHotkeys[index] = $0 } }
-        )
+    private var memorySettings: some View {
+        SettingsTaskSection(title: "自动记忆与联动") {
+            Toggle("分别记忆 HDR / SDR 精密控光", isOn: Binding(
+                get: { state.effectiveHdrMemoryEnabled },
+                set: { state.toggleHdrMemory($0) }
+            ))
+            .disabled(state.memoriesSuspendedByPreset)
+            Text(tools.hdrMemoryStatusText).foregroundStyle(Theme.secondaryText)
+            Text("根据 macOS EDR 判断 HDR 信号。")
+                .font(.system(size: 13)).foregroundStyle(Theme.secondaryText)
+            Divider().padding(.vertical, 2)
+            Toggle("关闭 FreeSync 后恢复原画面模式", isOn: Binding(
+                get: { state.effectiveFreesyncMemoryEnabled },
+                set: { state.toggleFreesyncMemory($0) }
+            ))
+            .disabled(state.memoriesSuspendedByPreset)
+            Text(tools.freesyncMemoryStatusText).foregroundStyle(Theme.secondaryText)
+            if state.memoriesSuspendedByPreset {
+                Label("使用预设时记忆设置已锁定；返回无预设后恢复。", systemImage: "lock")
+                    .font(.system(size: 13)).foregroundStyle(Theme.secondaryText)
+            }
+            Divider().padding(.vertical, 2)
+            Toggle("准星仅在游戏模式下生效", isOn: Binding(
+                get: { tools.crosshairGameModeOnly },
+                set: { state.toggleCrosshairGameModeOnly($0) }
+            ))
+            Text(tools.crosshairModeStatusText).foregroundStyle(Theme.secondaryText)
+        }
+    }
+
+    private var displayResolutionSettings: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack {
+                Text("显示器 4K UI").font(.system(size: 15, weight: .semibold))
+                Spacer()
+                Button("重新检测") { state.check4KState() }
+                    .toolboxAction()
+            }
+            Text("当前：\(tools.is4KUI ? "4K · 3840×2160 / DPI 640" : "1080p · 1920×1080 / DPI 320")")
+                .foregroundStyle(Theme.secondaryText)
+            Toggle("启用 4K UI", isOn: Binding(
+                get: { tools.is4KUI },
+                set: { pending4K = $0; show4KConfirm = true }
+            ))
+            Text("仅改变显示器内置系统界面的分辨率。切换前会再次确认，确认后显示器将重启。")
+                .font(.system(size: 13)).foregroundStyle(Theme.secondaryText)
+        }
+    }
+
+    private var installationTools: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text("安装显示器应用").font(.system(size: 15, weight: .semibold))
+            Text("选择本地 APK，使用 adb install -r -d 安装到显示器。")
+                .font(.system(size: 13)).foregroundStyle(Theme.secondaryText)
+            HStack(spacing: 12) {
+                Button("选择 APK 并安装…") { state.chooseAPK() }
+                    .toolboxAction()
+                if connection.isConnected {
+                    Label("已连接", systemImage: "checkmark.circle").foregroundStyle(Theme.success)
+                }
+            }
+        }
+    }
+
+    private var terminalTools: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text("ADB 命令行").font(.system(size: 15, weight: .semibold))
+            Text("在终端打开独立 ADB server（端口 5038），供手动调试。")
+                .font(.system(size: 13)).foregroundStyle(Theme.secondaryText)
+            HStack(spacing: 10) {
+                Button("打开 ADB 命令行") { state.openAdbCmd() }
+                    .toolboxAction()
+                Button("进入 ADB Shell") { state.openAdbShell() }
+                    .toolboxAction()
+            }
+            if let result = settings.terminalResult, result.outcome != .opened {
+                Text(result.outcome == .denied ? "上次 Terminal 请求被拒绝，请在系统设置中允许后重试。" : "Terminal 未确认完成，请检查日志后重试。")
+                    .font(.system(size: 13)).foregroundStyle(Theme.warning)
+            }
+            Button("自动化权限设置") { state.openAutomationSettings() }.toolboxAction()
+        }
     }
 }
 
@@ -270,178 +304,182 @@ struct ToolsView: View {
 /// 独立的配置 sheet。放在 sheet 里而不是内联折叠，是因为内联展开会改变整页高度、
 /// 触发工具页所有卡片的重新布局（实测 850ms）。
 struct HotkeyConfigSheet: View {
-    @EnvironmentObject var state: AppState
+    @ToolboxActions var state
+    @Environment(HotkeysModel.self) private var keyboard
     @Environment(\.dismiss) private var dismiss
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             HStack {
-                Text("自定义全局快捷键").font(.headline)
+                VStack(alignment: .leading, spacing: 6) {
+                    Text("键盘控制").font(.system(size: 23, weight: .semibold))
+                    Text("录入组合键，或直接接管系统音量与亮度键。")
+                        .font(.system(size: 13)).foregroundStyle(Theme.secondaryText)
+                }
                 Spacer()
             }
-            .padding(16)
+            .padding(28)
 
             Divider()
 
             ScrollView {
-                VStack(alignment: .leading, spacing: 10) {
-                    ForEach(hotkeyActions, id: \.id) { action in
-                        HotkeyRow(label: action.label, config: hotkeyBinding(action.id))
-                    }
-
-                    Divider().padding(.vertical, 4)
-
-                    ForEach(state.adjustHotkeys.indices, id: \.self) { i in
-                        AdjustHotkeyRow(config: adjustBinding(i)) {
-                            state.adjustHotkeys.remove(at: i)
+                VStack(alignment: .leading, spacing: 18) {
+                    SettingsTaskSection(title: "组合快捷键") {
+                        ForEach(hotkeyActions, id: \.id) { action in
+                            HotkeyRow(label: action.label, config: hotkeyBinding(action.id))
                         }
-                    }
-                    Button("新建可调快捷键") {
-                        state.adjustHotkeys.append(AdjustHotkeyConfig())
+
+                        Divider().padding(.vertical, 4)
+
+                        ForEach(keyboard.adjustHotkeys.indices, id: \.self) { i in
+                            AdjustHotkeyRow(config: adjustBinding(i)) {
+                                keyboard.adjustHotkeys.remove(at: i)
+                            }
+                        }
+                        Button("新建可调快捷键") {
+                            keyboard.adjustHotkeys.append(AdjustHotkeyConfig())
+                        }
+                        .toolboxAction()
+
                     }
 
-                    Divider().padding(.vertical, 4)
+                    Divider()
 
-                    // 系统亮度调节键直接接管为显示器背光。
-                    // 这类键可能以 NX_SYSDEFINED 或普通 keyDown(144/145) 到达，都要拦。
-                    HStack(spacing: 12) {
-                        Toggle("亮度调节键调显示器背光", isOn: $state.mediaBrightnessKeysEnabled)
+                    SettingsTaskSection(title: "亮度键") {
+                        // 系统亮度调节键直接接管为显示器背光。
+                        // 这类键可能以 NX_SYSDEFINED 或普通 keyDown(144/145) 到达，都要拦。
+                        HStack(spacing: 12) {
+                            Toggle("亮度调节键调显示器背光", isOn: Binding(get: { keyboard.mediaBrightnessKeysEnabled }, set: { state.mediaBrightnessKeysEnabled = $0 }))
+                                .toggleStyle(.checkbox)
+                            // 开原生 OSD 时步长固定 16 格，整个隐藏，别留一个灰着的「步长 10」
+                            if !keyboard.mediaBrightnessNativeOSD {
+                                Stepper("步长 \(keyboard.mediaBrightnessStep)", value: Binding(get: { keyboard.mediaBrightnessStep }, set: { state.mediaBrightnessStep = $0 }), in: 1...100)
+                                    .frame(width: 140)
+                                    .disabled(!keyboard.mediaBrightnessKeysEnabled)
+                            }
+                            Spacer()
+                        }
+                        Text("调暗、调亮键控制此显示器背光，不再调节内置屏幕。需要辅助功能权限及 ADB 连接。")
+                            .font(.system(size: 13))
+                            .foregroundStyle(Theme.secondaryText)
+
+                        Toggle("使用 macOS 原生亮度提示（OSD）", isOn: Binding(get: { keyboard.mediaBrightnessNativeOSD }, set: { state.mediaBrightnessNativeOSD = $0 }))
                             .toggleStyle(.checkbox)
-                        // 开原生 OSD 时步长固定 16 格，整个隐藏，别留一个灰着的「步长 10」
-                        if !state.mediaBrightnessNativeOSD {
-                            Stepper("步长 \(state.mediaBrightnessStep)", value: $state.mediaBrightnessStep, in: 1...100)
-                                .frame(width: 140)
-                                .disabled(!state.mediaBrightnessKeysEnabled)
-                        }
-                        Spacer()
-                    }
-                    Text("开启后系统亮度调节键被本应用接管：调暗键减小、调亮键增大显示器背光，内置屏幕不再变亮。需辅助功能权限，且已连接显示器。")
-                        .font(.caption)
-                        .foregroundColor(.secondary)
+                            .disabled(!keyboard.mediaBrightnessKeysEnabled)
+                        Text(keyboard.mediaBrightnessNativeOSD
+                             ? "原生提示固定为 16 格，每按一次调节一格，步长不可调。"
+                             : "当前使用应用悬浮提示，可自行设定调节步长。")
+                            .font(.system(size: 13))
+                            .foregroundStyle(Theme.secondaryText)
 
-                    Toggle("使用 macOS 原生亮度提示（OSD）", isOn: $state.mediaBrightnessNativeOSD)
-                        .toggleStyle(.checkbox)
-                        .disabled(!state.mediaBrightnessKeysEnabled)
-                    Text(state.mediaBrightnessNativeOSD
-                         ? "开启后按亮度键弹出系统原生亮度条（与系统亮度键同款），固定 16 格、每按一次一格，步长不可调。"
-                         : "开启后按亮度键弹出系统原生亮度条；关掉则用本应用的悬浮提示。")
-                        .font(.caption)
-                        .foregroundColor(.secondary)
-
-                    Toggle("多屏时仅在鼠标位于「\(state.mediaBrightnessDisplayName)」时拦截", isOn: $state.mediaBrightnessFocusOnly)
-                        .toggleStyle(.checkbox)
-                        .disabled(!state.mediaBrightnessKeysEnabled)
-                    HStack(spacing: 8) {
-                        Text("显示器名称")
-                            .font(.caption)
-                            .foregroundColor(.secondary)
-                        TextField("Mi Monitor", text: $state.mediaBrightnessDisplayName)
-                            .textFieldStyle(.roundedBorder)
-                            .frame(width: 200)
-                        Spacer()
-                    }
-                    .disabled(!state.mediaBrightnessKeysEnabled)
-                    Text("鼠标不在目标显示器上时，亮度键交回系统处理（去调内置屏亮度）。")
-                        .font(.caption)
-                        .foregroundColor(.secondary)
-
-                    Divider().padding(.vertical, 4)
-
-                    // 系统音量调节键接管为显示器音量。
-                    HStack(spacing: 12) {
-                        Toggle("音量调节键调显示器音量", isOn: $state.mediaVolumeKeysEnabled)
+                        Toggle("多屏时仅在鼠标位于「\(keyboard.mediaBrightnessDisplayName)」时拦截", isOn: Binding(get: { keyboard.mediaBrightnessFocusOnly }, set: { state.mediaBrightnessFocusOnly = $0 }))
                             .toggleStyle(.checkbox)
-                        if !state.mediaVolumeNativeOSD {
-                            Stepper("步长 \(state.mediaVolumeStep)", value: $state.mediaVolumeStep, in: 1...100)
-                                .frame(width: 140)
-                                .disabled(!state.mediaVolumeKeysEnabled)
+                            .disabled(!keyboard.mediaBrightnessKeysEnabled)
+                        HStack(spacing: 8) {
+                            Text("显示器名称")
+                                .font(.system(size: 13))
+                                .foregroundStyle(Theme.secondaryText)
+                            TextField("Mi Monitor", text: Binding(get: { keyboard.mediaBrightnessDisplayName }, set: { state.mediaBrightnessDisplayName = $0 }))
+                                .textFieldStyle(.roundedBorder)
+                                .frame(width: 200)
+                            Spacer()
                         }
-                        Spacer()
-                    }
-                    Text("开启后用音量加减键、静音键控制显示器。优先使用已连接的蓝牙设备，无需网络 ADB；蓝牙不可用时使用已连接的 ADB。需辅助功能权限。")
-                        .font(.caption)
-                        .foregroundColor(.secondary)
+                        .disabled(!keyboard.mediaBrightnessKeysEnabled)
+                        Text("鼠标不在目标显示器上时，亮度键交回系统处理（去调内置屏亮度）。")
+                            .font(.system(size: 13))
+                            .foregroundStyle(Theme.secondaryText)
 
-                    Toggle("优先通过蓝牙控制音量", isOn: $state.mediaVolumeBluetoothPreferred)
-                        .toggleStyle(.checkbox)
-                        .disabled(!state.mediaVolumeKeysEnabled)
-                    HStack(spacing: 8) {
-                        Text("蓝牙设备名").font(.caption).foregroundColor(.secondary)
-                        TextField("REDMI G Pro 32U 2026", text: $state.mediaVolumeBluetoothName)
-                            .textFieldStyle(.roundedBorder).frame(width: 240)
                     }
-                    .disabled(!state.mediaVolumeKeysEnabled || !state.mediaVolumeBluetoothPreferred)
-                    Text(state.mediaVolumeBluetoothStatus).font(.caption).foregroundColor(.secondary)
-                    Text("设备名需与 macOS 蓝牙音频设备名称一致。声音可以继续通过 DP/HDMI 输出；静音通过音量归零实现，再按可恢复原音量。")
-                        .font(.caption).foregroundColor(.secondary)
 
-                    Toggle("使用 macOS 原生音量提示（OSD）", isOn: $state.mediaVolumeNativeOSD)
-                        .toggleStyle(.checkbox)
-                        .disabled(!state.mediaVolumeKeysEnabled)
-                    Text(state.mediaVolumeNativeOSD
-                         ? "开启后按音量键弹出系统原生音量条（与系统音量键同款）；失败自动回退本应用悬浮提示。"
-                         : "开启后按音量键弹出系统原生音量条；关掉则用本应用的悬浮提示。")
-                        .font(.caption)
-                        .foregroundColor(.secondary)
+                    Divider()
 
-                    Toggle("仅当默认音频输出为指定设备时接管", isOn: $state.mediaVolumeOutputGateEnabled)
-                        .toggleStyle(.checkbox)
-                        .disabled(!state.mediaVolumeKeysEnabled)
-                    HStack(spacing: 8) {
-                        Text("音频输出设备名")
-                            .font(.caption)
-                            .foregroundColor(.secondary)
-                        TextField("Mi Monitor", text: $state.mediaVolumeOutputName)
-                            .textFieldStyle(.roundedBorder)
-                            .frame(width: 200)
-                        Spacer()
+                    SettingsTaskSection(title: "音量键") {
+                        // 系统音量调节键接管为显示器音量。
+                        HStack(spacing: 12) {
+                            Toggle("音量调节键调显示器音量", isOn: Binding(get: { keyboard.mediaVolumeKeysEnabled }, set: { state.mediaVolumeKeysEnabled = $0 }))
+                                .toggleStyle(.checkbox)
+                            if !keyboard.mediaVolumeNativeOSD {
+                                Stepper("步长 \(keyboard.mediaVolumeStep)", value: Binding(get: { keyboard.mediaVolumeStep }, set: { state.mediaVolumeStep = $0 }), in: 1...100)
+                                    .frame(width: 140)
+                                    .disabled(!keyboard.mediaVolumeKeysEnabled)
+                            }
+                            Spacer()
+                        }
+                        Text("音量加减、静音键通过已连接的网络 ADB 控制此显示器。需要辅助功能权限。")
+                            .font(.system(size: 13))
+                            .foregroundStyle(Theme.secondaryText)
+
+                        Toggle("使用 macOS 原生音量提示（OSD）", isOn: Binding(get: { keyboard.mediaVolumeNativeOSD }, set: { state.mediaVolumeNativeOSD = $0 }))
+                            .toggleStyle(.checkbox)
+                            .disabled(!keyboard.mediaVolumeKeysEnabled)
+                        Text(keyboard.mediaVolumeNativeOSD
+                             ? "原生音量提示固定为 16 格；提示失败时自动使用应用悬浮提示。"
+                             : "当前使用应用悬浮提示，可自行设定调节步长。")
+                            .font(.system(size: 13))
+                            .foregroundStyle(Theme.secondaryText)
+
+                        Toggle("仅当默认音频输出为指定设备时接管", isOn: Binding(get: { keyboard.mediaVolumeOutputGateEnabled }, set: { state.mediaVolumeOutputGateEnabled = $0 }))
+                            .toggleStyle(.checkbox)
+                            .disabled(!keyboard.mediaVolumeKeysEnabled)
+                        HStack(spacing: 8) {
+                            Text("音频输出设备名")
+                                .font(.system(size: 13))
+                                .foregroundStyle(Theme.secondaryText)
+                            TextField("Mi Monitor", text: Binding(get: { keyboard.mediaVolumeOutputName }, set: { state.mediaVolumeOutputName = $0 }))
+                                .textFieldStyle(.roundedBorder)
+                                .frame(width: 200)
+                            Spacer()
+                        }
+                        .disabled(!keyboard.mediaVolumeKeysEnabled || !keyboard.mediaVolumeOutputGateEnabled)
                     }
-                    .disabled(!state.mediaVolumeKeysEnabled || !state.mediaVolumeOutputGateEnabled)
-                    Text("启用输出限制时，上方音频输出设备或指定蓝牙设备作为默认输出均可接管；其他耳机和扬声器交回系统处理。")
-                        .font(.caption).foregroundColor(.secondary)
                 }
-                .padding(16)
+                .padding(28)
             }
 
             Divider()
 
-            HStack(spacing: 12) {
+            VStack(alignment: .leading, spacing: 12) {
                 Text("点「未设置」后直接按组合键即可录入")
-                    .font(.caption)
-                    .foregroundColor(.secondary)
+                    .font(.system(size: 13))
+                    .foregroundStyle(Theme.secondaryText)
 
-                // 排查"配了没反应"时才有用；平时开着手打键盘会把日志刷满
-                Toggle("诊断日志", isOn: Binding(
-                    get: { state.hotkeyDebugEnabled },
-                    set: { state.hotkeyDebugEnabled = $0 }
-                ))
-                .toggleStyle(.checkbox)
-                .font(.caption)
-                .help("记录「按键码命中但修饰键不符」这类信息，用于排查快捷键不生效")
+                HStack(spacing: 12) {
+                    // 排查"配了没反应"时才有用；平时开着手打键盘会把日志刷满
+                    Toggle("诊断日志", isOn: Binding(
+                        get: { keyboard.hotkeyDebugEnabled },
+                        set: { state.hotkeyDebugEnabled = $0 }
+                    ))
+                    .toggleStyle(.checkbox)
+                    .font(.system(size: 13))
+                    .help("记录「按键码命中但修饰键不符」这类信息，用于排查快捷键不生效")
 
-                Spacer()
-                Button("完成") {
-                    state.saveHotkeys()
-                    dismiss()
+                    Spacer()
+                    Button("完成") {
+                        state.saveHotkeys()
+                        dismiss()
+                    }
+                    .toolboxAction(prominent: true)
                 }
-                .buttonStyle(.borderedProminent)
             }
-            .padding(16)
+            .padding(28)
         }
-        .frame(width: 640, height: 500)
+        .frame(minWidth: 760, idealWidth: 800, maxWidth: 940, minHeight: 620, idealHeight: 760, maxHeight: 900)
+        .font(.system(size: 14))
+        .tint(Theme.accent)
+        .background(Theme.canvas)
     }
 
     private func hotkeyBinding(_ action: String) -> Binding<HotkeyConfig> {
         Binding(
-            get: { state.hotkeys[action] ?? HotkeyConfig() },
-            set: { state.hotkeys[action] = $0 }
+            get: { keyboard.hotkeys[action] ?? HotkeyConfig() },
+            set: { keyboard.hotkeys[action] = $0 }
         )
     }
 
     private func adjustBinding(_ index: Int) -> Binding<AdjustHotkeyConfig> {
         Binding(
-            get: { index < state.adjustHotkeys.count ? state.adjustHotkeys[index] : AdjustHotkeyConfig() },
-            set: { if index < state.adjustHotkeys.count { state.adjustHotkeys[index] = $0 } }
+            get: { index < keyboard.adjustHotkeys.count ? keyboard.adjustHotkeys[index] : AdjustHotkeyConfig() },
+            set: { if index < keyboard.adjustHotkeys.count { keyboard.adjustHotkeys[index] = $0 } }
         )
     }
 }
@@ -465,18 +503,18 @@ struct KeyRecorderButton: View {
     @State private var hint: String?
 
     var body: some View {
-        HStack(spacing: 6) {
+        VStack(alignment: .leading, spacing: 4) {
             Button {
                 recording ? stopRecording() : startRecording()
             } label: {
                 Text(recording ? "请按键…" : displayText)
                     .frame(width: width)
             }
-            .buttonStyle(.bordered)
+            .toolboxAction()
             .tint(recording ? .accentColor : nil)
 
             if let hint {
-                Text(hint).font(.caption).foregroundStyle(.orange)
+                Text(hint).font(.system(size: 13)).foregroundStyle(Theme.warning)
             }
         }
         .onDisappear { stopRecording() }
@@ -554,7 +592,21 @@ struct AdjustHotkeyRow: View {
             Button(action: onDelete) {
                 Image(systemName: "trash")
             }
-            .buttonStyle(.borderless)
+            .toolboxAction()
         }
+    }
+}
+
+/// Text-heavy settings stay on the page canvas; dividers separate tasks without nested cards.
+private struct SettingsTaskSection<Content: View>: View {
+    let title: String
+    @ViewBuilder let content: Content
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            Text(title).font(.system(size: 15, weight: .semibold))
+            content
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 }
