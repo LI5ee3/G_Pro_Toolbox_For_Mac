@@ -7,8 +7,8 @@ on:
     branches: [master]
   workflow_dispatch:
     inputs:
-      distribute:
-        description: 'Build, notarize and draft a release from a version tag (requires macos-release environment)'
+      package:
+        description: 'Explicitly build development DMG/ZIP (ad-hoc signing; never installs)'
         type: boolean
         default: false
 permissions:
@@ -33,13 +33,30 @@ jobs:
           python3 macos/scripts/runtime_assets.py prepare
           python3 macos/scripts/runtime_assets.py check
           python3 -m unittest discover -s macos/scripts/tests -v
-          swift test --package-path macos
+          swift test --package-path macos --scratch-path "$RUNNER_TEMP/swift-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
           python3 macos/scripts/validate_architecture.py
           python3 macos/scripts/validate_preview_boundary.py
+          xcodebuild -project macos/Toolbox.xcodeproj -scheme ToolboxApp -configuration Debug -derivedDataPath "$RUNNER_TEMP/app-debug-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}" -destination 'platform=macOS,arch=arm64' CODE_SIGN_IDENTITY=- build
           xcodebuild -project macos/Toolbox.xcodeproj -scheme ToolboxPreviews -configuration Debug -derivedDataPath "$RUNNER_TEMP/preview-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}" -destination 'platform=macOS,arch=arm64' CODE_SIGN_IDENTITY=- build
           python3 macos/scripts/validate_preview_boundary.py "$RUNNER_TEMP/preview-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}/Build/Products/Debug/ToolboxPreviewHost.app"
-          ./macos/build_app.sh --output "$RUNNER_TEMP/toolbox-build-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}" --build "$GITHUB_RUN_NUMBER"
-          ./macos/make_dmg.sh --app "$RUNNER_TEMP/toolbox-build-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}/红米G Pro ToolBox.app" --output "$RUNNER_TEMP/toolbox-packages-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          ./macos/build_app.sh --mode development --output "$RUNNER_TEMP/toolbox-build-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}" --derived-data "$RUNNER_TEMP/app-release-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}" --build "$GITHUB_RUN_NUMBER"
+  package:
+    needs: build
+    # Only an explicit opt-in may create DMG/ZIP; push, PR and default manual runs cannot.
+    if: github.event_name == 'workflow_dispatch' && inputs.package
+    runs-on: [self-hosted, macOS, ARM64, toolbox-macos27]
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+        with:
+          persist-credentials: false
+          clean: true
+      - name: Explicitly build development packages without installing
+        run: |
+          set -euo pipefail
+          python3 macos/scripts/runtime_assets.py prepare
+          ./macos/build_app.sh --mode development --output "$RUNNER_TEMP/package-app-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}" --derived-data "$RUNNER_TEMP/package-derived-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}" --build "$GITHUB_RUN_NUMBER"
+          ./macos/make_dmg.sh --mode development --app "$RUNNER_TEMP/package-app-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}/红米G Pro ToolBox.app" --output "$RUNNER_TEMP/toolbox-packages-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: mimonitor-development-arm64
@@ -50,69 +67,3 @@ jobs:
             ${{ runner.temp }}/toolbox-packages-${{ github.run_id }}-${{ github.run_attempt }}/SHA256SUMS
           if-no-files-found: error
           retention-days: 14
-  distribution:
-    needs: build
-    # No automatic tag release; only an explicit run on a tag can enter the protected environment.
-    if: github.event_name == 'workflow_dispatch' && inputs.distribute && startsWith(github.ref, 'refs/tags/v')
-    environment: macos-release
-    runs-on: [self-hosted, macOS, ARM64, toolbox-macos27, toolbox-release]
-    timeout-minutes: 90
-    steps:
-      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
-        with:
-          persist-credentials: false
-          clean: true
-      - name: Create scoped temporary signing keychain
-        env:
-          DEVELOPER_ID_P12_BASE64: ${{ secrets.DEVELOPER_ID_P12_BASE64 }}
-          DEVELOPER_ID_P12_PASSWORD: ${{ secrets.DEVELOPER_ID_P12_PASSWORD }}
-          DEVELOPER_TEAM_ID: ${{ vars.DEVELOPER_TEAM_ID }}
-          NOTARY_KEY_P8_BASE64: ${{ secrets.NOTARY_KEY_P8_BASE64 }}
-          NOTARY_KEY_ID: ${{ vars.NOTARY_KEY_ID }}
-          NOTARY_ISSUER_ID: ${{ vars.NOTARY_ISSUER_ID }}
-        run: python3 macos/scripts/ci_credentials.py setup "$RUNNER_TEMP/toolbox-credential-state-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}.json"
-      - name: Build and notarize official artifacts
-        env:
-          DEVELOPER_TEAM_ID: ${{ vars.DEVELOPER_TEAM_ID }}
-          RELEASE_TAG: ${{ github.ref_name }}
-        run: |
-          set -euo pipefail
-          VERSION="${RELEASE_TAG#v}"
-          python3 macos/scripts/runtime_assets.py prepare
-          ./macos/build_app.sh --mode distribution --identity "$TOOLBOX_SIGNING_IDENTITY" --team "$DEVELOPER_TEAM_ID" --version "$VERSION" --build "$GITHUB_RUN_NUMBER" --output "$RUNNER_TEMP/toolbox-official-build-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
-          ./macos/make_dmg.sh --mode distribution --identity "$TOOLBOX_SIGNING_IDENTITY" --team "$DEVELOPER_TEAM_ID" --profile "$TOOLBOX_NOTARY_PROFILE" --keychain "$TOOLBOX_SIGNING_KEYCHAIN" --app "$RUNNER_TEMP/toolbox-official-build-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}/红米G Pro ToolBox.app" --output "$RUNNER_TEMP/toolbox-official-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
-      - name: Always remove temporary credentials
-        if: always()
-        run: python3 macos/scripts/ci_credentials.py clean "$RUNNER_TEMP/toolbox-credential-state-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}.json"
-      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
-        with:
-          name: mimonitor-notarized-arm64
-          path: |
-            ${{ runner.temp }}/toolbox-official-${{ github.run_id }}-${{ github.run_attempt }}/*.dmg
-            ${{ runner.temp }}/toolbox-official-${{ github.run_id }}-${{ github.run_attempt }}/*.zip
-            ${{ runner.temp }}/toolbox-official-${{ github.run_id }}-${{ github.run_attempt }}/*.json
-            ${{ runner.temp }}/toolbox-official-${{ github.run_id }}-${{ github.run_attempt }}/SHA256SUMS
-          if-no-files-found: error
-          retention-days: 30
-  release:
-    needs: distribution
-    if: github.event_name == 'workflow_dispatch' && inputs.distribute && startsWith(github.ref, 'refs/tags/v')
-    environment: macos-release
-    runs-on: ubuntu-latest
-    permissions:
-      contents: write
-    steps:
-      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
-        with:
-          name: mimonitor-notarized-arm64
-      - name: Verify downloaded checksums
-        run: sha256sum -c SHA256SUMS
-      - uses: softprops/action-gh-release@6cbd405e2c4e67a21c47fa9e383d020e4e28b836 # v2.3.3
-        with:
-          draft: true
-          files: |
-            MimonitorToolbox-macos-arm64.dmg
-            MimonitorToolbox-macos-arm64.zip
-            release-manifest.json
-            SHA256SUMS
-          fail_on_unmatched_files: true
