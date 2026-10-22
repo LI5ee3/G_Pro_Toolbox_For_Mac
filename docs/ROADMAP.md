@@ -1,7 +1,7 @@
 # G Pro ToolBox 最终开发路线图
 
 > 唯一项目进度基准。创建于 2026-10-22（UTC+8），同日按用户要求修订自动模式、分层验收和 CI 前置门禁。
-> 当前结论：S1-05 server 健康检测与恢复边界正在实施；固定父版、候选 257 Swift/24 Python、构建与实际 Preview 已通过，默认 CI 待完成。A17 维持 CLOSED_S1-10；G1 NOT_PASSED，阶段二至四锁定。
+> 当前结论：S1-05 server 查询与应用恢复边界完成，本机及默认 push CI 的 257 Swift/24 Python、构建/边界、实际 Preview、保护与回滚通过。A04 在本任务范围关闭，A03 仍有阶段二门禁；A17 维持 CLOSED_S1-10。S1-06 未开始，G1 NOT_PASSED，阶段二至四锁定。
 > 后续每次工作先读取本文件，完成一个明确子任务后更新任务状态、证据、风险和下一步；其他文档只承载设计或历史证据，不另设竞争性进度表。
 
 ## 1. 范围、基线与执行边界
@@ -130,8 +130,8 @@ USB 数据线/ADB 连接不等于视频输入状态；信号源、默认音频�
 | --- | --- | --- |
 | A01 / B | AdbSession.targetIP / serial、AdbClient.activeIP/connect/disconnect 固定 TCP 5555；不能直接塞 USB serial。[E04][E05] | S1-04 已以 AdbEndpoint 替换 TCP 会话存储，默认 argv/取消兼容本机验证通过（见 8.7）；S2-02 USB 端点/发现未实施，风险未整体关闭 |
 | A02 / B | AdbPresetDevice 用 identity:5555，协调器以 adb.ip 判断基线、自动任务和活动预设；传输地址与物理设备身份混用。[E06][E08] | S1-04 已分离预设 endpoint 与 legacy identity 参数，固定目标本机验证通过；旧 IP 所有权规则保持，S2-04 物理身份/别名迁移待实现，风险未整体关闭 |
-| A03 / B | ensureConnected/restartServer 恢复可 kill-server；共享 5038 同时承载 USB/TCP，网络故障可能打断 USB。unauthorized 退出 wait 后仍可能进入后续恢复路径。[E05] | S1-05 明确 server 所有权、健康和恢复策略；S2-02/06 实现传输区分与故障注入 |
-| A04 / R | isServerAlive 调用 adb version；该命令只能证明客户端可运行，不能可靠证明 server 响应。[E05][X02] | S1-05 以假执行器覆盖“客户端在/server 不在”，选锁定 adb 已支持的 server 探测；先实查 help/行为 |
+| A03 / B | ensureConnected/restartServer 恢复可 kill-server；共享 5038 同时承载 USB/TCP，网络故障可能打断 USB。unauthorized 退出 wait 后仍可能进入后续恢复路径。[E05] | S1-05 已移除应用显式 kill/start 恢复循环，统一 unauthorized/取消/25 秒冷却；配置端口不视为独占凭证。官方 adb 启动/版本协调仍可能有 server 副作用，多客户端、USB/TCP 与真机恢复留 S2-02/06，风险未整体关闭（见 8.8） |
+| A04 / R | isServerAlive 调用 adb version；该命令只能证明客户端可运行，不能可靠证明 server 响应。[E05][X02] | CLOSED_S1-05：锁定客户端+本地假 server 实测 host-features；成功/拒绝/截断响应与客户端 version 对照，13 新增及原回归/默认 CI 通过；主动查询限制见 8.8 |
 | A05 / B | ConnectionStatus 仅四态，连接与扫描列表以 IP/String 表达；缺少 USB 枚举、授权、设备离线/歧义等结构化状态。[E09] | S1-03 已定义连接/发现/身份分开的状态契约；S1-04 仅 TCP 会话替换，状态扩展留 S2-01/03，风险未关闭 |
 | A06 / R | local_dimming_memory 解码为任意 Int 字典，状态展示与记忆应用均直接作四元素下标；live start 在连接前也调用展示，负数或 ≥4 可越界。S1-02 已确认源码，未做崩溃复现。[E18] | S1-06 用内存偏好复现后最小校验，保留原字节、不静默写回 |
 | A07 / R | applyGameJniMode 将缺失/无效 JNI 值与预期枚举比较后写成 0；读取失败可能被显示为确定“关闭”。[E19] | S1-07 假失败回归；区分未知和关闭，不改有效值映射 |
@@ -222,7 +222,7 @@ USB 连接不执行 adb connect；逻辑断开清除应用会话并暂停自动�
 | S1-10 | 独立处理 A17：关闭安全 Preview 宿主窗口偏好持久化 | 审查 Window 恢复/保存；最小 Preview-only 修复；实际移动/缩放、交互、关闭/退出及重启后偏好域/磁盘不变，保留旧值；全量自动回归通过 | DONE（4cef289；见 8.5） |
 | S1-03 | 输出统一端点/身份/状态与旧配置兼容设计 | 覆盖 USB/TCP、歧义、身份未知、旧 IP、会话失效；记录决策和不改的协议 | DONE（bf18c78；设计交付，未实施新契约；见 8.6） |
 | S1-04 | 最小替换 IP-only 会话契约，先迁移 TCP 路径 | TCP argv/命令顺序与旧行为一致；空端点、同址重连、A→B、预设固定目标测试通过；尚不开放 USB 发现 | DONE（60f476c；见 8.7） |
-| S1-05 | 收敛 server 健康检测与恢复决策边界 | 客户端存在/server 不在、unauthorized、冷却、取消的注入测试；不改变有效设备协议 | IN_PROGRESS（见 8.8） |
+| S1-05 | 收敛 server 健康检测与恢复决策边界 | 客户端存在/server 不在、unauthorized、冷却、取消的注入测试；不改变有效设备协议 | DONE（8b09ce3；见 8.8） |
 | S1-06 | 复现并修复非法控光记忆范围风险 | -1、4、极端 Int、错误 JSON 不崩溃且不向设备下发；有效 0…3 行为保持 | TODO |
 | S1-07 | 复现并修复 JNI 缺失被当作关闭 | failed/空/无效值呈未知；合法 320Hz/FreeSync 枚举和映射保持 | TODO |
 | S1-09 | 更新现行架构说明和必要遗留清理记录 | 依赖/所有权/Swift 模式/目标设计与源码一致；每个删除项有无引用证据；更新本表 | TODO |
@@ -423,7 +423,7 @@ HW-F01 的音量/静音、HW-F02 的安全画面控制、HW-F04/05 的预设与�
 | 项目 | 当前状态 | 已有证据 / 缺口 |
 | --- | --- | --- |
 | 现状审计与路线图修订 | DONE_REMOTE | 初版证据与修订历史保留；后续 S1-08 独立执行见下行及第 8.3 节 |
-| 阶段一 | S1-08 DONE；S1-02 DONE_WITH_FINDINGS（历史）；S1-10 DONE；S1-03 DONE；S1-04 DONE；G1 NOT_PASSED | TCP 最小会话迁移、本机/默认 CI、实际 Preview 与回滚通过；A01/A02 部分落实，A05 及后续门禁待实施，A17 维持关闭；S1-05 未开始，用户阶段验收未进行 |
+| 阶段一 | S1-08 DONE；S1-02 DONE_WITH_FINDINGS（历史）；S1-10 DONE；S1-03 DONE；S1-04 DONE；S1-05 DONE；G1 NOT_PASSED | TCP 会话及 server 恢复边界、本机/默认 CI、实际 Preview 与回滚通过；A04/A17 本任务范围关闭，A01/A02/A03 部分落实；S1-06 未开始，用户阶段验收未进行 |
 | 阶段二 | LOCKED | G1 未验收；Auto 为必需交付，USB→无线 TCP→USB 核心真机闭环不能省略 |
 | 阶段三 | LOCKED | G2 未验收；oil UI Pro 已在用户开发 Mac |
 | 阶段四 | LOCKED | G3 未验收；真实睡眠/登录/重启及最终交付均待执行 |
@@ -511,7 +511,10 @@ HW-F01 的音量/静音、HW-F02 的安全画面控制、HW-F04/05 的预设与�
 - **审查/最小计划**：version 只证明客户端；monitor 存在绕过冷却的重启入口；unauthorized 可能落入恢复；配置端口不证明独占 server。只改 AdbClient 和 monitor 调用边界，新增专项测试。移除应用显式 kill/start 恢复循环，保留成功 TCP 轨迹与目标重连；失败后仅一次 25 秒冷却的 host-features 查询，成功才允许最终目标重试。冷却用单调时钟，失败也记账；未授权/取消不恢复。
 - **锁定接口核验**：37.0.1-15733141 原始 adb SHA-256 1811e253b21b12cbfda7201ebaf86c10e7ddcb5c606a7a81f7c82b4c429c2d3b；help/version 与本地假 Unix socket 实测确认 host:version → host:host-features，成功/拒绝/截断响应区分。空本地 socket 的 version 仍成功；显式远端 host 模式下仅访问空 loopback 端口，查询失败且不启动 daemon。没有访问现用 server/设备。host-features 未列入当前 help，实际锁定二进制行为和官方源码共同支撑选型。
 - **生命周期限制**：host-features 是主动查询，普通官方 adb 命令可自动启动缺失 server，版本不匹配时可自行替换；本次不宣称其只读或完全消除 server 级副作用。显式预热与执行器环境保持，不新造 server/USB/RSA 栈。A03 仅收敛应用恢复决策；多客户端/版本冲突、USB/TCP 故障及真机恢复仍须 S2-02/06 验证；A08 不混入本次。
-- **本机验证**：基线 244 Swift/24 Python、独立父版 development Release 构建通过；候选 257 Swift（原 244 + 新 13）/24 Python、11 条回归命令、三种构建、架构/Preview 四层边界及 development 产物检查全部 exit 0。实际 Preview 音量/场景/zoom/退出重启，85.97 秒 180 样本（122 有宿主），无子进程/INET/偏好或密钥变化；原 App 内容/PID 保持。6 文件正逆补丁在独立父版恢复干净源码、原测试保留和文档检查通过。当前 LOCAL_PASS / CI_PENDING，默认 CI 待执行。证据 `../validation/S1-05-20261022-211401/`，私密备份不上传；S1-06 未开始，G1 NOT_PASSED。
+- **本机验证**：基线 244 Swift/24 Python、独立父版 development Release 构建通过；候选 257 Swift（原 244 + 新 13）/24 Python、11 条回归命令、三种构建、架构/Preview 四层边界及 development 产物检查全部 exit 0。实际 Preview 音量/场景/zoom/退出重启，85.97 秒 180 样本（122 有宿主），无子进程/INET/偏好或密钥变化；原 App 内容/PID 保持。6 文件正逆补丁在独立父版恢复干净源码、原测试保留和文档检查通过。本机与默认 CI 均通过。证据 `../validation/S1-05-20261022-211401/`，私密备份不上传；S1-06 未开始，G1 NOT_PASSED。
+
+- **提交/默认 CI**：实现提交 8b09ce3cf7fd6bda2e1f6dd37566e8fa95d24bf2，6 文件；172 个 macos 文件与受测摘要一致，普通 push 触发 [39787115283](https://github.com/LI5ee3/G_Pro_Toolbox_For_Mac/actions/runs/39787115283)。2026-10-22 21:29:10–21:31:30（UTC+8）build success，package skipped，21:32:22 总体 success、artifact=0；远端 257 Swift/24 Python、构建与自动边界通过。保存 clean HEAD Release 构建/验证报告（development、team=null）；临时 runner 退出 0/自动注销，远端 runner=0，无常驻服务；以后 CI 仍需在线 runner。
+- **最终裁决**：**S1-05 PASS / DONE**；A04 CLOSED_S1-05，A03 仅完成应用恢复边界，不整体关闭；A08 不变。CI 后原 App/PID、偏好及密钥保护再次通过，无安装/打包/真机操作。结果补记仅本文件与验收报告，使用 [skip ci]，产品树与受测实现一致；最终完整文档回读/清洁状态记录 `final-verification.json`。本次硬件 HW_NOT_TESTED，不替代阶段二核心真机门禁；G1 NOT_PASSED，用户阶段验收未进行。S1-06 未开始，阶段二至四 LOCKED，本次停止。
 
 ### 8.9 后续每个任务/阶段必填记录模板
 
