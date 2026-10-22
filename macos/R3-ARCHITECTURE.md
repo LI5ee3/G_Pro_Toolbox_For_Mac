@@ -1,5 +1,7 @@
 # R3：状态拆分与 Observation
 
+> 历史范围：以下正文保留本阶段当时的实现、测试、限制与回滚记录；不代表当前源码或本轮重新验收。现行架构见 [ARCHITECTURE](../docs/ARCHITECTURE.md)，唯一进度与执行门禁见 [ROADMAP](../docs/ROADMAP.md)；旧签名/发布要求不作为当前 development 构建的完成条件。
+
 这是 R3 完成时的历史记录；当前并发与进程边界见 [R4-CONCURRENCY.md](R4-CONCURRENCY.md)。
 
 2026-10-21。范围为 v2 的 R3a / R3b，继续保留 macOS 27、arm64、现有 Pro B UI、ADB 协议、预设存储和安全 Preview。未执行 R4–R6。

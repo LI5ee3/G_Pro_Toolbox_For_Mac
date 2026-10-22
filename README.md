@@ -20,6 +20,8 @@ Redmi G Pro 27U / 32U 显示器的原生 macOS 控制应用，使用 SwiftUI、A
 
 更多截图、配置和实测范围见 [Mac 使用与开发说明](macos/README.md)。
 
+当前架构与运行边界见 [ARCHITECTURE](docs/ARCHITECTURE.md)，执行范围及验收状态以 [ROADMAP](docs/ROADMAP.md) 为准。应用当前仍使用 TCP 连接；USB/Auto 和跨传输身份属于 [ADB 契约](docs/ADB-CONTRACTS.md) 的后续设计。
+
 ## 使用条件
 
 - Apple Silicon Mac（M1 或更新的 M 系列芯片），运行 macOS 27 或更高版本。
@@ -54,7 +56,7 @@ App 默认输出到 `macos/.build/artifacts/development/`；打包产物位于 `
 
 显式 `prepare` 从 Google 官方下载锁定版本的 macOS adb 并校验摘要；构建阶段只使用已准备的资源，不联网下载。开发包使用 ad-hoc 签名，内嵌 adb、显示器端 JAR、AdbGuardian APK 和必要致谢。最终用户无需安装 Python、Java 或 adb。
 
-架构、原生 Xcode Target 和安全 Preview 说明见 [开发文档](macos/README.md)；本机回归结果、权限入口的实际边界和回滚说明见 [R6c 收尾记录](macos/R6-CLOSEOUT.md)。正式签名、公证与公开发行流程见 [R6 发布说明](macos/R6-RELEASE.md)。
+现行依赖、状态/并发所有权和安全 Preview 见 [架构说明](docs/ARCHITECTURE.md)，构建入口见 [开发文档](macos/README.md)。[R6c 收尾记录](macos/R6-CLOSEOUT.md) 保留当时的本机验收与回滚事实；[R6 发布说明](macos/R6-RELEASE.md) 保留历史签名、公证和发行流程，均不替代 ROADMAP 的当前验收状态，也不要求 development 构建提供正式凭据。
 
 已验证阶段的源码回滚点同时保留为 `refactor/日期/阶段` 标签，例如 `refactor/20261022/R6c`。这些标签对应原本机检查点，不是正式版本标签，也不触发正式发布。
 

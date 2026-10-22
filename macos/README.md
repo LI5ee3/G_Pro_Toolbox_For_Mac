@@ -3,7 +3,9 @@
 Redmi G Pro 27U / 32U 显示器的原生 macOS 控制工具，使用 SwiftUI、AppKit 和 CoreAudio。
 仅支持 macOS 27 及以上的 Apple Silicon Mac（M 系列芯片）。本仓库仅维护 Mac 应用；设备端协议与实现源自 [原项目](https://github.com/YiHoooong/Mimonitor_Toolbox)，在此基础上继续开发。
 
-## Xcode 开发与安全 Preview（R0–R6）
+现行依赖、状态/并发所有权及遗留保留理由见 [ARCHITECTURE](../docs/ARCHITECTURE.md)；执行范围与验收状态以 [ROADMAP](../docs/ROADMAP.md) 为准。R0–R6c 文件保留历史事实，不作为当前进度表。
+
+## Xcode 开发与安全 Preview
 
 开发与运行均要求 macOS 27 或更新的 Apple Silicon Mac，使用本机已验证的 Xcode 27.1 工具链。
 
@@ -13,6 +15,8 @@ Redmi G Pro 27U / 32U 显示器的原生 macOS 控制工具，使用 SwiftUI、A
 - **ToolboxPreviews**：隔离的 App Target；不链接 `ToolboxMacAdapters` / `ToolboxProcessExecution`，不包含 adb/JAR/APK。
 
 选 **ToolboxPreviews**，打开 `Sources/ToolboxPreviewSupport/PreviewGallery.swift`，刷新 Canvas。也可以直接运行该 scheme 得到独立预览窗口。顶部选择页面与场景，底部按钮推进虚拟时间；所有权限、文件、终端、登录项和设备动作均为内存模拟。不要用真实 App scheme 预览：生产组合根会检测并拒绝 Xcode Preview 运行上下文。
+
+Preview 窗口显式关闭恢复行为，避免窗口位置/尺寸写入用户偏好。依赖/源码与二进制/资源检查仍须配合实际交互和偏好前后比对，不能只靠内存偏好实现推断整个宿主无写入。
 
 ```sh
 swift test
@@ -24,7 +28,7 @@ xcodebuild -project Toolbox.xcodeproj -scheme ToolboxApp -configuration Release 
 
 生产 App 的 Xcode 资源复制阶段只使用已有 `assets/runtime/adb` 或 `.cache/platform-tools/adb`，不在 Preview 或编译期间下载程序。首次准备运行资源请显式执行 `python3 scripts/runtime_assets.py prepare`，只下载锁定版本并验证摘要；必需的 JAR/APK、图标及 NOTICE 缺失时 Xcode 构建失败。CLI `swift build --product MimonitorToolbox` 入口继续保留，应用实现与 Xcode 宿主共享同一库。
 
-当前模块：`ToolboxDomain`（Swift 6 纯规则）、`MimonitorPresetCore`（预设引擎）、`ToolboxApplication`（九个 MainActor Observation 模型与动作协调）、`MimonitorToolbox`（共享 UI）、`ToolboxMacAdapters`（真实平台实现）、`ToolboxPreviewSupport`（内存模拟）。旧 AppState 已移除；架构、阶段验证和回滚见 [R3-ARCHITECTURE.md](R3-ARCHITECTURE.md)。R4 已加入 `ToolboxConcurrency`、`ToolboxProcessExecution` 和预设核心 Swift 6；会话、取消、异步所有权与过渡边界见 [R4-CONCURRENCY.md](R4-CONCURRENCY.md)。
+当前 `ToolboxDomain`、`ToolboxConcurrency`、`ToolboxProcessExecution`、`MimonitorPresetCore` 使用 Swift 6；Application、UI、MacAdapters、Preview 和宿主保留 Swift 5 语言模式。九个 MainActor Observation 模型拥有可观察状态，协调器拥有任务/队列；旧 AppState 已移除。真实进程只在 ProcessExecution 执行；Application 仍含 AppKit/Carbon 类型，但不依赖 SwiftUI 或生产适配器。完整依赖和所有权见 [现行架构](../docs/ARCHITECTURE.md)；[R3](R3-ARCHITECTURE.md)、[R4](R4-CONCURRENCY.md) 保留当时的迁移与验证记录。
 
 R5 已迁移到 `SMAppService.mainApp`，按系统读回显示登录项状态，并对可识别旧 LaunchAgent 先备份再迁移。权限返回检测、Terminal 实际执行结果、后台日志、音频输出缓存及 OSD 失败回退见 [R5-SYSTEM-SERVICES.md](R5-SYSTEM-SERVICES.md)。Preview 另有「权限拒绝」「登录待批准」场景，全部仍为内存模拟。
 
@@ -48,7 +52,7 @@ CI 要求在线且带 `toolbox-macos27` 标签的 macOS 27 ARM64 runner；没有
 
 在 Mac mini M4、Redmi G Pro 32U 2026（P32UEA-RGP，固件 OS3.0.120.0.UFFMAMN）上，前序实机测试中电源键待机唤醒约 18 秒恢复 ADB、Android 重启约 41 秒首次连通且约 58 秒起稳定、DP 息屏唤醒约 28 秒恢复 ADB。这些是该设备和网络下的观察结果，其他型号和固件仍需实测。
 
-本分支沿用原项目的网络 ADB 连接界面。
+本分支沿用原项目的网络 ADB 连接界面。设备工作固定使用提交时的 TCP endpoint，预设仍保留旧 IP 所有权键；尚未开放 USB 发现、Auto 或物理身份关联。恢复集中在 `ensureConnected`：未授权退出；目标重连失败后仅按 25 秒冷却进行有界 server 查询，再决定目标重试。应用不显式循环 kill-server，但官方 adb 查询仍可能启动缺失 server 或协调版本；详见 [ADB-CONTRACTS 第 0 节](../docs/ADB-CONTRACTS.md)。
 
 ### Type-C 有线 ADB 的硬件验证（2026-10-22）
 
@@ -151,7 +155,9 @@ macos/
    ├─ ToolboxApp/                # 生产组合根、AppDelegate、Dock 生命周期
    ├─ ToolboxPreviewHost/        # 独立安全预览 App 入口
    ├─ ToolboxPreviewSupport/     # #Preview 画廊、内存设备和虚拟时间
-   ├─ ToolboxMacAdapters/        # Process、tap、CoreAudio 读取、HUD、资源、登录项
+   ├─ ToolboxMacAdapters/        # 注入进程执行、tap、CoreAudio 读取、HUD、资源、登录项
+   ├─ ToolboxConcurrency/        # 请求/结果、取消、FIFO 执行桥与任务所有权
+   ├─ ToolboxProcessExecution/   # POSIX 进程执行、超时/取消与回收
    ├─ ToolboxDomain/             # 独立 Swift 6、映射、范围、步进和纯值规则
    ├─ MimonitorPresetCore/       # 预设模型、计划、迁移、存储接口
    ├─ ToolboxApplication/       # Observation 模型、动作协调、无 Process 的命令门面
@@ -168,7 +174,7 @@ macos/
 | 键盘音量键 | 网络 ADB；支持自定义步长及 16 格 OSD |
 | 全局快捷键与亮度键 | CGEventTap，需辅助功能权限 |
 | HDR/SDR 分区控光记忆 | 主机 EDR 与显示器画面模式综合判断 |
-| 登录后自动启动 | LaunchAgent |
+| 登录后自动启动 | SMAppService.mainApp；保留受控旧 LaunchAgent 迁移 |
 | ADB 保活守护 | AdbGuardian 部署与实际状态回读 |
 | APK 安装 / ADB 命令行 / 4K UI | 工具页高级功能 |
 | 日志 | 落盘、导出与打开目录 |
@@ -188,13 +194,13 @@ macos/
 
 ## 设计要点
 
-实现中需要关注的行为与边界。**详细原因写在对应源码的注释里**，这里只列要点。
+实现中需要关注的行为与边界。**详细原因写在对应源码的注释里**，这里只列要点。下列耗时/性能数字为前序记录，本次 S1-09 未重测。
 
 **通信与状态**
 
 - **网络扫描**：`SO_SNDTIMEO` 不约束 `connect()`，连不存在的主机会一直等 ARP 超时并占满线程池，结果「什么都扫不到」。必须非阻塞 connect + `poll` + 回读 `SO_ERROR`。
 - **`adb connect` 是异步的**，挂上 TCP 就返回，此时 `get-state` 往往还是 `offline`，要轮询等它翻转。健康监控在 `.connecting` / `.scanning` 期间必须让路，否则会把进行中的连接打断。
-- **循环动作（如 FreeSync 开关）的当前状态必须现读设备**。拿缓存值判断时，一次 JNI 回读失败就会把缓存留在 0，于是每次都算出「要开启」→ 按了没反应。
+- **循环动作（如 FreeSync 开关）的当前状态仍需现读设备**，避免使用过期缓存。S1-07 已将游戏页失败读数显示为未知；动作侧 legacy 失败决策和乐观写入仍属 ROADMAP 的 A08 边界，不据此宣称全部旧读取路径已修复。
 - **页面刷新分两阶段**：`settings list global` 一次拿回全部（~0.08s）先上屏撤掉遮罩，JNI `batchGet`（~0.9s）到达后静默修正。逐个 `settings get` 要 2.29s，差 28 倍。
 - **画面页的值以 JNI 回读为准**：用户用显示器自带 OSD 改过设置后，`settings get` 会和硬件实际状态漂移。
 - **FreeSync Pro 记忆只记「标准 / 游戏 / 电影」三个模式**。`picture_mode` 里混了信号驱动的值（Dolby Vision、HDR 系列）和用户手选的值，光看数字分不出，强行还原可能和当前信号不匹配。
