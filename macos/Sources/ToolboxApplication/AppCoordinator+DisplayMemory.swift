@@ -51,7 +51,8 @@ extension AppCoordinator {
     internal func applyHdrMemory(state: Bool) {
         guard isConnected, !memoriesSuspendedByPreset else { return }
         let bucket = state ? "hdr" : "sdr"
-        guard let value = localDimmingMemory()[bucket] else { return }
+        guard let value = localDimmingMemory()[bucket],
+              let valueName = RegisterMap.localDimmingNames[value] else { return }
 
         runBackground {
             // 现读设备真实值。用缓存的 currentValues 会因 JNI 读取偶发失败而过期，
@@ -61,7 +62,6 @@ extension AppCoordinator {
             guard Int(raw) != value else { return }
             self.publish {
                 guard self.isConnected, !self.memoriesSuspendedByPreset else { return }
-                let valueName = ["关", "低", "中", "高"][value]
                 self.log("\(state ? "HDR" : "SDR") 精密控光记忆: \(valueName)")
                 // 原版这里也会弹悬浮提示（_apply_hdr_memory_for_current_state）
                 self.environment.feedback.show(title: "\(state ? "HDR" : "SDR") 精密控光", value: valueName)
@@ -86,8 +86,8 @@ extension AppCoordinator {
     package func updateHdrMemoryStatus() {
         let stateText = hdrLastState == nil ? "未知" : (hdrLastState! ? "HDR" : "SDR")
         let m = localDimmingMemory()
-        let sdrText = m["sdr"].map { ["关", "低", "中", "高"][$0] } ?? "--"
-        let hdrText = m["hdr"].map { ["关", "低", "中", "高"][$0] } ?? "--"
+        let sdrText = m["sdr"].flatMap { RegisterMap.localDimmingNames[$0] } ?? "--"
+        let hdrText = m["hdr"].flatMap { RegisterMap.localDimmingNames[$0] } ?? "--"
         let sourceText = hdrStateSource.isEmpty ? "" : "（\(hdrStateSource)）"
         let status = memoriesSuspendedByPreset ? "已锁定（预设生效或切换中）" : (hdrMemoryEnabled ? "已开启" : "已关闭")
         let text = "分区控光记忆：\(status)，当前信号：\(stateText)\(sourceText)，记忆模式：SDR=\(sdrText) / HDR=\(hdrText)"

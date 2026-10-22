@@ -114,10 +114,11 @@ extension AppCoordinator {
     }
 
     package func setLocalDimming(_ value: Int) {
+        guard let valueName = RegisterMap.localDimmingNames[value] else { return }
         guard !isPresetBusy, !presetConfiguration.applicationIncomplete else { return }
         guard isConnected else { return log("未连接") }
         currentValues["picture_local_dimming"] = String(value)
-        log("精密控光: \(["关", "低", "中", "高"][value])")
+        log("精密控光: \(valueName)")
         if hdrMemoryEnabled, !memoriesSuspendedByPreset, let state = hdrLastState {
             var m = localDimmingMemory()
             m[state ? "hdr" : "sdr"] = value
