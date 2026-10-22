@@ -3,7 +3,7 @@ import ToolboxDomain
 import Foundation
 import MimonitorPresetCore
 
-/// ADB 客户端（移植自 adb.py）：封装对独立 adb server 的调用。
+/// ADB 客户端（移植自 adb.py）：封装对配置端口上 adb server 的调用。
 package final class AdbClient {
     package let adbPath: String
     package let serverPort: String
@@ -71,12 +71,16 @@ package final class AdbClient {
 
     package let resources: RuntimeResources
     private let execute: (CommandRequest) -> ProcessResult
+    private let recoveryTime: () -> TimeInterval
 
-    package init(resources: RuntimeResources, execute: @escaping (CommandRequest) -> ProcessResult) {
+    package init(resources: RuntimeResources,
+                 recoveryTime: @escaping () -> TimeInterval = { ProcessInfo.processInfo.systemUptime },
+                 execute: @escaping (CommandRequest) -> ProcessResult) {
         self.resources = resources
         self.adbPath = resources.adbPath
         self.serverPort = resources.serverPort
         self.execute = execute
+        self.recoveryTime = recoveryTime
     }
 
     package var serial: String { (operationSession ?? session()).serial }
@@ -173,7 +177,7 @@ package final class AdbClient {
             let deadline = Date().addingTimeInterval(timeout)
             var state = deviceState()
             while state != "device" && Date() < deadline && !operationCancelled {
-                if state == "unauthorized" { return state }
+                if isUnauthorized(state) { return state }
                 if !pause(0.4) { return "cancelled" }
                 state = deviceState()
             }
@@ -181,70 +185,50 @@ package final class AdbClient {
         }
     }
 
-    /// 重启 adb server。
-    ///
-    /// 长时间运行的 server 会失效：TCP 已经断了、但 server 仍持有旧 transport，
-    /// 此时 `adb connect` 会报 "No route to host" 或 "already connected"，
-    /// 而 kill + start 出一个全新的 server 立刻就能连上。
-    private var lastServerRestart = Date.distantPast
-
-    package func restartServer() {
-        return transaction {
-            guard !operationCancelled else { return }
-            lastServerRestart = Date()
-            _ = run(["kill-server"], timeout: 5)
-            guard pause(0.8) else { return }
-            _ = run(["start-server"], timeout: 10)
-            // 等 server 真正开始监听再往下走：紧接着就 connect 的话很容易落到 offline
-            for _ in 0..<10 {
-                if isServerAlive() { break }
-                guard pause(0.3) else { return }
-            }
-            guard pause(0.3) else { return }
-        }
+    private func isUnauthorized(_ state: String) -> Bool {
+        // get-state may report authorization as stderr with a nonzero exit status.
+        state.lowercased().contains("unauthorized")
     }
 
-    /// 距上次重启 server 是否已过冷却期。
-    ///
-    /// 恢复过程本身要十几秒（设备侧 adbd 得先清掉旧的 transport），期间重启 server
-    /// 会把正在进行的握手打断，于是「重试越勤 → 越连不上」。所以重启必须限流。
-    package func serverRestartAllowed(cooldown: TimeInterval = 25) -> Bool {
-        return transaction {
-            Date().timeIntervalSince(lastServerRestart) >= cooldown
-        }
+    private var lastServerRecovery: TimeInterval?
+
+    /// Active server query, serialized with device work and limited even on failure.
+    /// The configured port is not proof of exclusive ownership: never explicitly kill
+    /// a shared server for a target failure. Official adb may itself start a missing
+    /// server or coordinate versions; this is not a passive, side-effect-free probe.
+    private func recoverServer() -> Bool {
+        guard !operationCancelled else { return false }
+        let now = recoveryTime()
+        if let lastServerRecovery, now - lastServerRecovery < 25 { return false }
+        lastServerRecovery = now
+        let result = run(["host-features"], timeout: 3)
+        return result.succeeded && !result.standardOutput.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
     }
 
     /// 对应原版 ensure_connected：已连接就直接返回，否则连接并等待就绪。
     ///
-    /// 注意这里**故意不做 `disconnect`**：实测在「卡在 offline」时，先 disconnect 会让
-    /// server 转入 "No route to host"，越修越坏；而 kill-server + start-server 才是
-    /// 唯一能可靠治好的手段，所以失败后直接走重启 server 这条路。
+    /// Keep target-local reconnect first, without disconnect. Authorization requires
+    /// user action; it must not trigger server recovery or a shell probe.
     package func ensureConnected() -> (ok: Bool, state: String) {
         return transaction {
             guard !serial.isEmpty, !operationCancelled else { return (false, "unknown") }
 
             // get-state 说 device 还不够，要确认真能跑命令（可能是残留的死连接）
             var state = deviceState()
+            if isUnauthorized(state) { return (false, state) }
             if state == "device" && transportWorks() { return (true, state) }
 
             _ = run(["connect", serial], timeout: 10)
             state = waitForDevice(timeout: 6)
+            if isUnauthorized(state) { return (false, state) }
             if state == "device" && transportWorks() { return (true, state) }
 
-            // 连不上或卡在 offline：重启 server 后再试一轮。
-            // 受冷却期限制——恢复需要时间，重启太勤反而打断自己。
-            if serverRestartAllowed() {
-                restartServer()
-                _ = run(["connect", serial], timeout: 10)
-                state = waitForDevice(timeout: 10)
-            }
+            // One bounded server query and final target retry; never force a restart.
+            guard recoverServer() else { return (false, state) }
+            _ = run(["connect", serial], timeout: 10)
+            state = waitForDevice(timeout: 10)
             return (state == "device" && transportWorks(), state)
         }
-    }
-
-    /// server 是否还活着（能响应 version 查询）。
-    package func isServerAlive() -> Bool {
-        run(["version"], timeout: 3).succeeded
     }
 
     /// 预热：提前把 adb server 拉起来。
@@ -252,9 +236,7 @@ package final class AdbClient {
     /// 冷启动时第一条 adb 命令要顺带等 server 起来，紧接着 connect 很容易落到 offline。
     /// 启动时先预热，自动连接那一步就能快好几秒。
     package func warmUpServer() {
-        // start-server 本身幂等：已有 server 时直接返回，没有才拉起。
-        // 不要先 isServerAlive() 再 start-server —— 那会连做两次启动操作，
-        // 和随后的自动连接撞在一起。
+        // Compatible servers are reused; official adb owns startup/version coordination.
         _ = run(["start-server"], timeout: 10)
     }
 

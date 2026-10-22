@@ -1,6 +1,6 @@
 # S1-03：统一端点、设备身份、会话与状态设计
 
-本文主体是 **S1-03 设计契约，不是全部已实现功能说明**。唯一进度基准为 [ROADMAP](ROADMAP.md)；原设计审查固定到 `a41519a459c36762b8726a4a58507428c8b1b697`，2026-10-22（UTC+8）。S1-04 已实现的最小 TCP 部分单独列在第 0 节；其余类型、字段、状态及存储键仍为后续设计，须按 S1-05 与阶段二各自门禁执行。第 1 节及文末固定源码链接保留 S1-03 历史审查事实。
+本文主体是 **S1-03 设计契约，不是全部已实现功能说明**。唯一进度基准为 [ROADMAP](ROADMAP.md)；原设计审查固定到 `a41519a459c36762b8726a4a58507428c8b1b697`，2026-10-22（UTC+8）。S1-04 的最小 TCP 部分及 S1-05 server 边界单独列在第 0 节；其余类型、字段、状态及存储键仍为后续设计，须按各自门禁执行。第 1 节及文末固定源码链接保留 S1-03 历史审查事实。
 
 
 ## 0. S1-04 实施边界（2026-10-22）
@@ -12,6 +12,17 @@
 - [AdbClient](../macos/Sources/ToolboxApplication/Backend/AdbClient.swift) 在原 stateLock 内保存 endpoint，保留 ip / beginSession(ip:) / disconnect(ip:) 兼容入口；旧 UI/配置和预设所有权仍取 TCP host。TCP connect/disconnect/临时扫描的 argv、顺序和超时保持；serverPort 独立于设备端口，健康探测和恢复策略未改。
 - [预设工厂](../macos/Sources/ToolboxApplication/AppCoordinator+Presets.swift) 在既有提交会话下把不可变 endpoint 与原 legacy identity 分参给 [AdbPresetDevice](../macos/Sources/ToolboxMacAdapters/AdbPresetDevice.swift)。命令目标只由 endpoint 得到，不再由 identity 拼接；不另建会话以免覆盖提交操作的子取消 token。旧 TCP identity 仍是原 IP，PresetDevice 协议、引擎、JSON 和固定目标行为保持。
 - 未新增 DeviceID、IdentityResolution、sessionGeneration、连接偏好键、状态机、USB 发现或 Auto；未把 legacy IP 所有权宣称为物理身份验证。A01/A02 仅完成本次 TCP 部分，A05 状态扩展、A08 探活可靠性和 S1-05 server 边界仍待各自任务。
+
+### 0.1 S1-05 server 查询与恢复边界
+
+固定起点 `0bd6c05c5840c1344db50137c11b72205fd30e33`；本次结果和限制见 [S1-05 验收报告](acceptance/S1-05.md)。以下补充 S1-04 之后的实现事实，不回写第 1 节历史审查：
+
+- `ensureConnected` 是 monitor/显式重连共用的恢复决策边界。成功 TCP 的 get-state + shell 探活及目标 connect 轨迹保持；未授权（含 adb stderr 的 unauthorized 文本）立即失败返回，不执行 shell/进入 server 恢复。
+- 目标级重连失败后，私有 `recoverServer` 只在现有事务锁内执行一次 `host-features`（3 秒，现有取消令牌/执行器），完整退出成功且 stdout 非空才允许一次最终目标 connect/等待/探活。失败/超时/截断/取消不能当作健康 server。它只证明 server 已回应，不证明目标 ready；目标仍须 get-state 与原 shell 探针通过。
+- 25 秒冷却在查询边界用单调 uptime 实施，尝试前记账，失败也冷却；切换目标不重置 server 冷却。移除 monitor 的独立探测/重启分支和应用显式 kill-server 循环，没有对健康共享 server 强制重启的应用命令。
+- 配置的 serverPort 是路由配置，**不是独占所有权凭证**。复用官方 adb 的启动/版本协调；原启动预热不变。`host-features` 是主动 server 查询，官方 adb 可能启动缺失 server或替换版本不兼容的 server；本次未实现独占 server 租约，也不宣称所有 CLI 命令无 server 副作用。多客户端冲突、不同版本和真实 USB/TCP 恢复仍归 S2-02/06。
+- 锁定 37.0.1-15733141 已经通过本地假 server 记录实际 host:version/host:host-features 请求及成功/拒绝/截断响应；未操作现用 server/真机。当前官方源码仅解释已发现的 CLI 生命周期限制，不当作该锁定发行版的完整源码证明。
+- 无新存储键或状态图；awaitingAuthorization 等 UI 状态仍属阶段二。A08 legacy shell 的 exit code 整体治理保持独立；不能把本次 server 的严格结果判断宣称为全部设备探活已满足最终 D03。
 
 ## 1. 审查事实与设计决策
 

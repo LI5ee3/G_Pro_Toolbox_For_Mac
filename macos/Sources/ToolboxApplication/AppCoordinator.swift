@@ -294,14 +294,11 @@ public final class AppCoordinator {
 
     /// 探活并自愈。
     ///
-    /// 两种失效都会表现为连不上：server 长时间运行后失效（报 "No route to host"），
-    /// 以及 adb connect 后卡在 offline 不翻转。两者都靠 kill-server + start-server 治，
-    /// 但设备侧清掉旧 transport 需要时间，所以要反复重试而不是只试一次。
+    /// Recovery policy, authorization and cooldown belong to AdbClient.ensureConnected.
     internal func monitorAdbServer(refreshState: Bool = false) {
         guard !monitorChecking else { return }
         guard connectionIntent.allowsAutomaticRecovery else { return }
-        // 正在连接/扫描时不要插手：监控会重启 adb server，而重启会把
-        // 进行中的连接打断，于是「越监控越连不上」。这是之前冷启动很慢的元凶。
+        // Do not overlap monitoring with an explicit connection or scan.
         switch connectionStatus {
         case .connecting, .scanning: return
         case .disconnected, .connected: break
@@ -333,7 +330,6 @@ public final class AppCoordinator {
                 return
             }
 
-            if !self.adb.isServerAlive() { self.adb.restartServer() }
             let (ok, state) = self.adb.ensureConnected()
             let model = ok ? self.adb.getModel() : ""
 
