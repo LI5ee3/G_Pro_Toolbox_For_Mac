@@ -89,6 +89,6 @@ Mimonitor_Toolbox/
 
 ## 持续集成
 
-工作流需要自行配置带 `toolbox-macos27` 标签的 Apple Silicon / macOS 27 runner，目前未配置远端 runner。主分支 push、同仓库 PR 或版本标签运行开发包检查，成功后上传 development artifact；标签不会自动发布正式 Release。
+工作流需要在线且带 `toolbox-macos27` 标签的 Apple Silicon / macOS 27 runner。主分支 push、同仓库 PR、版本标签及默认手动运行仅进行编译、测试和架构/Preview 检查，使用 ad-hoc 签名和独立输出目录；不生成或上传 DMG/ZIP，不安装应用。
 
-正式签名、公证和草稿 Release 只接受版本标签上的显式分发请求，并要求保护环境、Developer ID 与公证凭据。当前不进行正式分发，具体门禁见 [R6 发布说明](macos/R6-RELEASE.md)。
+需要开发 DMG/ZIP 时，在 Actions 的 macOS Build 中显式选择 `package=true`；默认值为 false。打包依赖验证成功，使用 development ad-hoc 签名，不需要 Developer ID，也不安装应用。现行工作流不执行公证或创建 Release；历史分发脚本说明保留在 [R6 发布说明](macos/R6-RELEASE.md)，当前进度与验收以 [ROADMAP](docs/ROADMAP.md) 为准。

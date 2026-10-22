@@ -28,9 +28,9 @@ xcodebuild -project Toolbox.xcodeproj -scheme ToolboxApp -configuration Release 
 
 R5 已迁移到 `SMAppService.mainApp`，按系统读回显示登录项状态，并对可识别旧 LaunchAgent 先备份再迁移。权限返回检测、Terminal 实际执行结果、后台日志、音频输出缓存及 OSD 失败回退见 [R5-SYSTEM-SERVICES.md](R5-SYSTEM-SERVICES.md)。Preview 另有「权限拒绝」「登录待批准」场景，全部仍为内存模拟。
 
-CI 已显式要求带 `toolbox-macos27` 标签的专用 macOS 27 ARM64 runner；未注册该 runner 时任务会排队。本批未配置远端 runner 或触发远端 CI。同仓库受信任分支可运行，外部 fork PR 不自动在该自托管 runner 上执行。
+CI 要求在线且带 `toolbox-macos27` 标签的 macOS 27 ARM64 runner；没有可用 runner 时任务会排队。同仓库受信任分支可运行，外部 fork PR 不自动在该自托管 runner 上执行。S1-08 验证记录见 [ROADMAP](../docs/ROADMAP.md)。
 
-构建产物不自动替换已安装/正在运行的应用。R6 已加入严格构建/签名/DMG/ZIP 门禁及正式公证流程；当前仍需正式凭据和签名安装验收，详见 [R6-RELEASE.md](R6-RELEASE.md)。
+构建产物不自动替换已安装/正在运行的应用。当前 development 构建与显式打包使用 ad-hoc 签名，无需正式凭据或安装验收；历史分发流程见 [R6-RELEASE.md](R6-RELEASE.md)，不作为当前完成门槛。
 
 ## ADB 音量控制
 
@@ -126,7 +126,7 @@ open ".build/artifacts/development/红米G Pro ToolBox.app"
 
 产物默认位于 `.build/artifacts/development/红米G Pro ToolBox.app`，明确使用开发 ad-hoc 签名。原 `macos/` 下现用 App 和旧 DMG 不覆盖。打包独立执行 `./make_dmg.sh`，开发 DMG/ZIP 输出 `.build/artifacts/packages-development/`，名称带 `-development`；已有目录拒绝覆盖，可用 `--output` 指定新目录。
 
-构建使用原生 Xcode Release App Target，统一权限用途声明和 entitlements。运行时资源版本/摘要固定，缺失或签名失败非零退出。正式分发要求 Developer ID、timestamp、公证、staple 和 Gatekeeper 验证；没有凭据不会降级为成功。完整参数、CI 和回滚见 [R6-RELEASE.md](R6-RELEASE.md)。
+构建使用原生 Xcode Release App Target，统一权限用途声明和 entitlements。运行时资源版本/摘要固定，缺失或签名失败非零退出。当前 development 构建与打包不要求 Developer ID；保留的历史 distribution 模式仍有独立签名/公证门禁，但现行 CI 不调用它。历史参数与回滚见 [R6-RELEASE.md](R6-RELEASE.md)，当前规则见 [ROADMAP](../docs/ROADMAP.md)。
 
 `reinstall.sh` 是显式安装/重启操作，本轮没有执行。旧自签名只可作为可选 local 开发身份，不承诺权限连续性；整登录钥匙串导出脚本已停用。
 
@@ -245,4 +245,6 @@ EDID / FreeSync 这类会改变显示器输入信号格式（可能黑屏或改�
 
 ## CI
 
-`.github/workflows/macos.yml` 默认仅验证并上传 development artifact，不注入签名秘密。外部 fork PR 不在自托管 runner 执行。正式签名、公证及草稿 Release 需显式从版本标签触发，并配置受保护的 `macos-release` environment 与隔离 release runner；本机未触发远端 CI 或发布。配置、凭据与尚未解决的版权来源见 [R6-RELEASE.md](R6-RELEASE.md)。
+`.github/workflows/macos.yml` 的默认 build job 只运行资源校验、Python/Swift 测试、架构/Preview 边界检查、App Debug/Release 和 Preview Debug 编译及验证；不打包、不上传 DMG/ZIP、不安装应用、不使用签名秘密。所有构建输出位于 runner.temp 的 run ID/attempt 独立目录，外部 fork PR 不在自托管 runner 执行。
+
+只有 `workflow_dispatch` 显式选择 `package=true`（默认 false），并且 build 成功后，独立 package job 才生成并上传 development DMG/ZIP。该路径不需要 Developer ID、公证或 `macos-release` environment；现行工作流不创建 Release，也不调用 reinstall.sh。S1-08 的源码基线、测试、限制及回滚证据见 [ROADMAP](../docs/ROADMAP.md)；历史分发与版权说明见 [R6-RELEASE.md](R6-RELEASE.md)。

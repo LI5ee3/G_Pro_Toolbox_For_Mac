@@ -1,7 +1,7 @@
 # G Pro ToolBox 最终开发路线图
 
 > 唯一项目进度基准。创建于 2026-10-22（UTC+8），同日按用户要求修订自动模式、分层验收和 CI 前置门禁。
-> 当前结论：S1-08 已完成本机验证，正在独立提交及远端验证；本次只调整 CI 与本文件。阶段一尚未通过验收，阶段二至四锁定。
+> 当前结论：S1-08 已独立提交，完成本机与 GitHub 默认路径验证；本次只调整 CI 及相关说明。S1-02 尚未启动；阶段一尚未通过验收，阶段二至四锁定。
 > 后续每次工作先读取本文件，完成一个明确子任务后更新任务状态、证据、风险和下一步；其他文档只承载设计或历史证据，不另设竞争性进度表。
 
 ## 1. 范围、基线与执行边界
@@ -29,7 +29,7 @@
 | 历史回滚 | 远端实际存在 R0、R1、R2a/b、R3、R4、R5、R6、R6c 及细分 refactor 标签；保留，不移动旧标签 |
 | 工具链记录 | R6c 记载 Mac mini M4、macOS 27.0.1、Xcode 27.1；新执行时在开发 Mac 重新记录实际版本 |
 | 本次修订起点 | d91755f6b0de87a821233324d0fc8c4b3506c06b（初版路线图提交）；源码审计基线仍为上列 52d90d6 |
-| 当前执行范围 | 仅 S1-08：.github/workflows/macos.yml 与 docs/ROADMAP.md；业务源码、测试、资源、构建/安装脚本及现用 App 不变 |
+| 当前执行范围 | 仅 S1-08：.github/workflows/macos.yml、docs/ROADMAP.md 及两份 README 的 CI/签名说明；业务源码、测试、资源、构建/安装脚本及现用 App 不变 |
 
 下次实施前复核 master HEAD；若变化，先记录新 SHA 与差异并重新确认受影响任务，不能把移动分支当作固定测试基线。R6c 是历史检查点，不等于本轮已经完成。
 
@@ -139,7 +139,7 @@ USB 数据线/ADB 连接不等于视频输入状态；信号源、默认音频�
 | A09 / B | 唤醒/轮询从 saved_ip 恢复；Live 只订阅 didWake/screensDidWake，USB 插拔/睡眠中任务语义未定义。[E07][E12] | S2-06；取消旧会话、防旧读数、重枚举并回读，避免重放非幂等写 |
 | A10 / B | Preview 当前六种场景，无 USB/双连接/授权等待；布局测试主要断言 fittingSize > 0，不能证明无裁切、键盘可用或深色对比度。[E13] | S2-03/08、S3-07/08 补场景与视觉/交互证据 |
 | A11 / B | DESIGN.md 仍写“不新增 USB”、蓝牙操作、macOS 26 回退；当前代码已 ADB-only/macOS 27。README 与旧 R6 发布门槛也需按最终范围统一。[E15] | 本文件范围优先；S1-09 与 S3-01、S4-05 更新现行说明，保留历史事实 |
-| A12 / B | master push workflow 默认 make_dmg；还有 distribution/notary/release job；reinstall.sh 会退出进程、删除/替换应用并可能重启 Dock。[E14] | 本轮仅文档 skip CI；S1-08 作为首次业务源码修改/推送前置门禁，默认 CI 仅编译/测试/架构检查，DMG/ZIP 仅显式触发，禁止安装 |
+| A12 / B → CLOSED_S1-08 | 基线 master push 默认 make_dmg，含 distribution/notary/release job；reinstall.sh 有安装副作用。[E14] | S1-08 已隔离默认路径并在 GitHub 实跑确认 build 成功、package 跳过、零包产物；独立前置提交 9994f05。安装脚本不在任何现行 CI 路径，未运行；见第 8.3 节 |
 | A13 / N | NativeOSD 仍使用私有 XPC 兼容路径；已有过期保护、冷却和 HUD 回退。[E10] | 保留已验证行为，不再扩大私有 API；验收 HUD 必须可用，私有 OSD 限制单独登记 |
 | A14 / N | Application 仍依赖 AppKit、保留状态转发属性、部分大动作文件；这不自动证明架构失效 | 仅删除可证明无引用的代码；不因“纯化”拆空模块/重建协调器 |
 | A15 / N | Guardian 源码路径不可复现，整体/图标许可未确认；资源摘要与 NOTICE 已锁定。[E11] | 保留来源和致谢；本轮私人本地交付不以公开再分发审批为阻断，若以后公开发布需另行处理 |
@@ -214,8 +214,8 @@ USB 连接不执行 adb connect；逻辑断开清除应用会话并暂停自动�
 | ID | 单一子任务 / 交付 | 验证标准 | 初始状态 |
 | --- | --- | --- | --- |
 | S1-01 | 远端现状审计、范围与证据登记 | SHA、R6c blob 比对、全模块与现有门禁映射可追溯 | DONE_REMOTE |
-| S1-08 | 首次业务源码修改/推送前，先独立完成 CI 与打包解耦 | 默认 push/PR/未选择打包的手动运行仅编译、测试和架构/Preview 检查；不生成 DMG/ZIP、不安装、不用 Developer ID；打包仅显式触发，留下独立 CI 提交及验证证据 | IN_PROGRESS |
-| S1-02 | S1-08 完成后，在开发 Mac 建立业务源码未改动的基线，并逐个复核风险 | 记录 CI 前置提交和未改动业务源码 SHA；233/24 实际日志、三种构建/边界及现用 App/配置保护；失败先诊断 | LOCKED |
+| S1-08 | 首次业务源码修改/推送前，先独立完成 CI 与打包解耦 | 默认 push/PR/未选择打包的手动运行仅编译、测试和架构/Preview 检查；不生成 DMG/ZIP、不安装、不用 Developer ID；打包仅显式触发，留下独立 CI 提交及验证证据 | DONE（9994f05；见 8.3） |
+| S1-02 | S1-08 完成后，在开发 Mac 建立业务源码未改动的基线，并逐个复核风险 | 记录 CI 前置提交和未改动业务源码 SHA；233/24 实际日志、三种构建/边界及现用 App/配置保护；失败先诊断 | READY_NOT_STARTED（本次不执行） |
 | S1-03 | 输出统一端点/身份/状态与旧配置兼容设计 | 覆盖 USB/TCP、歧义、身份未知、旧 IP、会话失效；记录决策和不改的协议 | TODO |
 | S1-04 | 最小替换 IP-only 会话契约，先迁移 TCP 路径 | TCP argv/命令顺序与旧行为一致；空端点、同址重连、A→B、预设固定目标测试通过；尚不开放 USB 发现 | TODO |
 | S1-05 | 收敛 server 健康检测与恢复决策边界 | 客户端存在/server 不在、unauthorized、冷却、取消的注入测试；不改变有效设备协议 | TODO |
@@ -229,7 +229,7 @@ A08 若测试确认有误报，另建单一 S1 任务后再修；不能把它混
 
 **G1 通过条件：**
 
-- [ ] S1-08 已作为独立前置提交完成并验证，早于首次业务源码修改及其推送；默认 CI 仅编译、测试、架构/Preview 检查，DMG/ZIP 仅显式触发且不安装应用。
+- [x] S1-08 已作为独立前置提交完成并验证，早于首次业务源码修改及其推送；默认 CI 仅编译、测试、架构/Preview 检查，DMG/ZIP 仅显式触发且不安装应用。证据见第 8.3 节。
 - [ ] S1 全部必需任务完成；已有 233 Swift/24 脚本断言保留，必要新增用例通过；删除/调整测试必须说明理由，不能降低门槛。
 - [ ] App Debug/Release、Preview Debug 在 arm64/macOS 27+ 成功；模块无环、9 模型所有权、Preview 静态/二进制/资源边界通过。
 - [ ] TCP 固定目标、取消/超时、FIFO、预设身份与存储兼容没有回归；没有无收益重写或全库 Swift 模式强切。
@@ -417,8 +417,8 @@ HW-F01 的音量/静音、HW-F02 的安全画面控制、HW-F04/05 的预设与�
 
 | 项目 | 当前状态 | 已有证据 / 缺口 |
 | --- | --- | --- |
-| 现状审计与路线图修订 | 初版远端审计已完成；本次按三项要求修订计划，提交后以 Git 历史确认 | 原审计证据保留；Auto 必需、分层验收、CI 前置均已入文；未实施代码/CI |
-| 阶段一 | S1-08 本机验证通过，远端验证待完成；G1 NOT_PASSED | 仅实施 CI；S1-02 尚未启动，阶段二至四继续锁定 |
+| 现状审计与路线图修订 | DONE_REMOTE | 初版证据与修订历史保留；后续 S1-08 独立执行见下行及第 8.3 节 |
+| 阶段一 | S1-08 DONE；G1 NOT_PASSED | 本机/远端验证通过；S1-02 READY_NOT_STARTED，本次不启动任何后续任务；用户阶段验收尚未进行 |
 | 阶段二 | LOCKED | G1 未验收；Auto 为必需交付，USB→无线 TCP→USB 核心真机闭环不能省略 |
 | 阶段三 | LOCKED | G2 未验收；oil UI Pro 已在用户开发 Mac |
 | 阶段四 | LOCKED | G3 未验收；真实睡眠/登录/重启及最终交付均待执行 |
@@ -436,17 +436,19 @@ HW-F01 的音量/静音、HW-F02 的安全画面控制、HW-F04/05 的预设与�
 
 - **固定起点**：76e01144ec7cb8050b88ca424d4ac636b8fb2d8a；从本机 52d90d6 快进，新增两提交只涉及本文件，工作树初始干净。业务源码保持 52d90d6/R6c 基线。
 - **审查发现**：默认 build job 在测试和 Release 编译后无条件执行 make_dmg.sh 并上传 DMG/ZIP；distribution/release 虽为显式分支，但仍将本轮不要求的 Developer ID、公证及公开分发放在现行工作流中。build_app.sh/release_pipeline.py 已支持 development ad-hoc、校验资源/arm64/minOS/签名、拒绝覆盖输出，且不安装/启动；make_dmg.sh 已独立，无需重写。
-- **单一目标与最小计划**：仅调整 .github/workflows/macos.yml；默认 job 保留测试、架构、Preview 和 ad-hoc 编译/验证，补 App Debug 编译并隔离全部构建输出；独立 package job 仅接受 workflow_dispatch 且 package=true，复用现有 development 构建/打包入口；移出现行 workflow 的 distribution/release jobs，历史脚本保留。除本文件及 CI 外不修改业务/测试/资源/安装脚本。
+- **单一目标与最小计划**：优先仅调整 .github/workflows/macos.yml；默认 job 保留测试、架构、Preview 和 ad-hoc 编译/验证，补 App Debug 编译并隔离全部构建输出；独立 package job 仅接受 workflow_dispatch 且 package=true，复用现有 development 构建/打包入口；移出现行 workflow 的 distribution/release jobs，历史脚本保留。不修改业务/测试/资源/构建/安装脚本。复核后发现两份现行 README 仍写默认上传包、正式凭据阻断，因此仅同步其中 CI/签名段落；其他使用/架构/历史文档不整理，不提前执行 S1-09。
 - **验证计划**：检查 YAML/Actions 语法和 push/PR/默认手动/显式打包的入口矩阵；按新默认命令在独立目录执行现有 Python/Swift 测试、App Debug/Release、Preview 与产物验证；核对无 DMG/ZIP、现用 App 内容摘要不变；受控提交使用 [skip ci]，推送后显式触发默认验证并读回 job/步骤/产物状态。用户未请求生成打包产物，因此仅核对显式打包的门禁与已有打包回归，不实际打包。
-- **保护与回滚**：保留 macos/红米G Pro ToolBox.app 原件，记录版本及目录内容 SHA-256；不启动新生产 App、不触碰偏好/TCC/登录项/ADB/显示器。回滚固定父提交 76e0114，采用新提交撤销 CI 差异并用 [skip ci] 防止旧默认打包复活；不 reset --hard、不移动旧标签。远端当前无注册 runner，若验证排队则如实登记，不能冒称 CI PASS。
+- **保护与回滚**：保留 macos/红米G Pro ToolBox.app 原件，记录版本及目录内容 SHA-256；不启动新生产 App、不触碰偏好/TCC/登录项/ADB/显示器。回滚固定父提交 76e0114，采用新提交撤销 CI 差异并用 [skip ci] 防止旧默认打包复活；不 reset --hard、不移动旧标签。审查时远端无注册 runner；本次验证使用单任务临时 runner，未建立常驻服务。
 - **本次边界**：只执行 S1-08；S1-02 及后续任务不启动，G1 NOT_PASSED，阶段二至四保持 LOCKED。
-- **变更结果**：只修改 workflow 与本文件。build job 无 make_dmg/上传包/凭据/公证/安装步骤；package job 的条件为 `github.event_name == 'workflow_dispatch' && inputs.package`，boolean 默认 false，并依赖 build 成功。移除现行正式分发 jobs；不删历史脚本。Swift scratch、App Debug、Release、Preview、显式 package 的派生数据/产物各在 runner.temp 的 run ID/attempt 专属目录，不复用现用 App 或原构建目录。
+- **变更结果**：实施提交只修改 workflow 与本文件，验收补记提交仅更新本文件及两份 README 的 CI 说明，共四个文件。build job 无 make_dmg/上传包/凭据/公证/安装步骤；package job 的条件为 `github.event_name == 'workflow_dispatch' && inputs.package`，boolean 默认 false，并依赖 build 成功。移除现行正式分发 jobs；不删历史脚本。Swift scratch、App Debug、Release、Preview、显式 package 的派生数据/产物各在 runner.temp 的 run ID/attempt 专属目录，不复用现用 App 或原构建目录。
 - **本机测试结果**：macOS 27.0.1 (26A434)、arm64、Xcode 27.1 (27A9275)、Apple Swift 6.4、SDK 27.0。从新 workflow 提取默认 job 的原始 run 命令逐条执行，10 条命令全部退出 0：资源 prepare/check；Python 24/24；Swift XCTest 197+36=233/233（另有 Testing 库的 0 tests 行，不作为计数）；架构、Preview 源码检查；App Debug、Preview Debug；Preview 二进制/资源检查；Release development 构建及内置 verify-app（arm64/minOS 27.0/ad-hoc/资源锁）均 PASS。actionlint 1.7.12（官方发行摘要核验）退出 0；7 种触发组合静态断言 PASS；git diff --check 退出 0。
 - **本机证据**：受控目录 `../validation/S1-08-20261022-192707/`（相对仓库）：`environment.json`、`workflow.json`、`trigger-matrix.json`、`commands.json`、`02.log`–`11.log`、`local-default/toolbox-build-local-1/app-verification.json` 及其中 `build.log`。命令、退出码、耗时和完整日志可回查，不上传大量构建缓存。
 - **无副作用核对**：默认构建输出没有 DMG/ZIP；现用 App 内容树 SHA-256 前后同为 `d12c4857f04c43e6d54e07568ac1ebf6a285521e6237dbb0d8b0092710e4fec6`。没有运行生产 App/安装/证书设置/ADB 探针/真机写入；Mock 为现有测试中的假设备/执行器覆盖，HW_NOT_TESTED，硬件验收不属本子任务。
-- **远端验证计划与当前状态**：取消仍排队的旧基线运行 39698075389，避免临时 runner 消费旧的自动打包路径；仅为本次默认 CI 验证使用官方 arm64 临时单任务 runner，不安装系统服务，结束后注销并核查远端。首个 CI 提交使用 [skip ci]；随后显式 workflow_dispatch，保留默认 package=false，读回 job/步骤、结论和零包产物。当前远端结果 NOT_RUN，不提前标 PASS。
-- **回滚验证**：业务/测试/资源/构建脚本相对固定父提交无 diff；当前三种构建直接验证相同源码可构建。工作流回滚须用新提交恢复父版并 [skip ci]，随后暂停旧 workflow 或重应用本门禁，禁止直接运行回滚后的自动打包流程。未修改现用 App、偏好、系统权限和设备，无需二进制/配置回滚；本子任务不执行阶段四完整回滚演练。
-- **验收与下一步**：本机 PASS；远端待验证，S1-08 IN_PROGRESS。显式打包执行 NOT_RUN（本次未请求生成 DMG/ZIP；已有 6 项打包脚本回归通过），PR/标签/push 入口的包禁用是配置/条件证据，不能冒称各事件均已远端实跑。后续仅补本子任务的远端证据，不开始 S1-02。
+- **独立提交与远端验收**：CI 提交 `9994f05c1a119b1cd14a3498302f47188dc9f3bb`，父提交 `76e01144ec7cb8050b88ca424d4ac636b8fb2d8a`，仅 workflow/ROADMAP 两文件，使用 [skip ci] 并已推送 origin/master；远端 workflow 完整回读与本机字节一致。取消旧基线排队运行 39698075389 后，以不传任何打包输入的 workflow_dispatch 启动 [39771408162](https://github.com/LI5ee3/G_Pro_Toolbox_For_Mac/actions/runs/39771408162)；2026-10-22 19:33:19–19:35:45（UTC+8）完成，**build=success、package=skipped、总体 success、artifact total_count=0**。远端完整日志确认 24 Python 和 197+36 Swift 测试全部通过，三种构建与各边界/Release 校验成功，退出码均为 0。对应 `remote-default.log`、`remote-run.json`、`remote-jobs.json`、`remote-artifacts.json` 保存在上述受控目录。
+- **runner 生命周期与非阻断限制**：校验官方 actions/runner v2.338.0 arm64 发行摘要后临时注册 `s1-08-validation-20261022`，使用单任务 ephemeral 模式（[官方说明](https://docs.github.com/en/actions/reference/runners/self-hosted-runners#ephemeral-runners-for-autoscaling)），没有安装 LaunchAgent/常驻服务或设置发布秘密。job 成功后 runner 进程退出 0，自动删除 .credentials/.runner；API 回读 total_count=0，记录 `runners-after.json`。以后默认 CI 仍需在线的 macOS 27 ARM64 runner，否则排队；这不影响本次已完成的真实远端验证，不把临时验收当作常驻基础设施交付。
+- **回滚验证**：在独立 `rollback-checkout/` 恢复固定父提交 76e0114 的 detached checkout，显式资源准备与 development Release 构建退出 0，`rollback-verified-app/app-verification.json` 校验 arm64、minOS 27.0、ad-hoc、资源及 source_head；命令和完整日志见 `rollback-git-commands.json`、`rollback-git-0.log`、`rollback-git-1.log`。初次仅用 archive 的尝试因没有 Git 元数据而在报告 source_head 时退出 1，日志 `rollback-1.log` 保留；未修改产品脚本，改用带 Git 元数据的固定 checkout 重跑通过。当前业务/测试/资源/构建脚本相对父提交无 diff，现用 App 最终摘要仍不变（protected-app-before/after.json）。回滚用新提交恢复父版、保留 [skip ci]，随后暂停旧 workflow 或重应用本门禁，禁止直接运行父版自动打包流程；不 reset --hard，不移动旧标签。无现用二进制/偏好/权限/设备变更需要恢复；阶段四的完整产品/配置演练仍未执行。
+- **验收结论**：**S1-08 PASS / DONE**，本机、远端默认手动入口、源码独立提交/上传与父源码回滚构建证据齐全；A12 的默认 CI 打包风险关闭。显式 package=true 的实际打包为 NOT_RUN（本次未请求生成 DMG/ZIP；已有 6 项打包脚本回归通过）；其入口经语法、条件和 development 调用核对。PR/标签/push 及 fork PR 的入口限制是配置/条件证据，未冒称逐事件实跑。Preview 本次仅自动布局测试和静态/二进制/资源检查，无交互观察或真机测试；该限制不属于 CI 解耦阻断项，不豁免后续阶段门禁。
+- **用户阶段验收与下一步**：本子任务验收报告已提交供用户审阅；G1 仍为 NOT_PASSED，用户尚未确认阶段一通过。S1-02 仅变为可开始，本次不执行；S1-03 及其他任务保持原计划，阶段二至四 LOCKED。
 
 ### 8.4 后续每个任务/阶段必填记录模板
 
