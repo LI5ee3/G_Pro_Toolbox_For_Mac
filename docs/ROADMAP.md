@@ -1,7 +1,7 @@
 # G Pro ToolBox 最终开发路线图
 
 > 唯一项目进度基准。创建于 2026-10-22（UTC+8），同日按用户要求修订自动模式、分层验收和 CI 前置门禁。
-> 当前结论：S1-04 最小 TCP 会话迁移已通过本机 244 Swift/24 Python、构建与实际 Preview 检查；待提交及默认 push CI 验收。A17 维持 CLOSED_S1-10；S1-05 未开始，G1 NOT_PASSED，阶段二至四锁定。
+> 当前结论：S1-04 最小 TCP 会话迁移完成，本机及默认 push CI 的 244 Swift/24 Python、构建与边界检查通过，实际 Preview 与回滚验证通过。A17 维持 CLOSED_S1-10；S1-05 未开始，G1 NOT_PASSED，阶段二至四锁定。
 > 后续每次工作先读取本文件，完成一个明确子任务后更新任务状态、证据、风险和下一步；其他文档只承载设计或历史证据，不另设竞争性进度表。
 
 ## 1. 范围、基线与执行边界
@@ -221,7 +221,7 @@ USB 连接不执行 adb connect；逻辑断开清除应用会话并暂停自动�
 | S1-02 | S1-08 完成后，在开发 Mac 建立业务源码未改动的基线，并逐个复核风险 | 记录 CI 前置提交和未改动业务源码 SHA；233/24 实际日志、三种构建/边界及现用 App/配置保护；失败先诊断 | DONE_WITH_FINDINGS（当时 A17 FAIL；后由 S1-10 修复；见 8.4/8.5） |
 | S1-10 | 独立处理 A17：关闭安全 Preview 宿主窗口偏好持久化 | 审查 Window 恢复/保存；最小 Preview-only 修复；实际移动/缩放、交互、关闭/退出及重启后偏好域/磁盘不变，保留旧值；全量自动回归通过 | DONE（4cef289；见 8.5） |
 | S1-03 | 输出统一端点/身份/状态与旧配置兼容设计 | 覆盖 USB/TCP、歧义、身份未知、旧 IP、会话失效；记录决策和不改的协议 | DONE（bf18c78；设计交付，未实施新契约；见 8.6） |
-| S1-04 | 最小替换 IP-only 会话契约，先迁移 TCP 路径 | TCP argv/命令顺序与旧行为一致；空端点、同址重连、A→B、预设固定目标测试通过；尚不开放 USB 发现 | LOCAL_PASS；待默认 CI（见 8.7） |
+| S1-04 | 最小替换 IP-only 会话契约，先迁移 TCP 路径 | TCP argv/命令顺序与旧行为一致；空端点、同址重连、A→B、预设固定目标测试通过；尚不开放 USB 发现 | DONE（60f476c；见 8.7） |
 | S1-05 | 收敛 server 健康检测与恢复决策边界 | 客户端存在/server 不在、unauthorized、冷却、取消的注入测试；不改变有效设备协议 | TODO |
 | S1-06 | 复现并修复非法控光记忆范围风险 | -1、4、极端 Int、错误 JSON 不崩溃且不向设备下发；有效 0…3 行为保持 | TODO |
 | S1-07 | 复现并修复 JNI 缺失被当作关闭 | failed/空/无效值呈未知；合法 320Hz/FreeSync 枚举和映射保持 | TODO |
@@ -423,7 +423,7 @@ HW-F01 的音量/静音、HW-F02 的安全画面控制、HW-F04/05 的预设与�
 | 项目 | 当前状态 | 已有证据 / 缺口 |
 | --- | --- | --- |
 | 现状审计与路线图修订 | DONE_REMOTE | 初版证据与修订历史保留；后续 S1-08 独立执行见下行及第 8.3 节 |
-| 阶段一 | S1-08 DONE；S1-02 DONE_WITH_FINDINGS（历史）；S1-10 DONE；S1-03 DONE；S1-04 LOCAL_PASS；G1 NOT_PASSED | TCP 最小会话迁移本机通过，待默认 CI；A01/A02 部分落实，A05 及后续门禁待实施，A17 维持关闭；S1-05 未开始，用户阶段验收未进行 |
+| 阶段一 | S1-08 DONE；S1-02 DONE_WITH_FINDINGS（历史）；S1-10 DONE；S1-03 DONE；S1-04 DONE；G1 NOT_PASSED | TCP 最小会话迁移、本机/默认 CI、实际 Preview 与回滚通过；A01/A02 部分落实，A05 及后续门禁待实施，A17 维持关闭；S1-05 未开始，用户阶段验收未进行 |
 | 阶段二 | LOCKED | G1 未验收；Auto 为必需交付，USB→无线 TCP→USB 核心真机闭环不能省略 |
 | 阶段三 | LOCKED | G2 未验收；oil UI Pro 已在用户开发 Mac |
 | 阶段四 | LOCKED | G3 未验收；真实睡眠/登录/重启及最终交付均待执行 |
@@ -502,7 +502,8 @@ HW-F01 的音量/静音、HW-F02 的安全画面控制、HW-F04/05 的预设与�
 - **实际 Preview**：已连接模拟音量、预设创建/画面调整、模拟时钟、未知读数、断开并连接新 TCP 目标、窗口缩放、退出/重启；118.49 秒/251 样本，其中 167 个有宿主进程。两次宿主 PID 均未观察到子进程或 INET socket；生产/Preview 有效偏好域、原文件字节/mtime、ADB 密钥不变。A17 旧窗口键保持，测试预设重启不保留；采样局限与四层静态证据见报告。
 - **风险/范围**：A01 仅 TCP 会话部分、A02 仅 endpoint/identity 传参分离；物理身份、USB/Auto 和 A05 状态仍未实现。S1-05/A08、S1-06/07 OUT_OF_SCOPE；本次所有硬件项 HW_NOT_TESTED，不作为阶段二真机验收替代。无安装、DMG/ZIP、生产 App 启动或真机操作。
 - **保护/回滚**：现用 20261022.8 App 摘要/PID、偏好及 ADB 密钥保持；父版在独立 rollback-checkout 构建通过，候选 16 个文件正逆补丁在独立检出验证恢复干净父版，PASS。本次不改持久化 schema，不需转换配置；不在工作树 reset，不移动历史标签，不恢复系统权限/设备状态。
-- **提交与裁决**：本机 LOCAL_PASS；逆补丁已通过，提交、默认 push CI 及最终远端回读正在收尾。证据目录 `../validation/S1-04-20261022-204444/`；私密备份不上传。G1 NOT_PASSED，S1-05 未开始，阶段二至四 LOCKED。
+- **提交/远端验收**：实现提交 60f476c21d08c86c465f8b65c2e49bb392f33a53，父节点 ca2bee5；普通 push 触发 [39783249813](https://github.com/LI5ee3/G_Pro_Toolbox_For_Mac/actions/runs/39783249813)。2026-10-22 21:02:17–21:04:34（UTC+8）build success、package skipped，21:05:43 总体 success，artifact=0。远端 244 Swift/24 Python、App Debug/Release、Preview Debug、架构与 Preview 自动边界通过；保留完整步骤日志和 CI Release build.log/app-verification.json，确认 source_head=60f476c、dirty_tree=false、development/ad-hoc，无 Developer ID。临时 runner 自动退出 0/删除凭据，API runner=0，无常驻服务。
+- **最终裁决**：**S1-04 PASS / DONE（仅 TCP 最小迁移）**。原 233 测试保留、11 新增通过，工作文件与被测提交一致，16 文件正逆补丁/文档检查通过；CI 后原 App/PID/配置/密钥保护复核通过。结果补记仅 ROADMAP/本报告，使用 [skip ci]，macos 产品树与受测 60f476c 相同；最终 SHA 由补记提交定位。远端文档完整回读/最终清洁状态记录在 `final-verification.json`。证据目录 `../validation/S1-04-20261022-204444/`，私密备份不上传。G1 NOT_PASSED，用户阶段验收未进行；S1-05 未开始，阶段二至四 LOCKED。本次停止。
 
 ### 8.8 后续每个任务/阶段必填记录模板
 
