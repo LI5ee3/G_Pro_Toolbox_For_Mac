@@ -298,6 +298,9 @@ public final class AppCoordinator {
     internal func monitorAdbServer(refreshState: Bool = false) {
         guard !monitorChecking else { return }
         guard connectionIntent.allowsAutomaticRecovery else { return }
+        // USB selection is still read-only at this gate. Never reinterpret its empty TCP
+        // projection as saved_ip; typed manual recovery is introduced with the UI lifecycle.
+        guard adb.endpoint?.isUSB != true else { return }
         // Do not overlap monitoring with an explicit connection or scan.
         switch connectionStatus {
         case .connecting, .scanning: return

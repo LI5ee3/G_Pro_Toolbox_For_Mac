@@ -24,6 +24,16 @@
 - 锁定 37.0.1-15733141 已经通过本地假 server 记录实际 host:version/host:host-features 请求及成功/拒绝/截断响应；未操作现用 server/真机。当前官方源码仅解释已发现的 CLI 生命周期限制，不当作该锁定发行版的完整源码证明。
 - 无新存储键或状态图；awaitingAuthorization 等 UI 状态仍属阶段二。A08 legacy shell 的 exit code 整体治理保持独立；不能把本次 server 的严格结果判断宣称为全部设备探活已满足最终 D03。
 
+### 0.2 S2-01 / S2-02 本机实施边界
+
+用户确认 G1 PASS 后，阶段二按顺序推进；实际状态与证据见 [S2 报告](acceptance/S2.md)，核心真机尚未执行。
+
+- S2-01 新增 [AdbDiscovery](../macos/Sources/ToolboxDomain/AdbDiscovery.swift) 与显式 `discoverDevices()`：3 秒单次查询、完整结果先检查再解析 stdout；有界列表/原字段/未知状态/重复 serial 均保留或诊断。发现不改变会话，不自动选择。锁定 CLI 会隐藏一种非法长度头为空成功（A18），不宣称能检测其已丢失的信息。
+- S2-02 为 `AdbEndpoint` 增加 USB 和 `isUSB`，原 TCP 字节与 argv 保留。[validateUSBSelection](../macos/Sources/ToolboxApplication/Backend/AdbClient+USB.swift) 每次重新枚举、全部候选唯一匹配，再核实类型、授权和严格 shell 探活；缺类型证据时仅补查所选候选 `get-devpath`，unknown/裸路径不算 USB。返回的 ready 只是通道证据，不激活或授予业务身份能力。
+- USB connect/disconnect 不发 TCP CLI，USB ensureConnected 不进入 TCP/server 恢复；coordinator 的旧 monitor 明确阻止 USB 被 saved_ip 替代。TCP deviceState/transportWorks 收紧完整成功 stdout 的精确判据，命令/期限/次序及其他 legacy shell 保持。
+- UI、身份/迁移、控制能力和生命周期仍按 S2-03 至 S2-06 各自实施；M2 前不设计或实现 Auto。USB backend 的本机测试不代替真实应用/固件验证。
+
+
 ## 1. 审查事实与设计决策
 
 | 当前源码事实 | 风险 / 最小设计决策 | 实施归属 |

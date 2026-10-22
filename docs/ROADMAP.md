@@ -137,7 +137,7 @@ USB 数据线/ADB 连接不等于视频输入状态；信号源、默认音频�
 | A05 / B | ConnectionStatus 仅四态，连接与扫描列表以 IP/String 表达；缺少 USB 枚举、授权、设备离线/歧义等结构化状态。[E09] | S1-03 已定义连接/发现/身份分开的状态契约；S1-04 仅 TCP 会话替换，状态扩展留 S2-01/03，风险未关闭 |
 | A06 / R → CLOSED_S1-06 | local_dimming_memory 解码为任意 Int 字典，状态展示与记忆应用均直接作四元素下标；live start 在连接前也调用展示，负数或 ≥4 可越界。S1-02 已确认源码，未做崩溃复现。[E18] | S1-06 父版内存 fixture 复现崩溃；最小合法映射校验显示/恢复/写入入口，8 新增用例与默认 CI 通过；非法读取原字节保持，有效写入保留旧存储规则，见 8.9 |
 | A07 / R → CLOSED_S1-07 | applyGameJniMode 将缺失/无效 JNI 值与预期枚举比较后写成 0；读取失败可能被显示为确定“关闭”。[E19] | S1-07 父版复现失败误关；checked 批读显式未知覆盖缓存，UI/Preview 同步，11 新增与实际 Preview/默认 CI 通过；合法四源枚举/写序保持，A08 不扩大，见 8.9 |
-| A08 / R | 部分 legacy shell 返回 String 且不以 exitCode 判成功；部分普通设置先乐观更新。checkedShell/预设已有更严格路径。[E05][E06] | S1-02 已列 50 shell/5 checkedShell 直接调用及包装/上层语义；本次没有新增具体误报复现，不创建修复任务。后续如确认需单独登记，不整库改协议 |
+| A08 / R | 部分 legacy shell 返回 String 且不以 exitCode 判成功；部分普通设置先乐观更新。checkedShell/预设已有更严格路径。[E05][E06] | S1-02 历史列 50 shell/5 checkedShell 直接调用及包装/上层语义；S2-02 在父版复现四类 readiness 误报，只收紧 get-state/探针的成功退出、完整 stdout 和精确匹配（30 新增/327 全量通过）。其他 legacy shell/乐观更新仍保留，不整库改协议 |
 | A09 / B | 唤醒/轮询从 saved_ip 恢复；Live 只订阅 didWake/screensDidWake，USB 插拔/睡眠中任务语义未定义。[E07][E12] | S2-06；取消旧会话、防旧读数、重枚举并回读，避免重放非幂等写 |
 | A10 / B | Preview 当前六种场景，无 USB/双连接/授权等待；布局测试主要断言 fittingSize > 0，不能证明无裁切、键盘可用或深色对比度。[E13] | S2-03/08、S3-07/08 补场景与视觉/交互证据 |
 | A11 / B → CLOSED_S1-09（现行说明冲突） | DESIGN.md 仍写“不新增 USB”、蓝牙操作、macOS 26 回退；当前代码已 ADB-only/macOS 27。README 与旧 R6 发布门槛也需按最终范围统一。[E15] | S1-09 已同步 ARCHITECTURE、README/DESIGN 与历史入口，现行范围冲突关闭；原历史正文保留，后续 UI/最终交付文档仍随 S3-01/S4-05 更新，见 8.9 |
@@ -251,8 +251,8 @@ A08 若测试确认有误报，另建单一 S1 任务后再修；不能把它混
 | ID | 单一子任务 / 交付 | 验证标准 | 初始状态 |
 | --- | --- | --- | --- |
 | S2-01 | 有界设备枚举与解析 | 21 新增、297 Swift 全量及架构/Preview source PASS；锁定 CLI 8 项假 server 实证，A18 限制已登记 | LOCAL_PASS（整阶段构建/CI 待复验） |
-| S2-02 | USB 会话选择、授权等待、只读探活、逻辑断开 | USB 不执行 TCP connect/disconnect；待授权不 ready、不重启健康 server；断开后不自动抢回 | IN_PROGRESS |
-| S2-03 | 最小手动 USB/TCP 选择 UI 与模拟场景 | 模式/端点/实际状态明确，拒绝无目标写入；完整视觉统一留到阶段三 | WAITING_PREDECESSOR |
+| S2-02 | USB 会话选择、授权等待、只读探活、逻辑断开 | 30 新增、327 Swift 全量 PASS；USB 无 TCP 管理命令，严格只读探活，逻辑断开抑制恢复；尚不接生产 UI | LOCAL_PASS（整阶段构建/CI 待复验） |
+| S2-03 | 最小手动 USB/TCP 选择 UI 与模拟场景 | 模式/端点/实际状态明确，拒绝无目标写入；完整视觉统一留到阶段三 | IN_PROGRESS |
 | S2-04 | 同机身份绑定与旧 IP 兼容实现 | 同机跨传输保留基线/任务；异机/冲突拒绝恢复；旧 JSON 读入、迁移失败、回滚、二次迁移测试 | WAITING_PREDECESSOR |
 | S2-05 | 所有控制入口接入统一会话 | 音量、画面、游戏、信号源、灯光、遥控、预设、自动任务、菜单栏/快捷键、工具/Terminal 的 USB/TCP argv 契约测试；不复制业务实现 | WAITING_PREDECESSOR |
 | S2-06 | 插拔、网络断线与睡眠任务生命周期 | 旧任务取消/晚到结果丢弃、stop/start、重枚举、局部恢复、忙状态释放和不重放写入的故障注入 | WAITING_PREDECESSOR |
@@ -589,6 +589,7 @@ Mock 替代原因、具体未实测步骤、覆盖断言、残余限制和用户
 - **固定起点**：1222557614b2b855891b12927d4bfaf15b78cd61，master 与 origin/master 一致、工作区干净。计划与逐项结果见 [S2 阶段报告](acceptance/S2.md)。
 - **顺序/边界**：S2-01 枚举 → S2-02 会话 → S2-03 最小 UI → S2-04 身份兼容 → S2-05 控制入口 → S2-06 生命周期；每项独立计划、验证和提交。M2 / Auto / G2 保持证据门禁，不提前设计或实施 S2-08。
 - **S2-01**：21 项新增、297 Swift 全量、架构/Preview source PASS；固定锁定 CLI 8 项隔离假 server 实证，新增 A18 信息丢失限制。实现仅显式查询和纯解析，无生产调用者、无 USB 会话激活；计划 [S2-01](acceptance/S2-01-plan.md)，日志 S2-01-full.log。
+- **S2-02**：30 新增、327 Swift 全量和架构/Preview source PASS；父版四类错误 ready 已用注入执行器复现。USB 候选重新枚举/唯一匹配，必要时仅补查所选候选 devpath，严格探活、取消与逻辑断开；普通 TCP 33 项相关旧断言保持。计划 [S2-02](acceptance/S2-02-plan.md)，尚无生产 USB UI 调用。
 - **保护**：证据目录 `../validation/S2-20261022-222617/`；原 App、偏好、密钥私密备份，父版独立 checkout / 输出，不覆盖现用 App，不安装、打包或操作真机。
 
 

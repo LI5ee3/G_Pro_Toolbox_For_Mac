@@ -151,7 +151,7 @@ package final class AdbClient {
     @discardableResult
     package func connect() -> String {
         return transaction {
-            guard !serial.isEmpty, !operationCancelled else { return "" }
+            guard !serial.isEmpty, !operationCancelled, operationSession?.endpoint?.isUSB != true else { return "" }
             return run(["connect", serial], timeout: 10).output
         }
     }
@@ -163,7 +163,7 @@ package final class AdbClient {
 
     @discardableResult
     package func disconnect(endpoint: AdbEndpoint?) -> String {
-        guard let endpoint, !operationCancelled else { return "" }
+        guard let endpoint, !endpoint.isUSB, !operationCancelled else { return "" }
         return run(["disconnect", endpoint.serial], timeout: 5).output
     }
 
@@ -213,6 +213,11 @@ package final class AdbClient {
         return transaction {
             guard !serial.isEmpty, !operationCancelled else { return (false, "unknown") }
 
+            if operationSession?.endpoint?.isUSB == true {
+                let result = validateUSBSelection(serial: serial)
+                return (result.isReady, result.diagnostic)
+            }
+
             // get-state 说 device 还不够，要确认真能跑命令（可能是残留的死连接）
             var state = deviceState()
             if isUnauthorized(state) { return (false, state) }
@@ -257,8 +262,7 @@ package final class AdbClient {
     package func deviceState() -> String {
         return transaction {
             guard !serial.isEmpty, !operationCancelled else { return "unknown" }
-            return run(["-s", serial, "get-state"], timeout: 3)
-                .output.trimmingCharacters(in: .whitespacesAndNewlines)
+            return checkedDeviceState(target: serial)
         }
     }
 
@@ -280,7 +284,7 @@ package final class AdbClient {
     /// TCP 连接，这时 get-state 说 device，但任何真实命令都会失败并把设备标成 offline。
     /// 所以必须用一条真实命令确认。
     package func transportWorks() -> Bool {
-        shell("echo __mimonitor_probe__").contains("__mimonitor_probe__")
+        transaction { strictTransportProbe(target: serial) }
     }
 
     package func settingsGet(_ key: String) -> String {
