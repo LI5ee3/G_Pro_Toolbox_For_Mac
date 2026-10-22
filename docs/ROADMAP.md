@@ -1,7 +1,7 @@
 # G Pro ToolBox 最终开发路线图
 
 > 唯一项目进度基准。创建于 2026-10-22（UTC+8），同日按用户要求修订自动模式、分层验收和 CI 前置门禁。
-> 当前结论：按用户授权依次执行 S1-06、S1-07、S1-09；固定父版 257 Swift/24 Python、独立回滚构建通过，三个子任务本机 LOCAL_PASS，276 Swift/24 Python、构建及实际 Preview 通过，待正逆补丁/默认 CI。G1 NOT_PASSED，阶段二至四锁定。
+> 当前结论：S1-06、S1-07、S1-09 PASS / DONE；阶段一技术门禁完成，276 Swift/24 Python、本机构建/实际 Preview/回滚及默认 CI 通过。用户阶段验收待确认，G1 NOT_PASSED，阶段二至四锁定。
 > 后续每次工作先读取本文件，完成一个明确子任务后更新任务状态、证据、风险和下一步；其他文档只承载设计或历史证据，不另设竞争性进度表。
 
 ## 1. 范围、基线与执行边界
@@ -135,12 +135,12 @@ USB 数据线/ADB 连接不等于视频输入状态；信号源、默认音频�
 | A03 / B | ensureConnected/restartServer 恢复可 kill-server；共享 5038 同时承载 USB/TCP，网络故障可能打断 USB。unauthorized 退出 wait 后仍可能进入后续恢复路径。[E05] | S1-05 已移除应用显式 kill/start 恢复循环，统一 unauthorized/取消/25 秒冷却；配置端口不视为独占凭证。官方 adb 启动/版本协调仍可能有 server 副作用，多客户端、USB/TCP 与真机恢复留 S2-02/06，风险未整体关闭（见 8.8） |
 | A04 / R | isServerAlive 调用 adb version；该命令只能证明客户端可运行，不能可靠证明 server 响应。[E05][X02] | CLOSED_S1-05：锁定客户端+本地假 server 实测 host-features；成功/拒绝/截断响应与客户端 version 对照，13 新增及原回归/默认 CI 通过；主动查询限制见 8.8 |
 | A05 / B | ConnectionStatus 仅四态，连接与扫描列表以 IP/String 表达；缺少 USB 枚举、授权、设备离线/歧义等结构化状态。[E09] | S1-03 已定义连接/发现/身份分开的状态契约；S1-04 仅 TCP 会话替换，状态扩展留 S2-01/03，风险未关闭 |
-| A06 / R | local_dimming_memory 解码为任意 Int 字典，状态展示与记忆应用均直接作四元素下标；live start 在连接前也调用展示，负数或 ≥4 可越界。S1-02 已确认源码，未做崩溃复现。[E18] | S1-06 用内存偏好复现后最小校验，保留原字节、不静默写回 |
-| A07 / R | applyGameJniMode 将缺失/无效 JNI 值与预期枚举比较后写成 0；读取失败可能被显示为确定“关闭”。[E19] | S1-07 假失败回归；区分未知和关闭，不改有效值映射 |
+| A06 / R → CLOSED_S1-06 | local_dimming_memory 解码为任意 Int 字典，状态展示与记忆应用均直接作四元素下标；live start 在连接前也调用展示，负数或 ≥4 可越界。S1-02 已确认源码，未做崩溃复现。[E18] | S1-06 父版内存 fixture 复现崩溃；最小合法映射校验显示/恢复/写入入口，8 新增用例与默认 CI 通过；非法读取原字节保持，有效写入保留旧存储规则，见 8.9 |
+| A07 / R → CLOSED_S1-07 | applyGameJniMode 将缺失/无效 JNI 值与预期枚举比较后写成 0；读取失败可能被显示为确定“关闭”。[E19] | S1-07 父版复现失败误关；checked 批读显式未知覆盖缓存，UI/Preview 同步，11 新增与实际 Preview/默认 CI 通过；合法四源枚举/写序保持，A08 不扩大，见 8.9 |
 | A08 / R | 部分 legacy shell 返回 String 且不以 exitCode 判成功；部分普通设置先乐观更新。checkedShell/预设已有更严格路径。[E05][E06] | S1-02 已列 50 shell/5 checkedShell 直接调用及包装/上层语义；本次没有新增具体误报复现，不创建修复任务。后续如确认需单独登记，不整库改协议 |
 | A09 / B | 唤醒/轮询从 saved_ip 恢复；Live 只订阅 didWake/screensDidWake，USB 插拔/睡眠中任务语义未定义。[E07][E12] | S2-06；取消旧会话、防旧读数、重枚举并回读，避免重放非幂等写 |
 | A10 / B | Preview 当前六种场景，无 USB/双连接/授权等待；布局测试主要断言 fittingSize > 0，不能证明无裁切、键盘可用或深色对比度。[E13] | S2-03/08、S3-07/08 补场景与视觉/交互证据 |
-| A11 / B | DESIGN.md 仍写“不新增 USB”、蓝牙操作、macOS 26 回退；当前代码已 ADB-only/macOS 27。README 与旧 R6 发布门槛也需按最终范围统一。[E15] | 本文件范围优先；S1-09 与 S3-01、S4-05 更新现行说明，保留历史事实 |
+| A11 / B → CLOSED_S1-09（现行说明冲突） | DESIGN.md 仍写“不新增 USB”、蓝牙操作、macOS 26 回退；当前代码已 ADB-only/macOS 27。README 与旧 R6 发布门槛也需按最终范围统一。[E15] | S1-09 已同步 ARCHITECTURE、README/DESIGN 与历史入口，现行范围冲突关闭；原历史正文保留，后续 UI/最终交付文档仍随 S3-01/S4-05 更新，见 8.9 |
 | A12 / B → CLOSED_S1-08 | 基线 master push 默认 make_dmg，含 distribution/notary/release job；reinstall.sh 有安装副作用。[E14] | S1-08 已隔离默认路径并在 GitHub 实跑确认 build 成功、package 跳过、零包产物；独立前置提交 9994f05。安装脚本不在任何现行 CI 路径，未运行；见第 8.3 节 |
 | A13 / N | NativeOSD 仍使用私有 XPC 兼容路径；已有过期保护、冷却和 HUD 回退。[E10] | 保留已验证行为，不再扩大私有 API；验收 HUD 必须可用，私有 OSD 限制单独登记 |
 | A14 / N | Application 仍依赖 AppKit、保留状态转发属性、部分大动作文件；这不自动证明架构失效 | 仅删除可证明无引用的代码；不因“纯化”拆空模块/重建协调器 |
@@ -225,9 +225,9 @@ USB 连接不执行 adb connect；逻辑断开清除应用会话并暂停自动�
 | S1-03 | 输出统一端点/身份/状态与旧配置兼容设计 | 覆盖 USB/TCP、歧义、身份未知、旧 IP、会话失效；记录决策和不改的协议 | DONE（bf18c78；设计交付，未实施新契约；见 8.6） |
 | S1-04 | 最小替换 IP-only 会话契约，先迁移 TCP 路径 | TCP argv/命令顺序与旧行为一致；空端点、同址重连、A→B、预设固定目标测试通过；尚不开放 USB 发现 | DONE（60f476c；见 8.7） |
 | S1-05 | 收敛 server 健康检测与恢复决策边界 | 客户端存在/server 不在、unauthorized、冷却、取消的注入测试；不改变有效设备协议 | DONE（8b09ce3；见 8.8） |
-| S1-06 | 复现并修复非法控光记忆范围风险 | -1、4、极端 Int、错误 JSON 不崩溃且不向设备下发；有效 0…3 行为保持 | LOCAL_PASS（8 项新增；见 8.9，最终 CI 待完成） |
-| S1-07 | 复现并修复 JNI 缺失被当作关闭 | failed/空/无效值呈未知；合法 320Hz/FreeSync 枚举和映射保持 | LOCAL_PASS（11 项新增；见 8.9，最终 CI 待完成） |
-| S1-09 | 更新现行架构说明和必要遗留清理记录 | 依赖/所有权/Swift 模式/目标设计与源码一致；每个删除项有无引用证据；更新本表 | LOCAL_PASS（现行文档/历史保留；见 8.9，最终 CI 待完成） |
+| S1-06 | 复现并修复非法控光记忆范围风险 | -1、4、极端 Int、错误 JSON 不崩溃且不向设备下发；有效 0…3 行为保持 | DONE（dc7886d；8 项新增；见 8.9） |
+| S1-07 | 复现并修复 JNI 缺失被当作关闭 | failed/空/无效值呈未知；合法 320Hz/FreeSync 枚举和映射保持 | DONE（4a9db43；11 项新增；见 8.9） |
+| S1-09 | 更新现行架构说明和必要遗留清理记录 | 依赖/所有权/Swift 模式/目标设计与源码一致；每个删除项有无引用证据；更新本表 | DONE（931bf98；现行文档/历史保留；见 8.9） |
 
 任务 ID 保持不变，新增 A17 独立任务 S1-10，按用户要求插入 S1-03 之前。顺序为 S1-01 → S1-08 → S1-02 → S1-10 → S1-03 → S1-04 → S1-05 → S1-06 → S1-07 → S1-09。S1-08 是 CI 专项的首次实施/推送，不能夹带业务源码；其受控提交使用 [skip ci] 避免现有自动打包路径，并在远端确认新默认验证路径后才解除业务源码修改及推送禁令。[X05] 不能用今后每次源码推送都 skip CI 代替这一门禁。
 
@@ -236,12 +236,12 @@ A08 若测试确认有误报，另建单一 S1 任务后再修；不能把它混
 **G1 通过条件：**
 
 - [x] S1-08 已作为独立前置提交完成并验证，早于首次业务源码修改及其推送；默认 CI 仅编译、测试、架构/Preview 检查，DMG/ZIP 仅显式触发且不安装应用。证据见第 8.3 节。
-- [ ] S1 全部必需任务完成；已有 233 Swift/24 脚本断言保留，必要新增用例通过；删除/调整测试必须说明理由，不能降低门槛。
-- [ ] App Debug/Release、Preview Debug 在 arm64/macOS 27+ 成功；模块无环、9 模型所有权、Preview 静态/二进制/资源边界通过。
-- [ ] TCP 固定目标、取消/超时、FIFO、预设身份与存储兼容没有回归；没有无收益重写或全库 Swift 模式强切。
-- [ ] 架构文档、最小调整理由、差异清单、风险及回滚点齐全；未替换现用 App。
-- [ ] 最终候选 Preview 实际运行边界满足第 5 节；S1-10 已修复 A17 并实际验证，不等于后续源码的最终复验已完成，不用静态 PASS 替代运行证据。
-- [ ] 阶段报告提交并获得用户确认。当前 G1 = **NOT_PASSED**；不能进入 USB 实施。
+- [x] S1 全部必需任务完成；已有 233 Swift/24 脚本断言保留，必要新增用例通过；删除/调整测试必须说明理由，不能降低门槛。
+- [x] App Debug/Release、Preview Debug 在 arm64/macOS 27+ 成功；模块无环、9 模型所有权、Preview 静态/二进制/资源边界通过。
+- [x] TCP 固定目标、取消/超时、FIFO、预设身份与存储兼容没有回归；没有无收益重写或全库 Swift 模式强切。
+- [x] 架构文档、最小调整理由、差异清单、风险及回滚点齐全；未替换现用 App。
+- [x] 最终候选 Preview 实际运行边界满足第 5 节；S1-10 的 A17 修复在最终源码重新运行验证，400 样本及退出/重启/偏好比对通过（8.9），不用静态 PASS 替代运行证据。
+- [ ] 阶段报告已提交；**用户确认待进行**。当前 G1 = **NOT_PASSED**；技术门禁通过不自动解锁 USB 实施。
 
 ### 阶段二：USB ADB
 
@@ -414,7 +414,7 @@ HW-F01 的音量/静音、HW-F02 的安全画面控制、HW-F04/05 的预设与�
 - 保护现用 App：记录其路径/版本/摘要并保留原件。临时验收实例不能与现用实例争抢 Bundle ID、登录项、快捷键、偏好或 server；执行前明确停用/隔离计划，不把换端口误当完全隔离。
 - 保留用户配置的受控本地备份，备份不得公开；新增连接/身份偏好提供回滚兼容，原 picture_presets_v1 仍可读。
 - 在独立恢复位置验证上一阶段源码可构建、新配置可回退、原 App 完整；不对当前工作树 reset --hard，不默认恢复系统授权或设备状态。
-- docs/ARCHITECTURE.md（后续创建）承载现行依赖、状态/并发所有权、ADB 目标/身份与生命周期设计；README.md、macos/README.md、DESIGN.md 承载现行使用/开发/视觉规范。
+- [docs/ARCHITECTURE.md](ARCHITECTURE.md) 承载现行依赖、状态/并发所有权、ADB 目标/身份与生命周期设计；README.md、macos/README.md、DESIGN.md 承载现行使用/开发/视觉规范。
 - REFACTORING.md、R3/R4/R5、R6-RELEASE.md、R6-CLOSEOUT.md 保留为历史；加历史范围和当前文档链接，不能把未做的旧验收改写成已通过。
 - 证据可在后续 docs/acceptance/ 分阶段报告中索引，真实大日志/敏感设备资料留受控本地；进度与最终裁决仍只更新本文件。
 
@@ -425,7 +425,7 @@ HW-F01 的音量/静音、HW-F02 的安全画面控制、HW-F04/05 的预设与�
 | 项目 | 当前状态 | 已有证据 / 缺口 |
 | --- | --- | --- |
 | 现状审计与路线图修订 | DONE_REMOTE | 初版证据与修订历史保留；后续 S1-08 独立执行见下行及第 8.3 节 |
-| 阶段一 | S1-08 DONE；S1-02 DONE_WITH_FINDINGS（历史）；S1-10 DONE；S1-03 DONE；S1-04 DONE；S1-05 DONE；G1 NOT_PASSED | TCP 会话及 server 恢复边界、本机/默认 CI、实际 Preview 与回滚通过；A04/A17 本任务范围关闭，A01/A02/A03 部分落实；S1-06 未开始，用户阶段验收未进行 |
+| 阶段一 | S1-01/08/10/03/04/05/06/07/09 DONE；S1-02 DONE_WITH_FINDINGS（历史）；技术门禁 PASS，G1 NOT_PASSED | 276 Swift/24 Python、三种构建/实际 Preview/回滚/默认 CI 通过；A04/A06/A07/A11现行说明/A17 关闭，A01/A02/A03 部分落实；阶段报告已交付，待用户确认 |
 | 阶段二 | LOCKED | G1 未验收；Auto 为必需交付，USB→无线 TCP→USB 核心真机闭环不能省略 |
 | 阶段三 | LOCKED | G2 未验收；oil UI Pro 已在用户开发 Mac |
 | 阶段四 | LOCKED | G3 未验收；真实睡眠/登录/重启及最终交付均待执行 |
@@ -523,11 +523,13 @@ HW-F01 的音量/静音、HW-F02 的安全画面控制、HW-F04/05 的预设与�
 - **授权/基线**：本次依次执行上述三个独立子任务；父基点 5eec375737050eb6e668227116533de985909740，与 fetch 后 origin/master 相同、工作树干净。先记录源码/工具链及原 App/PID、生产/Preview 偏好/密钥，私密备份仅本机。固定父版 257 Swift/24 Python、资源、架构/Preview 源码、development Release 构建/产物检查全通过。
 - **计划**：S1-06 在独立父版内存 fixture 复现非法记忆下标，再复用既有 RegisterMap.localDimmingNames 校验显示/恢复及写入入口；不清洗或静默写回原 JSON。通过后再实施 S1-07 的 JNI 游戏读数未知语义，保留合法枚举/命令；最后实施 S1-09 的现行架构/历史边界说明，不做无证据代码删除。只读审查可并行，修复和子任务提交保持顺序。
 - **验证/回滚**：原测试保留，逐项专项及全量测试；最终三种构建/四层 Preview 边界/实际 Preview、受测源码与提交一致性、独立父版正逆补丁和默认 CI。新目录 `../validation/S1-06-07-09-20261022-213923/` 保存证据，不替换现用 App，不安装/打包/操作真机；不 reset 工作树或移动旧标签。完整报告见 [专项验收报告](acceptance/S1-06-07-09.md)。
-- **S1-06 本机结果**：独立父版合法 3 fixture 通过，非法状态 fixture 确认 Index out of range；最小 2 文件修复后 265 Swift（原 257 + 新 8）、架构/Preview 源码通过。非法范围/坏 JSON 零命令且原数据保留；合法 0…3 目标/命令顺序保持，原测试不改。S1-06 LOCAL_PASS，最终 CI 待完成。
-- **S1-07 本机结果**：父版 dc7886d 的 4 个合法 fixture 通过，失败输出产生 10 个 0≠-1 断言，复现旧版误关。最小复用 checked 批读，未知覆盖缓存、UI 明示未知，Preview 场景同步；合法四源枚举/固定目标/写序保持。276 Swift（原 257 + 8 + 11）、架构/Preview 源码通过，A08 邻接 legacy 路径不扩大修复。S1-07 LOCAL_PASS，实际 Preview/最终 CI 待完成。
-- **S1-09 本机结果**：新增现行 ARCHITECTURE，修订两份 README/DESIGN；6 份历史文档仅加头注、正文保留，删除代码 0，旧 IP/登录项迁移/HUD/历史脚本引用证据齐全。模块依赖、9 模型、Swift 模式、TCP/身份与后续设计、Preview/CI 边界已同步。S1-09 LOCAL_PASS。
+- **S1-06 本机结果**：独立父版合法 3 fixture 通过，非法状态 fixture 确认 Index out of range；最小 2 文件修复后 265 Swift（原 257 + 新 8）、架构/Preview 源码通过。非法范围/坏 JSON 零命令且原数据保留；合法 0…3 目标/命令顺序保持，原测试不改。S1-06 逐项本机门禁通过，最终 CI 结果见下。
+- **S1-07 本机结果**：父版 dc7886d 的 4 个合法 fixture 通过，失败输出产生 10 个 0≠-1 断言，复现旧版误关。最小复用 checked 批读，未知覆盖缓存、UI 明示未知，Preview 场景同步；合法四源枚举/固定目标/写序保持。276 Swift（原 257 + 8 + 11）、架构/Preview 源码通过，A08 邻接 legacy 路径不扩大修复。S1-07 逐项本机门禁通过，实际 Preview/最终 CI 结果见下。
+- **S1-09 本机结果**：新增现行 ARCHITECTURE，修订两份 README/DESIGN；6 份历史文档仅加头注、正文保留，删除代码 0，旧 IP/登录项迁移/HUD/历史脚本引用证据齐全。模块依赖、9 模型、Swift 模式、TCP/身份与后续设计、Preview/CI 边界已同步。S1-09 文档审查通过。
 - **最终本机回归**：11 条命令全 exit 0，276 Swift/24 Python、App Debug/Release、Preview Debug、架构与 Preview 四层边界、development .app/verify-app 通过；非文档受测摘要锁定。实际 Preview 正常/未知游戏读数、刷新/虚拟时钟/zoom/退出重启通过；192.38 秒 400 样本（296 有宿主）无子进程/INET/偏好或密钥变化，原 App/PID 保持。无安装/打包/真机操作；完整局限见报告。
-- **状态**：三个子任务 LOCAL_PASS，正逆补丁与默认 CI 待完成，G1 NOT_PASSED。三个子任务完成后提供阶段一技术门禁结果，用户确认前阶段二至四仍 LOCKED。
+- **提交/远端验收**：S1-06 dc7886d、S1-07 4a9db43、S1-09 931bf98 分别提交，累计 19 文件；普通 push 的 [39792775394](https://github.com/LI5ee3/G_Pro_Toolbox_For_Mac/actions/runs/39792775394) 总体 success、build success、package skipped、artifact=0。远端日志确认 276 Swift（240+36）/24 Python、App Debug/Release、Preview Debug 及架构/Preview 自动边界通过。保存 Release build.log/app-verification.json：source_head=931bf98c6e383dfa261988ee7fc85bcde1d8c5b5、dirty_tree=false、development、team=null；无 Developer ID。单任务临时 runner 退出 0 并自动注销/删除凭据，API runner=0，无常驻服务；以后 CI 仍需在线 runner。checkout 的 Node 20→24 迁移提示是既有非阻塞警告，本次不改 workflow。
+- **回滚/最终保护**：19 个文件的正逆补丁在独立父版应用、逐字节核对候选后逆向恢复干净父版；原 37 个测试文件逐字节保持，6 份历史正文保持，129 个相对链接与差异检查通过。证据 scope-rollback-document-check.json/candidate.patch，源码回滚不触碰当前工作树或用户配置。 CI 后原 App/PID、偏好/密钥保护再次 PASS。结果补记仅本文件与验收报告，使用 [skip ci]，macos 完整树与受测提交一致；最终远端文档/清洁状态回读见 final-verification.json。
+- **最终裁决**：**S1-06、S1-07、S1-09 PASS / DONE**；A06/A07 与 A11 现行说明冲突关闭，A08 及后续设计/核心真机不冒称完成。阶段一技术门禁 PASS，报告已交付，用户阶段验收待确认；**G1 NOT_PASSED**，阶段二至四 **LOCKED**。本次停止，不开始后续任务。
 
 ### 8.10 后续每个任务/阶段必填记录模板
 
