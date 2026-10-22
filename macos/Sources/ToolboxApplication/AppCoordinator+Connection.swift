@@ -5,7 +5,7 @@ import MimonitorPresetCore
 
 extension AppCoordinator {
     package func autoConnectOnStartup() {
-        guard connectionIntent.allowsStartupAttempt else { return }
+        guard connection.mode == .tcp, connectionIntent.allowsStartupAttempt else { return }
         guard !isConnected else { return }
         let saved = (preferences.string(forKey: "saved_ip") ?? "")
             .trimmingCharacters(in: .whitespaces)
@@ -20,11 +20,17 @@ extension AppCoordinator {
     }
 
     package func connect(isAuto: Bool = false) {
+        if connection.mode == .usb { connectUSB(); return }
         let ip = ipInput.trimmingCharacters(in: .whitespaces)
-        guard !ip.isEmpty else { log("请输入显示器 IP 地址"); return }
+        guard let endpoint = AdbEndpoint.inputTCP(host: ip, port: connection.tcpPortInput) else {
+            log("请输入有效 IPv4 或 ASCII 主机名及 1–65535 端口"); return
+        }
         let request = connectionIntent.beginConnection()
-        preferences.set(ip, forKey: "saved_ip")
-        adb.beginSession(endpoint: AdbEndpoint.tcp(host: ip))
+        if endpoint.tcpPort == 5555 { preferences.set(ip, forKey: "saved_ip") }
+        connection.selectedEndpoint = endpoint
+        connection.activeEndpoint = nil
+        connection.identityRestricted = false
+        adb.beginSession(endpoint: endpoint)
         resetMediaVolumeSession()
         invalidatePictureRefreshesForPreset()
         pendingPresetSave?.cancel(); pendingPresetSave = nil
@@ -43,6 +49,7 @@ extension AppCoordinator {
             let detail = model.isEmpty ? ip : "\(model) · \(ip)"
             if result.ok {
                 guard self.connectionIntent.isCurrent(request) else { return }
+                self.connection.activeEndpoint = endpoint
                 self.connectionStatus = .connected(detail)
                 self.log(isAuto ? "启动自动连接成功: \(detail)" : "已连接: \(detail)")
                 self.loadedPages = []
@@ -71,6 +78,12 @@ extension AppCoordinator {
                 self.refreshMediaVolumeState()
             } else {
                 guard self.connectionIntent.isCurrent(request) else { return }
+                self.connection.activeEndpoint = nil
+                if state.lowercased().contains("unauthorized") {
+                    self.connectionStatus = .awaitingAuthorization
+                    self.log("等待在显示器上确认 ADB 授权")
+                    return
+                }
                 self.connectionStatus = .disconnected
                 if isAuto {
                     self.log("启动自动连接失败: \(state)，开始扫描内网")
@@ -119,6 +132,7 @@ extension AppCoordinator {
         adjustPendingWork.values.forEach { $0.cancel() }; adjustPendingWork.removeAll()
         adjustPendingValues.removeAll()
         connectionStatus = .disconnected
+        connection.activeEndpoint = nil
         currentValues = [:]
         loadedPages = []
         loadingPages = []
@@ -133,12 +147,14 @@ extension AppCoordinator {
     }
 
     package func scanNet() {
+        guard connection.mode == .tcp else { log("USB 模式请使用枚举设备"); return }
         switch connectionStatus {
-        case .disconnected: break
+        case .disconnected, .awaitingAuthorization, .offline, .failed: break
         case .connecting: log("正在连接显示器，请等待连接完成或先断开"); return
         case .connected: log("已连接显示器，请先断开后扫描"); return
         case .scanning: log("正在扫描内网，请等待扫描完成"); return
         }
+        let allowAutomaticSelection = connectionIntent.allowsAutomaticRecovery
         let request = connectionIntent.beginScan()
         adb.beginSession(endpoint: nil)
         connectionStatus = .scanning
@@ -169,9 +185,10 @@ extension AppCoordinator {
                 self.connectionStatus = .disconnected
                 let monitors = found.filter(\.isMonitor)
                 self.log("扫描完成，发现 \(found.count) 台 ADB 设备，其中 \(monitors.count) 台 MiTV 显示器")
-                if let target = self.connectionIntent.scanConnectionTarget(request: request, devices: found) {
+                if allowAutomaticSelection, let target = self.connectionIntent.scanConnectionTarget(request: request, devices: found) {
                     self.selectedDevice = target.ip
                     self.ipInput = target.ip
+                    self.connection.tcpPortInput = "5555"
                     self.log("扫描识别到唯一显示器，自动连接 \(target.label)")
                     self.connect()
                 } else if monitors.count > 1 {
@@ -190,7 +207,8 @@ extension AppCoordinator {
         if case .connecting = connectionStatus { log("正在连接显示器，请等待连接完成"); return }
         selectedDevice = ip
         ipInput = ip
-        guard !isConnected || adb.ip != ip else { return }
+        connection.tcpPortInput = "5555"
+        guard !isConnected || adb.endpoint != .tcp(host: ip) else { return }
         connect()
     }
 

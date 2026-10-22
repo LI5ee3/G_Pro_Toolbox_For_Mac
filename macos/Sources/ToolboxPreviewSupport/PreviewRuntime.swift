@@ -65,6 +65,8 @@ package final class PreviewDisplay: PresetDevice {
     package let identity = "192.0.2.27"
     private let lock = NSRecursiveLock()
     private var commands: [String] = []
+    private var discoveryRows = "192.0.2.27:5555 device model:MiTV_Preview transport_id:1"
+    private var discoveryDevicePaths: [String: String] = [:]
     package var failWrites = false
     package var unknownReadings = false
     package var volume = 10
@@ -81,6 +83,11 @@ package final class PreviewDisplay: PresetDevice {
         "atmosphere_light_color_temp": "1", "atmosphere_light_color_value": "0"
     ]
     package var recordedCommands: [String] { lock.lock(); defer { lock.unlock() }; return commands }
+    package func configureDiscovery(rows: String, devicePaths: [String: String] = [:]) {
+        lock.lock(); defer { lock.unlock() }
+        discoveryRows = rows
+        discoveryDevicePaths = devicePaths
+    }
     package func capture() throws -> [String: String] { lock.lock(); defer { lock.unlock() }; return values }
     package func apply(_ values: [String: String]) throws -> PresetApplyReport {
         lock.lock(); defer { lock.unlock() }
@@ -95,6 +102,21 @@ package final class PreviewDisplay: PresetDevice {
         let args = request.arguments
         commands.append(args.joined(separator: " "))
         func result(_ value: String = "", _ code: Int32 = 0) -> ProcessResult { ProcessResult(output: value, exitCode: code) }
+        if args == ["devices", "-l"] { return result("List of devices attached\n\(discoveryRows)\n\n") }
+        if args.count >= 3, args[0] == "-s", !args[1].contains(":") {
+            guard case .complete(let devices) = AdbDeviceListParser.parse("List of devices attached\n\(discoveryRows)\n\n") else {
+                return result("error: malformed simulated discovery", 1)
+            }
+            let matches = devices.filter { $0.serial == args[1] }
+            guard matches.count == 1 else { return result("error: simulated device missing or ambiguous", 1) }
+            if args[2] == "get-devpath" { return result(discoveryDevicePaths[args[1]] ?? "unknown") }
+            switch matches[0].state {
+            case .device: break
+            case .unauthorized: return result("error: device unauthorized", 1)
+            case .offline: return result("error: device offline", 1)
+            case .unsupported, .unknown: return result("error: unsupported simulated device state", 1)
+            }
+        }
         guard args.count >= 3, args[2] == "shell" else {
             if args.contains("get-state") { return result("device") }
             if args.contains("install") { return result(failWrites ? "Failure [SIMULATED]" : "Success") }
@@ -153,7 +175,12 @@ package final class PreviewDisplay: PresetDevice {
 }
 
 package final class PreviewRuntime {
-    package enum Scenario: String, CaseIterable { case connected = "已连接", disconnected = "未连接", failure = "写入失败", unknown = "未知读数", permissionDenied = "权限拒绝", loginApproval = "登录待批准" }
+    package enum Scenario: String, CaseIterable {
+        case connected = "已连接", disconnected = "未连接", failure = "写入失败", unknown = "未知读数"
+        case permissionDenied = "权限拒绝", loginApproval = "登录待批准"
+        case usbConnected = "USB 已连接", usbUnauthorized = "USB 待授权", usbOffline = "USB 离线"
+        case multipleDevices = "多台候选", dualTransport = "USB 与 TCP 同时在线"
+    }
     package let preferences = MemoryPreferences()
     package let scheduler = ManualScheduler()
     package let display = PreviewDisplay()
@@ -226,9 +253,51 @@ package final class PreviewRuntime {
         state.ipInput = display.identity
         display.failWrites = scenario == .failure
         display.unknownReadings = scenario == .unknown
-        if scenario != .disconnected {
+        let usbSerial = "000PreviewUSB"
+        let usbState = scenario == .usbUnauthorized ? "unauthorized" : scenario == .usbOffline ? "offline" : "device"
+        var rows = "\(display.identity):5555 device model:MiTV_Preview transport_id:1"
+        switch scenario {
+        case .usbConnected, .usbUnauthorized, .usbOffline:
+            rows = "\(usbSerial) \(usbState) usb:preview-1 model:MiTV_Preview transport_id:2"
+        case .dualTransport:
+            rows += "\n\(usbSerial) device usb:preview-1 model:MiTV_Preview transport_id:2"
+        case .multipleDevices:
+            rows += "\n\(usbSerial) device usb:preview-1 model:MiTV_Preview transport_id:2"
+            rows += "\n000PreviewOther device usb:preview-2 model:MiTV_Preview transport_id:3"
+            rows += "\n000PreviewUnknown device model:MiTV_Preview transport_id:4"
+            rows += "\n000PreviewDuplicate device usb:preview-5 transport_id:5"
+            rows += "\n000PreviewDuplicate offline usb:preview-6 transport_id:6"
+            rows += "\nemulator-5554 device model:Emulator transport_id:7"
+        default: break
+        }
+        display.configureDiscovery(rows: rows, devicePaths: [usbSerial: "usb:preview-1", "000PreviewOther": "usb:preview-2",
+                                                           "000PreviewUnknown": "usb:preview-3"])
+        let isUSBScenario = [Scenario.usbConnected, .usbUnauthorized, .usbOffline, .multipleDevices, .dualTransport].contains(scenario)
+        if isUSBScenario {
+            state.connection.mode = .usb
+            state.connection.identityRestricted = true
+            let outcome = AdbDeviceListParser.parse("List of devices attached\n\(rows)\n\n")
+            state.connection.discoverySnapshot = AdbDiscoverySnapshot(outcome: outcome)
+            if scenario != .multipleDevices, case .complete(let devices) = outcome,
+               let device = devices.first(where: { $0.serial == usbSerial }), let endpoint = AdbEndpoint.usb(discovered: device) {
+                state.connection.selectedUSBSerial = usbSerial
+                state.connection.selectedEndpoint = endpoint
+                switch scenario {
+                case .usbUnauthorized: state.connectionStatus = .awaitingAuthorization
+                case .usbOffline: state.connectionStatus = .offline("USB 设备离线")
+                default:
+                    state.adb.beginSession(endpoint: endpoint)
+                    state.connection.activeEndpoint = endpoint
+                    state.connectionStatus = .connected("MiTV Preview · \(usbSerial)")
+                }
+            }
+        } else if scenario != .disconnected {
             state.adb.ip = display.identity
+            state.connection.selectedEndpoint = state.adb.endpoint
+            state.connection.activeEndpoint = state.adb.endpoint
             state.connectionStatus = .connected("MiTV Preview · \(display.identity)")
+        }
+        if state.connection.isConnected {
             state.currentValues = (try? display.capture()) ?? [:]
             if scenario == .unknown {
                 state.currentValues["mode_320"] = "-1"

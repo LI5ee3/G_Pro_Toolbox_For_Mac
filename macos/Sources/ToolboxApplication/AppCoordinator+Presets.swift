@@ -6,6 +6,7 @@ import MimonitorPresetCore
 extension AppCoordinator {
     package var activePresetID: String? {
         _ = connection.connectionStatus
+        guard !connection.identityRestricted else { return nil }
         return presetConfiguration.activeDeviceIdentity == adb.ip ? presetConfiguration.activePresetID : nil
     }
     package var activePresetName: String {
@@ -15,15 +16,15 @@ extension AppCoordinator {
         _ = connection.connectionStatus
         return PresetControlPolicy(configuration: presetConfiguration, deviceIdentity: adb.ip, isSwitching: isPresetBusy)
     }
-    package var memoriesSuspendedByPreset: Bool { presetControlPolicy.memoriesLocked }
+    package var memoriesSuspendedByPreset: Bool { connection.identityRestricted || presetControlPolicy.memoriesLocked }
     package var effectiveHdrMemoryEnabled: Bool {
-        presetControlPolicy.effectiveMemoryEnabled(savedPreference: hdrMemoryEnabled)
+        !connection.identityRestricted && presetControlPolicy.effectiveMemoryEnabled(savedPreference: hdrMemoryEnabled)
     }
     package var effectiveFreesyncMemoryEnabled: Bool {
-        presetControlPolicy.effectiveMemoryEnabled(savedPreference: freesyncMemoryEnabled)
+        !connection.identityRestricted && presetControlPolicy.effectiveMemoryEnabled(savedPreference: freesyncMemoryEnabled)
     }
     package var canRestoreBaseline: Bool {
-        isConnected && presetConfiguration.baseline?.deviceIdentity == adb.ip
+        !connection.identityRestricted && isConnected && presetConfiguration.baseline?.deviceIdentity == adb.ip
             && !(presetConfiguration.baseline?.values.isEmpty ?? true)
     }
 
@@ -59,7 +60,7 @@ extension AppCoordinator {
 
     package func checkAutomaticTasks() {
         updateAutomaticTaskStatus()
-        guard isConnected, !isPresetOperationInFlight, presetWorker.loadError == nil else { return }
+        guard !connection.identityRestricted, isConnected, !isPresetOperationInFlight, presetWorker.loadError == nil else { return }
         if pendingPresetSave == nil, let id = pendingPresetSaveID, activePresetID == id,
            pendingPresetSaveDevice == adb.ip,
            !presetConfiguration.applicationIncomplete {
@@ -169,7 +170,7 @@ extension AppCoordinator {
         let save = DispatchWorkItem { [weak self] in
             guard let self else { return }
             self.pendingPresetSave = nil
-            guard self.isConnected,
+            guard !self.connection.identityRestricted, self.isConnected,
                   self.connectionIntent.isCurrent(request), self.activePresetID == id,
                   self.pictureEditRevision == revision, !self.presetConfiguration.applicationIncomplete else { return }
             if self.hasPendingDeviceControls || self.isPresetOperationInFlight {
@@ -190,6 +191,7 @@ extension AppCoordinator {
                                     switchHUDTitle: String? = nil,
                                     operation: @escaping @Sendable (PresetEngine, (any PresetDevice)?) throws -> Void) {
         guard !isPresetOperationInFlight else { return }
+        guard !connection.identityRestricted else { log(connection.identityNotice); return }
         let request = connectionIntent.generation
         let identity = adb.ip
         let connected = isConnected

@@ -13,6 +13,19 @@ package struct AdbEndpoint: Equatable, Sendable {
         return AdbEndpoint(transport: .tcp(host: host, port: port))
     }
 
+    /// New UI input boundary. The legacy TCP factory remains byte-preserving.
+    package static func inputTCP(host: String, port: String) -> AdbEndpoint? {
+        guard AdbDeviceListParser.supportsTCPHost(host), !port.isEmpty,
+              port.utf8.allSatisfy({ (48...57).contains($0) }),
+              let value = UInt16(port), value > 0 else { return nil }
+        return tcp(host: host, port: value)
+    }
+
+    package var tcpPort: UInt16? {
+        if case .tcp(_, let port) = transport { return port }
+        return nil
+    }
+
     /// The caller must first obtain a fresh complete list and reject duplicate serials.
     /// A supplemental path is accepted only for an otherwise unknown enumerated candidate.
     package static func usb(discovered device: AdbDiscoveredDevice,

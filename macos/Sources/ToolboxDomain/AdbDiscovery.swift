@@ -122,7 +122,7 @@ package enum AdbDeviceListParser {
         let usb = fields.filter { $0.key == "usb" }
         if serial.contains(":") {
             let parts = serial.split(separator: ":", omittingEmptySubsequences: false)
-            guard usb.isEmpty, parts.count == 2, validHost(String(parts[0])),
+            guard usb.isEmpty, parts.count == 2, supportsTCPHost(String(parts[0])),
                   !parts[1].isEmpty, parts[1].utf8.allSatisfy({ (48...57).contains($0) }),
                   let port = UInt16(parts[1]), port > 0 else { return .unsupported }
             return .tcp(host: String(parts[0]), port: port)
@@ -143,7 +143,7 @@ package enum AdbDeviceListParser {
         (48...57).contains(byte) || (65...90).contains(byte) || (97...122).contains(byte)
     }
 
-    private static func validHost(_ host: String) -> Bool {
+    package static func supportsTCPHost(_ host: String) -> Bool {
         guard !host.isEmpty, host.utf8.count <= 253 else { return false }
         let labels = host.split(separator: ".", omittingEmptySubsequences: false)
         if host.utf8.allSatisfy({ (48...57).contains($0) || $0 == 46 }) {

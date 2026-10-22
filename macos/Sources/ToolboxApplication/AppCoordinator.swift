@@ -97,6 +97,7 @@ public final class AppCoordinator {
     internal var hdrLastState: Bool?
     internal var sourcePollTimer: RuntimeCancellation?
     internal var sourcePollArmed = false
+    internal var discoveryGeneration = 0
     internal var monitorChecking = false
     internal var monitorTick = 0
     internal var lastMonitorFailState = ""
@@ -244,6 +245,8 @@ public final class AppCoordinator {
     }
 
     package func stop() {
+        discoveryGeneration &+= 1
+        connection.discoveryStatus = .idle
         adb.cancelSession()
         systemCancellation.cancel()
         workTasks.cancelAll()
@@ -300,22 +303,22 @@ public final class AppCoordinator {
         guard connectionIntent.allowsAutomaticRecovery else { return }
         // USB selection is still read-only at this gate. Never reinterpret its empty TCP
         // projection as saved_ip; typed manual recovery is introduced with the UI lifecycle.
-        guard adb.endpoint?.isUSB != true else { return }
+        guard connection.mode != .usb, adb.endpoint?.isUSB != true else { return }
         // Do not overlap monitoring with an explicit connection or scan.
         switch connectionStatus {
         case .connecting, .scanning: return
-        case .disconnected, .connected: break
+        case .disconnected, .connected, .awaitingAuthorization, .offline, .failed: break
         }
 
-        // 未连接时也要能重试，所以目标从 adb.ip 兜底到上次保存的 IP
-        let target = adb.ip.isEmpty
-            ? (preferences.string(forKey: "saved_ip") ?? "").trimmingCharacters(in: .whitespaces)
-            : adb.ip
-        guard !target.isEmpty else { return }
+        // 优先保留明确端点（包括非默认端口）；没有选择时才使用旧 TCP 保存值。
+        let saved = (preferences.string(forKey: "saved_ip") ?? "").trimmingCharacters(in: .whitespaces)
+        guard let targetEndpoint = adb.endpoint ?? connection.selectedEndpoint
+            ?? AdbEndpoint.inputTCP(host: saved, port: "5555"), !targetEndpoint.isUSB else { return }
+        let target = targetEndpoint.serial
 
         let wasConnected = isConnected    // 在主线程序上读，避免后台 sync 主线程
         let request = connectionIntent.generation
-        if adb.ip.isEmpty { adb.ip = target }
+        if adb.endpoint == nil { adb.beginSession(endpoint: targetEndpoint) }
         monitorChecking = true
         runConnectionTask(onCancel: { self.monitorChecking = false }) {
             defer { self.publishCompletion { self.monitorChecking = false } }
@@ -341,6 +344,7 @@ public final class AppCoordinator {
                       self.connectionIntent.allowsAutomaticRecovery else { return }
                 if ok {
                     let ip = target
+                    self.connection.activeEndpoint = targetEndpoint
                     self.connectionStatus = .connected(model.isEmpty ? ip : "\(model) · \(ip)")
                     if !wasConnected {
                         // 关键：恢复后必须把连接状态也置回已连接，
@@ -358,7 +362,8 @@ public final class AppCoordinator {
                     self.refreshMediaVolumeState()
                     self.checkGuardian()
                 } else if self.isConnected {
-                    self.adb.beginSession(endpoint: AdbEndpoint.tcp(host: target))
+                    self.adb.beginSession(endpoint: targetEndpoint)
+                    self.connection.activeEndpoint = nil
                     self.connectionStatus = .disconnected
                     self.log("ADB 链路恢复失败: \(state)")
                 } else if self.lastMonitorFailState != state {

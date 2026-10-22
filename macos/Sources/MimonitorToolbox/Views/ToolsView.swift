@@ -233,7 +233,7 @@ struct ToolsView: View {
             .disabled(state.memoriesSuspendedByPreset)
             Text(tools.freesyncMemoryStatusText).foregroundStyle(Theme.secondaryText)
             if state.memoriesSuspendedByPreset {
-                Label("使用预设时记忆设置已锁定；返回无预设后恢复。", systemImage: "lock")
+                Label(connection.identityRestricted ? connection.identityNotice : "使用预设时记忆设置已锁定；返回无预设后恢复。", systemImage: "lock")
                     .font(.system(size: 13)).foregroundStyle(Theme.secondaryText)
             }
             Divider().padding(.vertical, 2)
@@ -241,6 +241,7 @@ struct ToolsView: View {
                 get: { tools.crosshairGameModeOnly },
                 set: { state.toggleCrosshairGameModeOnly($0) }
             ))
+            .disabled(state.memoriesSuspendedByPreset)
             Text(tools.crosshairModeStatusText).foregroundStyle(Theme.secondaryText)
         }
     }

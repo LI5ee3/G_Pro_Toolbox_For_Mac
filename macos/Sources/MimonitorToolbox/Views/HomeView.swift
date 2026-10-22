@@ -21,6 +21,7 @@ struct HomeView: View {
         return RegisterMap.sceneNames[value] ?? "模式 \(value)"
     }
     private var deviceName: String {
+        if connection.activeEndpoint?.isUSB == true { return "USB 设备" }
         guard case .connected(let detail) = connection.connectionStatus else { return "Redmi G Pro" }
         let name = detail.components(separatedBy: " · ").first ?? "Redmi G Pro"
         return name.hasPrefix("MiTV") || name == connection.ipInput ? "Redmi G Pro" : name
@@ -42,7 +43,7 @@ struct HomeView: View {
                     HStack(alignment: .top, spacing: 16) {
                         VStack(alignment: .leading, spacing: 7) {
                             Text(deviceName).font(.system(size: 23, weight: .semibold))
-                            Text(connection.ipInput.isEmpty ? "网络 ADB" : "网络 ADB · \(connection.ipInput)")
+                            Text(connection.transportText)
                                 .font(.system(size: 13)).foregroundColor(Theme.secondaryText)
                         }
                         Spacer()
@@ -62,7 +63,7 @@ struct HomeView: View {
                                                     Color(red: 0.13, green: 0.17, blue: 0.24)],
                                            startPoint: .topLeading, endPoint: .bottomTrailing)
                             VStack(spacing: 12) {
-                                Text(connection.isConnected ? "画面模式" : "网络 ADB")
+                                Text(connection.isConnected ? "画面模式" : connection.transportText)
                                     .font(.system(size: 13)).foregroundColor(Color(red: 0.75, green: 0.8, blue: 0.88))
                                 Text(connection.isConnected ? mode : "等待连接")
                                     .font(.system(size: 32, weight: .medium)).foregroundColor(.white)
@@ -78,6 +79,12 @@ struct HomeView: View {
                     .frame(height: min(350, max(270, geometry.size.height - 350)))
                     .accessibilityElement(children: .contain)
                     .accessibilityLabel("显示器，\(connection.isConnected ? mode : "控制尚未连接")")
+
+                    if connection.identityRestricted {
+                        Label(connection.identityNotice, systemImage: "person.crop.circle.badge.questionmark")
+                            .font(.system(size: 13)).foregroundColor(Theme.warning)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                    }
 
                 HStack(alignment: .top, spacing: 24) {
                     VStack(alignment: .leading, spacing: 17) {
@@ -182,7 +189,8 @@ struct HomeView: View {
             Button { state.requestedPage = .tools } label: { Label(guardian, systemImage: "checkmark.shield") }
                 .help(tools.guardianStatus)
             Button { state.requestedPage = .tools } label: {
-                Label(connection.intent.allowsAutomaticRecovery ? "唤醒后自动重连" : "自动重连已暂停", systemImage: "arrow.clockwise")
+                Label(connection.mode == .usb ? "手动 USB 模式" :
+                    (connection.intent.allowsAutomaticRecovery ? "唤醒后自动重连" : "自动重连已暂停"), systemImage: "arrow.clockwise")
             }
             Button { showLogs = true } label: { Label("日志", systemImage: "text.alignleft") }
         }
@@ -208,34 +216,90 @@ private struct ConnectionSettingsSheet: View {
     @ToolboxActions var state
     @Environment(ConnectionModel.self) private var connection
     @Environment(\.dismiss) private var dismiss
+    private var isConnecting: Bool { connection.connectionStatus == .connecting }
+    private var isDiscovering: Bool {
+        if case .discovering = connection.discoveryStatus { return true }
+        return false
+    }
     var body: some View {
-        VStack(alignment: .leading, spacing: 22) {
+        VStack(alignment: .leading, spacing: 18) {
             HStack { Text("连接显示器").font(.system(size: 24, weight: .semibold)); Spacer(); Button("完成") { dismiss() }.toolboxAction() }
-            Text("Mac 与显示器需处于可互通的网络，显示器已开启 ADB。")
+            Picker("连接方式", selection: Binding(get: { connection.mode }, set: { state.setConnectionMode($0) })) {
+                ForEach(ManualConnectionMode.allCases, id: \.self) { mode in Text(mode.rawValue).tag(mode) }
+            }.pickerStyle(.segmented)
+            Text("切换方式会断开当前会话；选择目标后点击连接。")
                 .font(.system(size: 14)).foregroundColor(Theme.secondaryText)
-            SectionCard(title: "网络 ADB") {
-                HStack(spacing: 12) {
-                    TextField("显示器 IP 地址", text: Binding(get: { connection.ipInput }, set: { state.ipInput = $0 })).textFieldStyle(.roundedBorder)
-                        .onSubmit { state.connect() }
-                    Button("开始连接") { state.connect() }.toolboxAction(prominent: true)
+            if connection.mode == .tcp {
+                SectionCard(title: "网络 ADB") {
+                    Text("Mac 与显示器需处于可互通的网络，显示器已开启 ADB。")
+                        .font(.system(size: 13)).foregroundColor(Theme.secondaryText)
+                    HStack(spacing: 12) {
+                        TextField("显示器 IP 地址或主机名", text: Binding(get: { connection.ipInput }, set: { connection.ipInput = $0 }))
+                            .textFieldStyle(.roundedBorder).onSubmit { state.connect() }
+                        TextField("端口", text: Binding(get: { connection.tcpPortInput }, set: { connection.tcpPortInput = $0 }))
+                            .textFieldStyle(.roundedBorder).frame(width: 80).accessibilityLabel("显示器 ADB 端口")
+                            .onSubmit { state.connect() }
+                        Button("开始连接") { state.connect() }.toolboxAction(prominent: true).disabled(isConnecting)
+                    }
+                    HStack {
+                        Button("扫描内网") { state.scanNet() }.toolboxAction()
+                        Button("网络诊断") { state.runDiagnostics() }.toolboxAction()
+                    }
+                }
+                Picker("已扫描设备", selection: Binding(get: { connection.selectedDevice }, set: { state.selectScannedDevice($0) })) {
+                    Text("选择扫描到的显示器").tag("")
+                    ForEach(connection.scannedDevices, id: \.self) { device in
+                        Text(connection.scannedDeviceModels[device].map { "\($0) (\(device))" } ?? device).tag(device)
+                    }
+                }
+            } else {
+                SectionCard(title: "USB ADB") {
+                    Text("使用 USB 数据线连接显示器，并在显示器上允许 ADB 授权。刷新列表不会自动连接。")
+                        .font(.system(size: 13)).foregroundColor(Theme.secondaryText)
+                    HStack {
+                        Text(connection.discoveryText).font(.system(size: 13)).foregroundColor(Theme.secondaryText)
+                        Spacer()
+                        Button(isDiscovering ? "刷新中…" : "刷新设备") { state.refreshDevices() }
+                            .toolboxAction().disabled(isDiscovering)
+                    }
+                    if !connection.discoveredDevices.isEmpty {
+                        ScrollView {
+                            VStack(spacing: 12) {
+                                ForEach(Array(connection.discoveredDevices.enumerated()), id: \.offset) { _, device in
+                                    HStack(alignment: .center, spacing: 12) {
+                                        VStack(alignment: .leading, spacing: 5) {
+                                            Text(device.serial).font(.system(size: 13, weight: .medium, design: .monospaced)).textSelection(.enabled)
+                                            Text("\(device.discoveryTransportText) · \(device.discoveryStateText)")
+                                                .font(.system(size: 12)).foregroundColor(Theme.secondaryText)
+                                            if connection.selectedUSBSerial == device.serial {
+                                                Text("当前选择").font(.system(size: 12)).foregroundColor(Theme.accent)
+                                            }
+                                        }
+                                        Spacer()
+                                        Button(device.usbActionTitle) { state.connectUSB(serial: device.serial) }
+                                            .toolboxAction().disabled(!device.canValidateAsUSB || isConnecting || isDiscovering)
+                                    }
+                                }
+                            }.frame(maxWidth: .infinity, alignment: .leading)
+                        }.frame(maxHeight: 240)
+                    }
+                }
+            }
+            VStack(alignment: .leading, spacing: 8) {
+                Label(connection.statusText, systemImage: connection.isConnected ? "checkmark.circle" : "network")
+                    .foregroundColor(connection.statusColor).font(.system(size: 14))
+                Text(connection.transportText).font(.system(size: 13)).foregroundColor(Theme.secondaryText)
+                if connection.identityRestricted {
+                    Text(connection.identityNotice).font(.system(size: 13)).foregroundColor(Theme.warning)
                 }
                 HStack {
-                    Button("扫描内网") { state.scanNet() }.toolboxAction()
-                    Button("网络诊断") { state.runDiagnostics() }.toolboxAction()
                     Spacer()
-                    Button("断开连接") { state.disconnectAdb() }.toolboxAction().disabled(!connection.isConnected)
+                    Button(isConnecting ? "取消连接" : "断开连接") { state.disconnectAdb() }
+                        .toolboxAction().disabled(connection.connectionStatus == .disconnected)
                 }
             }
-            Picker("已扫描设备", selection: Binding(get: { connection.selectedDevice }, set: { state.selectScannedDevice($0) })) {
-                Text("选择扫描到的显示器").tag("")
-                ForEach(connection.scannedDevices, id: \.self) { device in
-                    Text(connection.scannedDeviceModels[device].map { "\($0) (\(device))" } ?? device).tag(device)
-                }
-            }
-            Label(connection.statusText, systemImage: connection.isConnected ? "checkmark.circle" : "network")
-                .foregroundColor(connection.statusColor).font(.system(size: 14))
         }
-        .padding(30).frame(width: 640).background(Theme.canvas).tint(Theme.accent)
+        .padding(30).frame(width: 700).background(Theme.canvas).tint(Theme.accent)
     }
 }
 
