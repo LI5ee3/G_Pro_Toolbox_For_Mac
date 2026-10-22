@@ -147,6 +147,7 @@ USB 数据线/ADB 连接不等于视频输入状态；信号源、默认音频�
 | A15 / N | Guardian 源码路径不可复现，整体/图标许可未确认；资源摘要与 NOTICE 已锁定。[E11] | 保留来源和致谢；本轮私人本地交付不以公开再分发审批为阻断，若以后公开发布需另行处理 |
 | A16 / R | 设备侧 helper 使用固定 batch/ramp 结果文件；应用内锁不覆盖另一个 Toolbox/Terminal 进程。Guardian 在配置异常时可能重启 adbd，影响两种传输 | S2-05/06 复核共享设备端资源与 Guardian 恢复影响；真机测试隔离其他写入者，不声称应用事务锁是全设备锁 |
 | A17 / R → CLOSED_S1-10 | S1-02 发现 SwiftUI Window 默认恢复保存 NSWindow Frame preview；历史失败保留。S1-10 仅给 Preview 场景加 restorationBehavior(.disabled)，本机实际窗口变更/交互/退出/重启与空域运行验证均不再改变偏好 | 修复提交 4cef289；871 次监测无偏好变化，原 plist 字节/mtime 不变，新域无文件；默认 push CI 39777222854 success。旧键保留，未放宽零写入要求，见第 8.5 节；G1 仍待其余任务 |
+| A18 / R | S2-01 锁定 adb 37.0.1 假 server 实证：非法长度头 `OKAYZZZZ` 被 CLI 转成 exit 0 / 标准空列表；上层 ProcessResult 无法恢复已丢失信息 | 保留 CLI 限制，不重写协议；空枚举无候选、不得激活/抢占或认定当前会话已断线。其他失败/截断/坏行由应用严格区分；证据 `../validation/S2-01-fake-discovery-20261022-222707/REPORT.md`，非真机 |
 
 ### 2.5 历史已验证与本轮仍缺证据
 
@@ -249,8 +250,8 @@ A08 若测试确认有误报，另建单一 S1 任务后再修；不能把它混
 
 | ID | 单一子任务 / 交付 | 验证标准 | 初始状态 |
 | --- | --- | --- | --- |
-| S2-01 | 有界设备枚举与解析 | 0/1/多台、USB+TCP、unauthorized/offline、附加字段、损坏/截断/超时、取消的 fixture 全覆盖 | IN_PROGRESS |
-| S2-02 | USB 会话选择、授权等待、只读探活、逻辑断开 | USB 不执行 TCP connect/disconnect；待授权不 ready、不重启健康 server；断开后不自动抢回 | WAITING_PREDECESSOR |
+| S2-01 | 有界设备枚举与解析 | 21 新增、297 Swift 全量及架构/Preview source PASS；锁定 CLI 8 项假 server 实证，A18 限制已登记 | LOCAL_PASS（整阶段构建/CI 待复验） |
+| S2-02 | USB 会话选择、授权等待、只读探活、逻辑断开 | USB 不执行 TCP connect/disconnect；待授权不 ready、不重启健康 server；断开后不自动抢回 | IN_PROGRESS |
 | S2-03 | 最小手动 USB/TCP 选择 UI 与模拟场景 | 模式/端点/实际状态明确，拒绝无目标写入；完整视觉统一留到阶段三 | WAITING_PREDECESSOR |
 | S2-04 | 同机身份绑定与旧 IP 兼容实现 | 同机跨传输保留基线/任务；异机/冲突拒绝恢复；旧 JSON 读入、迁移失败、回滚、二次迁移测试 | WAITING_PREDECESSOR |
 | S2-05 | 所有控制入口接入统一会话 | 音量、画面、游戏、信号源、灯光、遥控、预设、自动任务、菜单栏/快捷键、工具/Terminal 的 USB/TCP argv 契约测试；不复制业务实现 | WAITING_PREDECESSOR |
@@ -587,6 +588,7 @@ Mock 替代原因、具体未实测步骤、覆盖断言、残余限制和用户
 - **用户门禁**：明确确认阶段一验收通过，G1 PASS；随后回复暂不能配合真机，先完成可独立工作。历史 S1 验收的“待确认”反映当时事实，不回写历史测试结论。
 - **固定起点**：1222557614b2b855891b12927d4bfaf15b78cd61，master 与 origin/master 一致、工作区干净。计划与逐项结果见 [S2 阶段报告](acceptance/S2.md)。
 - **顺序/边界**：S2-01 枚举 → S2-02 会话 → S2-03 最小 UI → S2-04 身份兼容 → S2-05 控制入口 → S2-06 生命周期；每项独立计划、验证和提交。M2 / Auto / G2 保持证据门禁，不提前设计或实施 S2-08。
+- **S2-01**：21 项新增、297 Swift 全量、架构/Preview source PASS；固定锁定 CLI 8 项隔离假 server 实证，新增 A18 信息丢失限制。实现仅显式查询和纯解析，无生产调用者、无 USB 会话激活；计划 [S2-01](acceptance/S2-01-plan.md)，日志 S2-01-full.log。
 - **保护**：证据目录 `../validation/S2-20261022-222617/`；原 App、偏好、密钥私密备份，父版独立 checkout / 输出，不覆盖现用 App，不安装、打包或操作真机。
 
 
