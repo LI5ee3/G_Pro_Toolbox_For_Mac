@@ -208,7 +208,7 @@ package final class PreviewRuntime {
             adb: AdbClient(resources: resources, execute: display.execute),
             hotkeys: HotkeyManager(driver: hotkeyDriver), feedback: feedback, scheduler: scheduler,
             system: system, now: { Date(timeIntervalSince1970: 1_800_000_000 + self.scheduler.time) },
-            calendar: Calendar(identifier: .gregorian), presetDevice: { _, _ in self.display })
+            calendar: Calendar(identifier: .gregorian), presetDevice: { _, _, _ in self.display })
     }
     @MainActor package func makeState(_ scenario: Scenario = .connected) -> AppCoordinator {
         loginLock.lock()

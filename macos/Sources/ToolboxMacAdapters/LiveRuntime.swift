@@ -177,7 +177,7 @@ extension AppEnvironment {
         return AppEnvironment(mode: .live, preferences: UserDefaults.standard, adb: adb,
             hotkeys: HotkeyManager(driver: LiveHotkeyDriver()), feedback: LiveFeedback(),
             scheduler: LiveScheduler(), system: system, now: Date.init, calendar: .current,
-            presetDevice: { AdbPresetDevice(adb: $0, identity: $1) })
+            presetDevice: { AdbPresetDevice(adb: $0, endpoint: $1, identity: $2) })
     }
 }
 

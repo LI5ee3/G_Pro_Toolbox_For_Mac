@@ -46,7 +46,7 @@ final class AdbPresetDeviceTests: XCTestCase {
         try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: executable.path)
         let client = AdbClient(adbPath: executable.path)
         client.ip = "192.168.1.30"
-        try test(AdbPresetDevice(adb: client, identity: "192.168.1.20"))
+        try test(AdbPresetDevice(adb: client, endpoint: AdbEndpoint.tcp(host: "192.168.1.20"), identity: "192.168.1.20"))
     }
 
     func testCaptureReadsHardwareRatherThanSettingsBacklight() throws {

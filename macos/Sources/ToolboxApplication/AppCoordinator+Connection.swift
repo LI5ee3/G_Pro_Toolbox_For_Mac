@@ -24,7 +24,7 @@ extension AppCoordinator {
         guard !ip.isEmpty else { log("请输入显示器 IP 地址"); return }
         let request = connectionIntent.beginConnection()
         preferences.set(ip, forKey: "saved_ip")
-        adb.beginSession(ip: ip)
+        adb.beginSession(endpoint: AdbEndpoint.tcp(host: ip))
         resetMediaVolumeSession()
         invalidatePictureRefreshesForPreset()
         pendingPresetSave?.cancel(); pendingPresetSave = nil
@@ -108,9 +108,9 @@ extension AppCoordinator {
         pendingPresetSave?.cancel()
         pendingPresetSave = nil
         // Keep dirty identity; reconnecting this same display can still save the edit safely.
-        let ip = adb.ip
+        let endpoint = adb.session().endpoint
         connectionIntent.disconnect()
-        adb.beginSession(ip: "")
+        adb.beginSession(endpoint: nil)
         mediaBrightnessCommit?.cancel(); mediaBrightnessCommit = nil
         mediaBrightnessCommitInFlight = false
         mediaBrightnessPreview = nil; mediaBrightnessHardware = nil
@@ -125,8 +125,8 @@ extension AppCoordinator {
         activeSource = "未知"
         hdrLastState = nil
         stopSourcePolling()
-        if !ip.isEmpty {
-            runConnectionTask { _ = self.adb.disconnect(ip: ip) }
+        if let endpoint {
+            runConnectionTask { _ = self.adb.disconnect(endpoint: endpoint) }
         }
         log("已断开连接")
         updateAutomaticTaskStatus()
@@ -140,7 +140,7 @@ extension AppCoordinator {
         case .scanning: log("正在扫描内网，请等待扫描完成"); return
         }
         let request = connectionIntent.beginScan()
-        adb.beginSession(ip: "")
+        adb.beginSession(endpoint: nil)
         connectionStatus = .scanning
         scannedDevices = []
         scannedDeviceModels = [:]

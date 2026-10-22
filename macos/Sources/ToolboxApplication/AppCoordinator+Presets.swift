@@ -219,7 +219,10 @@ extension AppCoordinator {
             if let hudToken { self.environment.feedback.finishOperation(token: hudToken, result: .cancelled, title: nil) }
         }) {
             let current = !self.adb.operationCancelled
-            let device = connected && current ? self.environment.presetDevice(self.adb, identity) : nil
+            // submitOperation captured this immutable session on MainActor before queueing.
+            // Do not re-read the mutable client endpoint or derive an address from identity.
+            let device = connected && current
+                ? self.environment.presetDevice(self.adb, self.adb.operationSession?.endpoint, identity) : nil
             let (reports, errorText, savedEdits, configuration) = self.presetWorker.withEngine { engine in
                 var reports: [PresetApplyReport] = []
                 engine.onReport = { reports.append($0) }

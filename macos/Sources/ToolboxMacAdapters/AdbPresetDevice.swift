@@ -8,8 +8,8 @@ package final class AdbPresetDevice: PresetDevice {
     package let identity: String
     private let target: String
     private let adb: AdbClient
-    package init(adb: AdbClient, identity: String) {
-        self.adb = adb; self.identity = identity; self.target = "\(identity):5555"
+    package init(adb: AdbClient, endpoint: AdbEndpoint?, identity: String) {
+        self.adb = adb; self.identity = identity; self.target = endpoint?.serial ?? ""
     }
 
     private func source() throws -> String {

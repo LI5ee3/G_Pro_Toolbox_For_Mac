@@ -1,15 +1,16 @@
 import Foundation
 import ToolboxConcurrency
+import ToolboxDomain
 
-/// Immutable submission-time target. A new connection attempt invalidates even the same IP.
+/// Immutable submission-time target. A new attempt invalidates even the same endpoint.
 package struct AdbSession: Sendable {
     let clientID: UUID
-    package let targetIP: String
+    package let endpoint: AdbEndpoint?
     package let cancellation: CommandCancellation
     package func childOperation() -> AdbSession {
-        AdbSession(clientID: clientID, targetIP: targetIP, cancellation: CommandCancellation(parent: cancellation))
+        AdbSession(clientID: clientID, endpoint: endpoint, cancellation: CommandCancellation(parent: cancellation))
     }
-    package var serial: String { targetIP.isEmpty ? "" : "\(targetIP):5555" }
+    package var serial: String { endpoint?.serial ?? "" }
 }
 
 /// Explicitly installed on the blocking worker, and removed before it returns. Never held across

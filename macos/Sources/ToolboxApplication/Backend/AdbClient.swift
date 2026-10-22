@@ -8,21 +8,29 @@ package final class AdbClient {
     package let adbPath: String
     package let serverPort: String
     private let stateLock = NSLock()
-    private var activeIP = ""
+    private var activeEndpoint: AdbEndpoint?
     private var cancellation = CommandCancellation()
     private let clientID = UUID()
-    package var ip: String {
-        get { stateLock.lock(); defer { stateLock.unlock() }; return activeIP }
+    package var endpoint: AdbEndpoint? {
+        get { stateLock.lock(); defer { stateLock.unlock() }; return activeEndpoint }
         set {
             stateLock.lock(); defer { stateLock.unlock() }
-            if activeIP != newValue {
-                cancellation.cancel(); cancellation = CommandCancellation(); activeIP = newValue
+            if activeEndpoint != newValue {
+                cancellation.cancel(); cancellation = CommandCancellation(); activeEndpoint = newValue
             }
         }
     }
-    package func beginSession(ip: String) {
+    /// Transitional TCP UI/configuration boundary. It is not a physical device identity.
+    package var ip: String {
+        get { endpoint?.tcpHost ?? "" }
+        set { endpoint = AdbEndpoint.tcp(host: newValue) }
+    }
+    package func beginSession(endpoint: AdbEndpoint?) {
         stateLock.lock(); defer { stateLock.unlock() }
-        cancellation.cancel(); cancellation = CommandCancellation(); activeIP = ip
+        cancellation.cancel(); cancellation = CommandCancellation(); activeEndpoint = endpoint
+    }
+    package func beginSession(ip: String) {
+        beginSession(endpoint: AdbEndpoint.tcp(host: ip))
     }
     package func cancelSession() {
         stateLock.lock(); defer { stateLock.unlock() }; cancellation.cancel()
@@ -33,7 +41,7 @@ package final class AdbClient {
     }
     package func session() -> AdbSession {
         stateLock.lock(); defer { stateLock.unlock() }
-        return AdbSession(clientID: clientID, targetIP: activeIP, cancellation: cancellation)
+        return AdbSession(clientID: clientID, endpoint: activeEndpoint, cancellation: cancellation)
     }
     package var operationSession: AdbSession? {
         guard let current = AdbOperationContext.current, current.clientID == clientID else { return nil }
@@ -92,9 +100,9 @@ package final class AdbClient {
 
     /// Temporary, target-pinned validation. Never changes the active display or restarts its server.
     package func probeScannedDevice(ip targetIP: String) -> ScannedDevice? {
-        guard !targetIP.isEmpty else { return nil }
+        guard let endpoint = AdbEndpoint.tcp(host: targetIP) else { return nil }
         return transaction {
-                let target = "\(targetIP):5555"
+                let target = endpoint.serial
                 defer { _ = run(["disconnect", target], timeout: 3) }
                 _ = run(["connect", target], timeout: 5)
                 let deadline = Date().addingTimeInterval(6)
@@ -146,8 +154,13 @@ package final class AdbClient {
 
     @discardableResult
     package func disconnect(ip: String) -> String {
-        guard !ip.isEmpty, !operationCancelled else { return "" }
-        return run(["disconnect", "\(ip):5555"], timeout: 5).output
+        disconnect(endpoint: AdbEndpoint.tcp(host: ip))
+    }
+
+    @discardableResult
+    package func disconnect(endpoint: AdbEndpoint?) -> String {
+        guard let endpoint, !operationCancelled else { return "" }
+        return run(["disconnect", endpoint.serial], timeout: 5).output
     }
 
     /// 等设备进入 device 状态。
