@@ -293,8 +293,8 @@ final class ControlRoutingTests: XCTestCase {
          "am broadcast -a \(Guardian.package).ACTION_KEEP_ALIVE -p \(Guardian.package) >/dev/null"]
     }
     private var guardianReads: [String] {
-        ["settings get secure enabled_accessibility_services 2>/dev/null", "pm path \(Guardian.package) 2>/dev/null",
-         "pidof \(Guardian.package) 2>/dev/null", "getprop persist.appcontrol_w_mask 2>/dev/null",
+        ["settings get secure enabled_accessibility_services 2>/dev/null", "pm path \(Guardian.package) 2>/dev/null || true",
+         "pidof \(Guardian.package) 2>/dev/null || true", "getprop persist.appcontrol_w_mask 2>/dev/null",
          "settings get global adb_enabled 2>/dev/null", "settings get global adb_wifi_enabled 2>/dev/null",
          "getprop service.adb.tcp.port 2>/dev/null", "getprop persist.adb.tcp.port 2>/dev/null",
          "getprop init.svc.adbd 2>/dev/null", "dumpsys package \(Guardian.package) 2>/dev/null | grep stopped=true | head -n 1"]
