@@ -1,6 +1,6 @@
 # S1-03：统一端点、设备身份、会话与状态设计
 
-本文主体是 **S1-03 设计契约，不是全部已实现功能说明**。唯一进度基准为 [ROADMAP](ROADMAP.md)；原设计审查固定到 `a41519a459c36762b8726a4a58507428c8b1b697`，2026-10-22（UTC+8）。S1-04 的最小 TCP 部分及 S1-05 server 边界单独列在第 0 节；其余类型、字段、状态及存储键仍为后续设计，须按各自门禁执行。第 1 节及文末固定源码链接保留 S1-03 历史审查事实。
+本文主体是 **S1-03 设计契约，不是全部已实现功能说明**。唯一进度基准为 [ROADMAP](ROADMAP.md)；原设计审查固定到 `a41519a459c36762b8726a4a58507428c8b1b697`，2026-10-22（UTC+8）。S1-04/05 及 S2-01 至 S2-04 的实现事实单独列在第 0 节；第 0 节未落实的设计仍须按各自门禁执行。第 1 节及文末固定源码链接保留 S1-03 历史审查事实。
 
 
 ## 0. S1-04 实施边界（2026-10-22）
@@ -230,7 +230,7 @@ S2-04 将 DeviceID 与一个 `PresetIdentityKey` 关联：
 | ID | 输入/事件 | 必须断言 | 原用例基础 / 实施归属 |
 | --- | --- | --- | --- |
 | D01 | 旧有效 host、空 endpoint、同址重连、A→B | TCP argv/顺序完全一致；空目标不派发；旧 token 取消；预设始终固定目标 | AdbSessionTests、AdbClientTests、ConnectionConcurrencyTests；S1-04 |
-| D02 | USB serial、TCP host+port、重复 serial、未知枚举类别、无 usb 字段 | USB 无 :5555/connect/disconnect；未知/歧义无写；不同 server/设备端口不混淆 | S2-01/02，当前 NOT_RUN |
+| D02 | USB serial、TCP host+port、重复 serial、未知枚举类别、无 usb 字段 | USB 无 :5555/connect/disconnect；未知/歧义无写；不同 server/设备端口不混淆 | S2-01/02 本机验证通过；真机未验证 |
 | D03 | unauthorized/offline/device、失败/截断/超时探活、server 不在 | 未授权不 ready、不循环 kill；device 单独不足；server 与客户端健康分开 | AdbClientTests 既有部分断言；S1-05/S2-02/06 |
 | D04 | 身份缺失、重复、同型号异机、IP 被另一机复用、冲突登记 | 不自动合并，不返回旧基线，不开始/恢复任务；冲突阻断全部目标写入 | PresetEngineTests 原机保护；S2-04 |
 | D05 | 同机 USB+TCP 与旧 IP 别名 | 证据匹配/用户确认后兼容键一致，单写通道、单原始基线；错误别名不认领 | S2-04/05 |

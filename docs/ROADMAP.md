@@ -1,7 +1,7 @@
 # G Pro ToolBox 最终开发路线图
 
 > 唯一项目进度基准。创建于 2026-10-22（UTC+8），同日按用户要求修订自动模式、分层验收和 CI 前置门禁。
-> 当前结论：用户于 2026-10-22 明确确认阶段一验收通过，**G1 PASS**。阶段二已授权，按顺序实施至 S2-04；用户最新要求完成 S2-04 并提交后停止；用户暂不能配合真机，M2 / G2 尚未通过，S2-08 Auto 仍受 M2 门禁约束，阶段三、四锁定。
+> 当前结论：用户于 2026-10-22 明确确认阶段一验收通过，**G1 PASS**。阶段二已授权，S2-01 至 S2-04 本机验证与默认 CI 已通过并提交推送；按用户要求在 S2-04 后停止；用户暂不能配合真机，M2 / G2 尚未通过，S2-08 Auto 仍受 M2 门禁约束，阶段三、四锁定。
 > 后续每次工作先读取本文件，完成一个明确子任务后更新任务状态、证据、风险和下一步；其他文档只承载设计或历史证据，不另设竞争性进度表。
 
 ## 1. 范围、基线与执行边界
@@ -250,12 +250,12 @@ A08 若测试确认有误报，另建单一 S1 任务后再修；不能把它混
 
 | ID | 单一子任务 / 交付 | 验证标准 | 初始状态 |
 | --- | --- | --- | --- |
-| S2-01 | 有界设备枚举与解析 | 21 新增、297 Swift 全量及架构/Preview source PASS；锁定 CLI 8 项假 server 实证，A18 限制已登记 | LOCAL_PASS（整阶段构建/CI 待复验） |
-| S2-02 | USB 会话选择、授权等待、只读探活、逻辑断开 | 30 新增、327 Swift 全量 PASS；USB 无 TCP 管理命令，严格只读探活，逻辑断开抑制恢复；尚不接生产 UI | LOCAL_PASS（整阶段构建/CI 待复验） |
-| S2-03 | 最小手动 USB/TCP 选择 UI 与模拟场景 | 24 新增、351 Swift 全量 PASS；独立 Preview 构建/四层边界与 336 样本实际交互 PASS；身份限制和手动抑制生效 | LOCAL_PASS（整阶段 CI 待复验） |
-| S2-04 | 同机身份绑定与旧 IP 兼容实现 | 同机跨传输保留基线/任务；异机/冲突拒绝恢复；旧 JSON 读入、迁移失败、回滚、二次迁移测试 | LOCAL_PASS（417 Swift / 24 Python；CI 待最终回读；HW_NOT_TESTED） |
-| S2-05 | 所有控制入口接入统一会话 | 音量、画面、游戏、信号源、灯光、遥控、预设、自动任务、菜单栏/快捷键、工具/Terminal 的 USB/TCP argv 契约测试；不复制业务实现 | WAITING_PREDECESSOR |
-| S2-06 | 插拔、网络断线与睡眠任务生命周期 | 旧任务取消/晚到结果丢弃、stop/start、重枚举、局部恢复、忙状态释放和不重放写入的故障注入 | WAITING_PREDECESSOR |
+| S2-01 | 有界设备枚举与解析 | 21 新增、297 Swift 全量及架构/Preview source PASS；锁定 CLI 8 项假 server 实证，A18 限制已登记 | LOCAL_PASS（本窗口构建/CI PASS；HW_NOT_TESTED） |
+| S2-02 | USB 会话选择、授权等待、只读探活、逻辑断开 | 30 新增、327 Swift 全量 PASS；USB 无 TCP 管理命令，严格只读探活，逻辑断开抑制恢复；本项只开放 backend；UI 由 S2-03 接入 | LOCAL_PASS（本窗口构建/CI PASS；HW_NOT_TESTED） |
+| S2-03 | 最小手动 USB/TCP 选择 UI 与模拟场景 | 24 新增、351 Swift 全量 PASS；独立 Preview 构建/四层边界与 336 样本实际交互 PASS；身份限制和手动抑制生效 | LOCAL_PASS（本窗口 CI PASS；HW_NOT_TESTED） |
+| S2-04 | 同机身份绑定与旧 IP 兼容实现 | 同机跨传输保留基线/任务；异机/冲突拒绝恢复；旧 JSON 读入、迁移失败、回滚、二次迁移测试 | DONE_LOCAL / LOCAL_PASS（417 Swift / 24 Python / CI PASS；HW_NOT_TESTED） |
+| S2-05 | 所有控制入口接入统一会话 | 音量、画面、游戏、信号源、灯光、遥控、预设、自动任务、菜单栏/快捷键、工具/Terminal 的 USB/TCP argv 契约测试；不复制业务实现 | NOT_STARTED（用户要求 S2-04 后停止） |
+| S2-06 | 插拔、网络断线与睡眠任务生命周期 | 旧任务取消/晚到结果丢弃、stop/start、重枚举、局部恢复、忙状态释放和不重放写入的故障注入 | NOT_STARTED（用户要求 S2-04 后停止） |
 | S2-07 | 手动模式分层验收子门禁 M2 | USB/TCP 核心连接、控制、同机双在线、手动切换及拔插/恢复必须真机通过；首次授权/第二台设备等例外按第 6.0 节严格 Mock 并记录未实测限制；具体写入按批准执行和恢复 | HW_NOT_TESTED / 待窗口 |
 | S2-08 | M2 通过后设计并实现必需的 Auto | USB 优先 → 有线失效自动回退同机无线 TCP → 有线稳定恢复后自动回切 USB；单会话、安全切换、不重复派发、稳定窗口/冷却/退避、手动断开抑制均有确定性测试 | WAITING_M2 |
 | S2-09 | Auto 核心真机与例外 Mock 的完整阶段回归 | USB→无线 TCP→USB 自动往返、控制回读、同机身份、切换中取消/不重放和睡眠恢复必须真机；多机歧义/不可安全制造的故障严格 Mock，分列结果及限制 | WAITING_PREDECESSOR |
@@ -541,8 +541,11 @@ HW-F01 的音量/静音、HW-F02 的安全画面控制、HW-F04/05 的预设与�
 - **S2-02**：30 新增、327 Swift 全量和架构/Preview source PASS；父版四类错误 ready 已用注入执行器复现。USB 候选重新枚举/唯一匹配，必要时仅补查所选候选 devpath，严格探活、取消与逻辑断开；普通 TCP 33 项相关旧断言保持。计划 [S2-02](acceptance/S2-02-plan.md)，尚无生产 USB UI 调用。
 - **保护**：证据目录 `../validation/S2-20261022-222617/`；原 App、偏好、密钥私密备份，父版独立 checkout / 输出，不覆盖现用 App，不安装、打包或操作真机。
 - **S2-03**：手动 USB/TCP UI、独立发现/连接状态；351 Swift、独立 Preview 与实际交互 PASS。原场景保留，新增五种 USB 场景，尚未确认身份时暂停预设/记忆副作用；实施提交 7fc0573。
-- **S2-04（2026-10-23）**：计划先行、会话绑定的稳定属性证据、兼容预设身份键、显式归属/记忆确认、单 envelope 与受控备份/原值比较/回读/恢复。417 Swift（新增 66）、24 Python、三种构建、development .app、架构/Preview 四层与实际窗口验证 PASS；270 样本未见偏好/密钥、子进程或网络副作用。父版 7fc0573 独立 351 Swift / Release 重建 PASS，原 App/配置/密钥保持。详见 [S2 验收](acceptance/S2.md) 与契约 §0.3。仅 LOCAL_PASS，固件身份与核心真机 HW_NOT_TESTED；默认 CI/提交结果随后补记。
+- **S2-04（2026-10-23）**：计划先行、会话绑定的稳定属性证据、兼容预设身份键、显式归属/记忆确认、单 envelope 与受控备份/原值比较/回读/恢复。417 Swift（新增 66）、24 Python、三种构建、development .app、架构/Preview 四层与实际窗口验证 PASS；270 样本未见偏好/密钥、子进程或网络副作用。父版 7fc0573 独立 351 Swift / Release 重建 PASS，原 App/配置/密钥保持。详见 [S2 验收](acceptance/S2.md) 与契约 §0.3。仅 LOCAL_PASS，固件身份与核心真机 HW_NOT_TESTED；默认 CI/提交结果见下一条。
 - **最新范围与停止点**：用户再次要求完成 S2-04 剩余验证、更新 ROADMAP、提交推送后停止。工作区已有音量/Guardian 改动经用户明确要求保留并排除，本次使用隔离候选验证；不将这些改动计入 S2-04，S2-05/06/Auto 未开始，M2/G2 不通过。
+
+- **提交/默认 CI**：实现提交 [4532237](https://github.com/LI5ee3/G_Pro_Toolbox_For_Mac/commit/4532237315b4178036167cb5c4290946800dc725)；普通 push 触发 [39952973094](https://github.com/LI5ee3/G_Pro_Toolbox_For_Mac/actions/runs/39952973094)，2026-10-23 20:24:10–20:26:43（UTC+8）build success、package skipped、总体 success，artifact=0。远端日志确认 417 Swift / 24 Python、三种构建与架构/Preview 检查。临时 runner 退出 0/注销、凭据删除、远端 runner=0；无常驻服务。
+- **最终验收/停止**：S2-04 **DONE_LOCAL / LOCAL_PASS**，可独立工作完成；M2/G2 NOT_PASSED，核心真机 HW_NOT_TESTED。37 文件提交在两个父基点正逆补丁验证 PASS，最终源码与隔离候选/CI 相同；六份历史文档保持。CI 临时产物元数据在任务清理后未保留，已在独立干净 4532237 检出补建 development App，source_head 精确匹配、dirty_tree=false，证据 CommittedDelivery/。收尾文档同步 README/现行架构中与本项直接相关的陈旧说明，不改变业务源码；结果提交使用 [skip ci]。工作区 7 个范围外文件按用户要求保留未提交，不能把它称为全工作区干净；最终远端回读见 final-verification.json。本次停止。
 
 ### 8.11 后续每个任务/阶段必填记录模板
 

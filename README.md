@@ -20,7 +20,7 @@ Redmi G Pro 27U / 32U 显示器的原生 macOS 控制应用，使用 SwiftUI、A
 
 更多截图、配置和实测范围见 [Mac 使用与开发说明](macos/README.md)。
 
-当前架构与运行边界见 [ARCHITECTURE](docs/ARCHITECTURE.md)，执行范围及验收状态以 [ROADMAP](docs/ROADMAP.md) 为准。应用当前仍使用 TCP 连接；USB/Auto 和跨传输身份属于 [ADB 契约](docs/ADB-CONTRACTS.md) 的后续设计。
+当前架构与运行边界见 [ARCHITECTURE](docs/ARCHITECTURE.md)，执行范围及验收状态以 [ROADMAP](docs/ROADMAP.md) 为准。S2-01 至 S2-04 已实现手动 USB/TCP 选择和经确认的身份兼容，详见 [ADB 契约第 0 节](docs/ADB-CONTRACTS.md)；当前仅本机/模拟验证通过，核心真机 M2/G2 尚未通过，Auto 未实现。
 
 ## 使用条件
 
@@ -34,7 +34,7 @@ Redmi G Pro 27U / 32U 显示器的原生 macOS 控制应用，使用 SwiftUI、A
 
 同一台 32U 已通过「Mac 扩展坞 USB-A → A↔C 数据线 → 显示器 Type-C」建立有线 ADB。内嵌 adb 在端口 5038 上唯一列出 `76226171600005770 device usb:51589120X`，指定序列号 shell 返回 `connected=true`、`configured=true`、`kernel_state=CONFIGURED`。此前“Type-C 无法有线 ADB”的结论错误。
 
-内部 RTS5411 Hub 的 Port 1/2 接外部两个 USB-A 下行口，Port 3 接 SoC ADB Gadget，Port 4 接 Billboard。`usb2typec=1` 将 Hub 上行口接外部 Type-C；`0` 接显示器自身 Host，不能将外部 USB-A 变成调试口。本次确认的是硬件和 adb 传输能力，不代表本分支网络连接界面已增加 USB 功能；本轮只更新文档，未修改显示器状态。
+内部 RTS5411 Hub 的 Port 1/2 接外部两个 USB-A 下行口，Port 3 接 SoC ADB Gadget，Port 4 接 Billboard。`usb2typec=1` 将 Hub 上行口接外部 Type-C；`0` 接显示器自身 Host，不能将外部 USB-A 变成调试口。这段历史记录只确认硬件和 adb CLI 传输能力，当时只更新文档、没有修改显示器状态；不能替代后来 S2 手动 USB 界面的真机验收。
 
 ## 从源码构建
 
