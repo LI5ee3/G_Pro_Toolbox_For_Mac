@@ -17,8 +17,18 @@ package final class ConnectionModel {
     package var activeEndpoint: AdbEndpoint?
     package var discoverySnapshot: AdbDiscoverySnapshot?
     package var discoveryStatus: DeviceDiscoveryStatus = .idle
-    /// Temporary USB admission boundary; S2-04 replaces it with identity capabilities.
-    package var identityRestricted = false
+    package var identityRestricted = true
+    package var identitySessionID: UUID?
+    package var identityEvidence: IdentityEvidence?
+    package var presetIdentityKey: String?
+    package var allowsIdentityAutomaticActions = false
+    package var memoryOwnershipConfirmed = false
+    package var identityConflict = false
+    package var identityOperationBusy = false
+    package var identityText = "设备身份尚未验证"
+    package var profileMessage = ""
+    package var ownershipConfirmationText = ""
+
     package var intent = ConnectionIntent()
     package init() {}
     package var isConnected: Bool {
@@ -61,7 +71,11 @@ package final class ConnectionModel {
     }
 
     package var identityNotice: String {
-        identityRestricted ? "通道身份尚未确认，预设、自动任务与记忆恢复暂停" : ""
+        if identityConflict { return "身份或配置冲突，已停止该目标的全部设备操作" }
+        if identityRestricted { return "通道身份尚未确认，预设、自动任务与记忆恢复暂停" }
+        if !allowsIdentityAutomaticActions { return "人工确认仅限本次会话，自动任务与记忆恢复暂停" }
+        if !memoryOwnershipConfirmed { return "已验证设备身份；全局记忆归属未确认，自动记忆暂停" }
+        return ""
     }
 
 }

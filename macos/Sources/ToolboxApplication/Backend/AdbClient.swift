@@ -11,12 +11,14 @@ package final class AdbClient {
     private var activeEndpoint: AdbEndpoint?
     private var cancellation = CommandCancellation()
     private let clientID = UUID()
+    private var sessionID = UUID()
     package var endpoint: AdbEndpoint? {
         get { stateLock.lock(); defer { stateLock.unlock() }; return activeEndpoint }
         set {
             stateLock.lock(); defer { stateLock.unlock() }
             if activeEndpoint != newValue {
                 cancellation.cancel(); cancellation = CommandCancellation(); activeEndpoint = newValue
+                sessionID = UUID()
             }
         }
     }
@@ -28,6 +30,7 @@ package final class AdbClient {
     package func beginSession(endpoint: AdbEndpoint?) {
         stateLock.lock(); defer { stateLock.unlock() }
         cancellation.cancel(); cancellation = CommandCancellation(); activeEndpoint = endpoint
+        sessionID = UUID()
     }
     package func beginSession(ip: String) {
         beginSession(endpoint: AdbEndpoint.tcp(host: ip))
@@ -37,11 +40,11 @@ package final class AdbClient {
     }
     package func resumeSession() {
         stateLock.lock(); defer { stateLock.unlock() }
-        if cancellation.isCancelled { cancellation = CommandCancellation() }
+        if cancellation.isCancelled { cancellation = CommandCancellation(); sessionID = UUID() }
     }
     package func session() -> AdbSession {
         stateLock.lock(); defer { stateLock.unlock() }
-        return AdbSession(clientID: clientID, endpoint: activeEndpoint, cancellation: cancellation)
+        return AdbSession(clientID: clientID, endpoint: activeEndpoint, cancellation: cancellation, sessionID: sessionID)
     }
     package var operationSession: AdbSession? {
         guard let current = AdbOperationContext.current, current.clientID == clientID else { return nil }

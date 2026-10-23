@@ -7,8 +7,15 @@ package struct AdbSession: Sendable {
     let clientID: UUID
     package let endpoint: AdbEndpoint?
     package let cancellation: CommandCancellation
+    package let sessionID: UUID
+    package init(clientID: UUID, endpoint: AdbEndpoint?, cancellation: CommandCancellation, sessionID: UUID = UUID()) {
+        self.clientID = clientID
+        self.endpoint = endpoint
+        self.cancellation = cancellation
+        self.sessionID = sessionID
+    }
     package func childOperation() -> AdbSession {
-        AdbSession(clientID: clientID, endpoint: endpoint, cancellation: CommandCancellation(parent: cancellation))
+        AdbSession(clientID: clientID, endpoint: endpoint, cancellation: CommandCancellation(parent: cancellation), sessionID: sessionID)
     }
     package var serial: String { endpoint?.serial ?? "" }
 }

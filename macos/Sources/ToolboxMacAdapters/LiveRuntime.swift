@@ -96,6 +96,7 @@ extension AppEnvironment {
         let loginItems = LiveLoginItems()
         let output = DefaultOutputCache.live()
         var system = SystemActions()
+        system.backupConnectionProfile = { try ConnectionProfileBackup.write($0, identifier: $1) }
         system.isTrusted = { AXIsProcessTrusted() }
         system.promptAccessibility = {
             AXIsProcessTrustedWithOptions([kAXTrustedCheckOptionPrompt.takeUnretainedValue() as String: true] as CFDictionary)

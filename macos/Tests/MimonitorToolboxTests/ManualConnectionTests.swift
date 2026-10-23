@@ -30,6 +30,11 @@ private final class ManualConnectionTrace {
         ["-s", "000ManualUSB", "shell", "echo __mimonitor_probe__"]
     ]
 
+    private let identityCommands = [
+        ["-s", "000ManualUSB", "shell", "getprop ro.serialno"],
+        ["-s", "000ManualUSB", "shell", "getprop ro.boot.serialno"]
+    ]
+
     private func fixture(_ runtime: PreviewRuntime = PreviewRuntime(),
                          respond: ((CommandRequest) -> ProcessResult)? = nil)
         -> (AppCoordinator, PreviewRuntime, ManualConnectionTrace) {
@@ -121,7 +126,7 @@ private final class ManualConnectionTrace {
         state.connectUSB(serial: usbSerial)
         await state.waitForPendingWork()
 
-        XCTAssertEqual(trace.arguments, readyCommands)
+        XCTAssertEqual(trace.arguments, readyCommands + identityCommands)
         XCTAssertTrue(state.isConnected)
         XCTAssertEqual(state.connection.mode, .usb)
         XCTAssertEqual(state.connection.selectedUSBSerial, usbSerial)
@@ -149,7 +154,7 @@ private final class ManualConnectionTrace {
         await state.waitForPendingWork()
 
         XCTAssertEqual(trace.arguments, [["devices", "-l"], ["-s", usbSerial, "get-devpath"],
-            ["-s", usbSerial, "get-state"], ["-s", usbSerial, "shell", "echo __mimonitor_probe__"]])
+            ["-s", usbSerial, "get-state"], ["-s", usbSerial, "shell", "echo __mimonitor_probe__"]] + identityCommands)
         XCTAssertEqual(state.connection.activeEndpoint?.serial, usbSerial)
         XCTAssertTrue(state.isConnected)
         state.stop()
@@ -190,7 +195,7 @@ private final class ManualConnectionTrace {
         state.toggleCrosshairGameModeOnly(false)
         await state.waitForPendingWork()
 
-        XCTAssertEqual(trace.arguments, readyCommands)
+        XCTAssertEqual(trace.arguments, readyCommands + identityCommands)
         XCTAssertEqual(trace.presetDeviceCount, 0)
         XCTAssertTrue(state.memoriesSuspendedByPreset)
         XCTAssertFalse(state.effectiveHdrMemoryEnabled)
@@ -279,7 +284,7 @@ private final class ManualConnectionTrace {
         }
     }
 
-    func testValidTCPPortsUseTheEnteredTargetAndOnlyDefaultPortUpdatesSavedIP() async {
+    func testValidTCPPortsUseEnteredTargetWithoutImplicitPreferenceWrite() async {
         for (host, port) in [("192.0.2.50", "1"), ("Monitor.Example", "5555"), ("192.0.2.51", "65535")] {
             let runtime = PreviewRuntime()
             runtime.preferences.set("192.0.2.99", forKey: "saved_ip")
@@ -296,7 +301,7 @@ private final class ManualConnectionTrace {
             XCTAssertEqual(state.adb.serial, "\(host):\(port)")
             XCTAssertEqual(state.connectionStatus, .awaitingAuthorization)
             XCTAssertNil(state.connection.activeEndpoint)
-            XCTAssertEqual(runtime.preferences.string(forKey: "saved_ip"), port == "5555" ? host : "192.0.2.99")
+            XCTAssertEqual(runtime.preferences.string(forKey: "saved_ip"), "192.0.2.99")
             state.stop()
         }
     }

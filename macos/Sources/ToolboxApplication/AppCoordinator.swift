@@ -97,6 +97,9 @@ public final class AppCoordinator {
     internal var hdrLastState: Bool?
     internal var sourcePollTimer: RuntimeCancellation?
     internal var sourcePollArmed = false
+    internal var connectionProfile: ConnectionProfileSnapshot?
+    internal var identityOperationID: UUID?
+    internal var observedIdentityEvidence: [IdentityEvidence] = []
     internal var discoveryGeneration = 0
     internal var monitorChecking = false
     internal var monitorTick = 0
@@ -153,6 +156,7 @@ public final class AppCoordinator {
         self.hotkeyCountdownSeconds = preferences.object(forKey: "hotkey_countdown_seconds") as? Double ?? 0.8
         self.presetConfiguration = presetWorker.initialConfiguration
         self.presetError = presetWorker.loadError
+        loadSavedConnectionProfile()
         self.isConfiguring = false
         if environment.mode == .simulation { executionLifetime.begin() }
     }
@@ -245,6 +249,7 @@ public final class AppCoordinator {
     }
 
     package func stop() {
+        resetIdentity()
         discoveryGeneration &+= 1
         connection.discoveryStatus = .idle
         adb.cancelSession()
@@ -300,6 +305,9 @@ public final class AppCoordinator {
     /// Recovery policy, authorization and cooldown belong to AdbClient.ensureConnected.
     internal func monitorAdbServer(refreshState: Bool = false) {
         guard !monitorChecking else { return }
+        // A manual identity confirmation remains scoped to this exact session. A periodic
+        // timer may not silently replace it; explicit reconnect/wake requires confirmation again.
+        if isConnected, !connection.identityRestricted, !connection.allowsIdentityAutomaticActions, !refreshState { return }
         guard connectionIntent.allowsAutomaticRecovery else { return }
         // USB selection is still read-only at this gate. Never reinterpret its empty TCP
         // projection as saved_ip; typed manual recovery is introduced with the UI lifecycle.
@@ -316,63 +324,36 @@ public final class AppCoordinator {
             ?? AdbEndpoint.inputTCP(host: saved, port: "5555"), !targetEndpoint.isUSB else { return }
         let target = targetEndpoint.serial
 
-        let wasConnected = isConnected    // 在主线程序上读，避免后台 sync 主线程
+        // Identity validation is an admission boundary. Do not cancel an in-flight preset
+        // merely for a periodic check, and do not accept controls while revalidating.
+        guard !isPresetOperationInFlight, !hasPendingDeviceControls, !connection.identityOperationBusy else { return }
         let request = connectionIntent.generation
-        if adb.endpoint == nil { adb.beginSession(endpoint: targetEndpoint) }
+        resetIdentity()
+        adb.beginSession(endpoint: targetEndpoint)
+        resetMediaVolumeSession()
+        currentValues = [:]; loadedPages = []; loadingPages = []
+        connection.activeEndpoint = nil
+        connectionStatus = .connecting
         monitorChecking = true
-        runConnectionTask(onCancel: { self.monitorChecking = false }) {
-            defer { self.publishCompletion { self.monitorChecking = false } }
-
-            if wasConnected && self.adb.deviceState() == "device" && self.adb.transportWorks() {
-                // 唤醒时连接可能仍可用，但显示器的音量和保活设置已经变化。
-                if refreshState {
-                    self.publish {
-                        guard self.connectionIntent.isCurrent(request),
-                              self.connectionIntent.allowsAutomaticRecovery else { return }
-                        self.refreshMediaVolumeState()
-                        self.checkGuardian()
-                    }
-                }
-                return
-            }
-
-            let (ok, state) = self.adb.ensureConnected()
-            let model = ok ? self.adb.getModel() : ""
-
-            self.publish {
-                guard self.connectionIntent.isCurrent(request),
-                      self.connectionIntent.allowsAutomaticRecovery else { return }
-                if ok {
-                    let ip = target
-                    self.connection.activeEndpoint = targetEndpoint
-                    self.connectionStatus = .connected(model.isEmpty ? ip : "\(model) · \(ip)")
-                    if !wasConnected {
-                        // 关键：恢复后必须把连接状态也置回已连接，
-                        // 否则界面一直以为"未连接"，点任何页面都会被弹回主页。
-                        self.log("已连接: \(ip)")
-                        self.loadedPages = []
-                        self.refreshPage("picture")
-                        self.refreshPage("game")
-                        self.pollHdrState(force: true)
-                        self.checkAutomaticTasks()
-                    } else {
-                        self.log("ADB 链路已恢复")
-                    }
-                    self.lastMonitorFailState = ""
-                    self.refreshMediaVolumeState()
-                    self.checkGuardian()
-                } else if self.isConnected {
-                    self.adb.beginSession(endpoint: targetEndpoint)
-                    self.connection.activeEndpoint = nil
-                    self.connectionStatus = .disconnected
-                    self.log("ADB 链路恢复失败: \(state)")
-                } else if self.lastMonitorFailState != state {
-                    // 未连接状态下只在失败原因变化时记一次，避免每 6 秒刷屏
-                    self.lastMonitorFailState = state
-                    self.log("自动重连失败: \(state)")
+        submitOperation(on: connectionQueue, work: { [adb] in adb.ensureConnected() }, onCancel: {
+            self.monitorChecking = false
+        }) { result in
+            self.monitorChecking = false
+            guard self.connectionIntent.isCurrent(request), self.connectionIntent.allowsAutomaticRecovery else { return }
+            if result.ok {
+                self.lastMonitorFailState = ""
+                self.verifyConnectionIdentity(endpoint: targetEndpoint, request: request, detail: target)
+            } else {
+                self.connection.activeEndpoint = nil
+                self.connectionStatus = result.state.lowercased().contains("unauthorized")
+                    ? .awaitingAuthorization : .offline(result.state)
+                if self.lastMonitorFailState != result.state {
+                    self.lastMonitorFailState = result.state
+                    self.log("自动重连失败: \(result.state)")
                 }
             }
         }
+
     }
 
 
@@ -414,7 +395,7 @@ public final class AppCoordinator {
     internal let mediaBrightnessCommitDelay: TimeInterval = 0.12
 
     internal var mediaVolumePreview: Int?
-    /// 最近一次真正下发到设备的音量
+    /// 最近一次成功下发的目标或读回值；命令成功不等于逐次读回确认。
     internal var mediaVolumeHardware: Int?
     /// 设备当前是否静音（nil = 未知）
     internal var mediaVolumeMuted: Bool?
@@ -424,6 +405,8 @@ public final class AppCoordinator {
     internal var mediaVolumeCommit: DispatchWorkItem?
     /// 是否有一次下发正在跑
     internal var mediaVolumeCommitInFlight = false
+    /// 只有真实用户输入产生提交意图；失败后的预览差值不能触发自动重试。
+    internal var mediaVolumePending = false
     /// 回退通道只提示一次，避免连按刷屏
     internal var mediaVolumeFallbackLogged = false
 

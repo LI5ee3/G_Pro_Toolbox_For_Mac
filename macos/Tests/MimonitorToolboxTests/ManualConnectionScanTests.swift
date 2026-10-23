@@ -67,7 +67,7 @@ final class ManualConnectionScanTests: XCTestCase {
         XCTAssertEqual(Array(runtime.display.recordedCommands.prefix(4)), scanTrace(runtime.display.identity))
         XCTAssertTrue(runtime.display.recordedCommands.contains("-s \(runtime.display.identity):5555 shell echo __mimonitor_probe__"))
         XCTAssertFalse(runtime.display.recordedCommands.contains { $0.contains(":5566") })
-        XCTAssertEqual(runtime.preferences.string(forKey: "saved_ip"), runtime.display.identity)
+        XCTAssertNil(runtime.preferences.object(forKey: "saved_ip"))
         state.stop()
     }
 

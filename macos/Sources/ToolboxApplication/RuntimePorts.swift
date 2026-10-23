@@ -51,6 +51,10 @@ package struct RuntimeResources {
 
 package struct SystemActions {
     package init() {}
+    /// Receives an immutable private backup before a connection profile commit.
+    package var backupConnectionProfile: (Data, String) throws -> Void = { _, _ in
+        throw PresetError("连接配置备份服务不可用")
+    }
     package var isTrusted: () -> Bool = { false }
     package var promptAccessibility: () -> Bool = { false }
     package var openAccessibility: () -> Void = {}

@@ -161,17 +161,32 @@ public final class PresetStore {
     public private(set) var configuration = PresetConfiguration()
     public private(set) var loadError: String?
     private let key = "picture_presets_v1"
+    private var originalData: Data?
     public init(defaults: any PreferencesStore = UserDefaults.standard) {
         self.defaults = defaults
-        if let data = defaults.data(forKey: key) {
+        if let value = defaults.object(forKey: key) {
+            guard let data = value as? Data else {
+                loadError = "预设配置类型错误，已保留原值"; return
+            }
+            originalData = data
             do { configuration = try JSONDecoder().decode(PresetConfiguration.self, from: data) }
             catch { loadError = "预设配置无法读取，已保留原数据：\(error.localizedDescription)" }
         }
     }
     func save(_ configuration: PresetConfiguration) throws {
         if let loadError { throw PresetError(loadError) }
+        let current = defaults.object(forKey: key)
+        guard (current == nil && originalData == nil) || (current as? Data == originalData && current is Data) else {
+            loadError = "预设配置已被其他所有者修改，已保留当前值"
+            throw PresetError(loadError!)
+        }
         let data = try JSONEncoder().encode(configuration)
         defaults.set(data, forKey: key)
+        guard defaults.object(forKey: key) as? Data == data else {
+            loadError = "预设配置写入回读失败，已停止后续写入"
+            throw PresetError(loadError!)
+        }
+        originalData = data
         self.configuration = configuration
     }
 }

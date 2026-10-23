@@ -31,8 +31,20 @@
 - S2-01 新增 [AdbDiscovery](../macos/Sources/ToolboxDomain/AdbDiscovery.swift) 与显式 `discoverDevices()`：3 秒单次查询、完整结果先检查再解析 stdout；有界列表/原字段/未知状态/重复 serial 均保留或诊断。发现不改变会话，不自动选择。锁定 CLI 会隐藏一种非法长度头为空成功（A18），不宣称能检测其已丢失的信息。
 - S2-02 为 `AdbEndpoint` 增加 USB 和 `isUSB`，原 TCP 字节与 argv 保留。[validateUSBSelection](../macos/Sources/ToolboxApplication/Backend/AdbClient+USB.swift) 每次重新枚举、全部候选唯一匹配，再核实类型、授权和严格 shell 探活；缺类型证据时仅补查所选候选 `get-devpath`，unknown/裸路径不算 USB。返回的 ready 只是通道证据，不激活或授予业务身份能力。
 - USB connect/disconnect 不发 TCP CLI，USB ensureConnected 不进入 TCP/server 恢复；coordinator 的旧 monitor 明确阻止 USB 被 saved_ip 替代。TCP deviceState/transportWorks 收紧完整成功 stdout 的精确判据，命令/期限/次序及其他 legacy shell 保持。
-- UI、身份/迁移、控制能力和生命周期仍按 S2-03 至 S2-06 各自实施；M2 前不设计或实现 Auto。USB backend 的本机测试不代替真实应用/固件验证。
+- S2-03 已接入手动 USB/TCP UI；S2-04 的身份/配置实现见下节。S2-05 控制入口、S2-06 生命周期及 Auto 仍未实施；M2 前不设计或实现 Auto。本机测试不代替真实应用/固件验证。
 
+
+### 0.3 S2-04 实现边界（2026-10-23）
+
+固定父版 `7fc0573`，计划及验收见 [S2-04-plan](acceptance/S2-04-plan.md) / [S2 报告](acceptance/S2.md)。第 1 节之后保留原设计与历史审查，不能将本节本机结果当作 M2 真机结论。
+
+- 每次接入读取固定端点 `ro.serialno` / `ro.boot.serialno`，每条 3 秒，仅完整成功 stdout 可作为本次 session UUID 的证据。占位/不完整为 unknown，两属性不一致或已登记端点换机为 conflict；不按型号/IP/USB serial 猜同机。没有证明该固件属性唯一可靠，仍须 M2。
+- 通道 ready 与预设/自动任务/全局记忆权限分开。未确认只允许普通手动控制；冲突或损坏配置取消会话并清空执行端点。旧所有权必须明确确认；unknown 的人工确认仅当前会话有效，重连失效，自动任务/全局记忆保持暂停。没有旧所有权时生成规范小写 `device:<UUID>`；之后升级稳定登记仍需明确确认，复用同一兼容键。
+- 协调器的预设基线、活动预设、延迟保存和任务会话改用解析后的兼容键；固定 endpoint 单独传递。PresetEngine、预设 JSON 与 Android 协议未改。仅本地名称/任务/菜单栏编辑仍可离线进行，不创建设备适配器。
+- `connection_profile_v1` 单 envelope 保存模式、端点、登记、证据、版本、旧别名、全局记忆唯一归属和备份摘要；启动/连接只读，显式保存/确认才提交。仅 TCP:5555 镜像旧 saved_ip；USB/其他端口不覆盖它；新 envelope 优先。picture_presets_v1 不重编码。PresetStore 后续正常编辑增加原值比较及写后回读保护。
+- PresetWorker 同一同步所有者执行备份→原值/会话再核对→整 envelope 写入→回读，失败不启用新绑定；只撤销仍属于本次写入的 envelope，不覆盖外部修改。备份保留三个键的缺失、类型和原值，内容 SHA-256，真实 adapter 目录 0700 / 文件 0600；Preview 完全内存。UserDefaults 回读不等于断电持久事务，也不提供跨进程 CAS；其他写入者仍须隔离。
+- 恢复 API 仅在当前摘要匹配、备份校验与再次备份成功后恢复新连接键；不倒写之后编辑的旧 JSON/saved_ip。旧版忽略 envelope，可能按 saved_ip 恢复 TCP；新 device:<UUID> 所有权不能承诺与旧版无损兼容。生产偏好恢复未执行。
+- S2-04 只把现有 TCP 恢复纳入身份验证；没有实现 USB 插拔恢复、willSleep 生命周期或 Auto。确认动作自身不部署 helper/执行设备设置，后续经验证重连沿用原初始化；已有自动功能的时序仍受后续生命周期验收约束。
 
 ## 1. 审查事实与设计决策
 
@@ -223,7 +235,7 @@ S2-04 将 DeviceID 与一个 `PresetIdentityKey` 关联：
 | D04 | 身份缺失、重复、同型号异机、IP 被另一机复用、冲突登记 | 不自动合并，不返回旧基线，不开始/恢复任务；冲突阻断全部目标写入 | PresetEngineTests 原机保护；S2-04 |
 | D05 | 同机 USB+TCP 与旧 IP 别名 | 证据匹配/用户确认后兼容键一致，单写通道、单原始基线；错误别名不认领 | S2-04/05 |
 | D06 | 旧 JSON、缺 optional 字段、损坏/未来 schema、空配置 | 读不写；旧偏好 TCP；坏数据原字节保留，无默认写入；任务定义不被赋予猜测身份 | PresetMenuBarTests/Store 保护；S2-04 |
-| D07 | 迁移二次执行、写失败/回读失败、任一阶段崩溃、并发编辑、多个旧身份 | no-op 幂等、失败不激活、重启重验、恢复不覆盖后续用户数据 | S2-04，当前 NOT_RUN |
+| D07 | 迁移二次执行、写失败/回读失败、任一阶段崩溃、并发编辑、多个旧身份 | no-op 幂等、失败不激活、重启重验、恢复不覆盖后续用户数据 | S2-04 本机故障注入已验证；硬件/断电持久性未验证 |
 | D08 | 模式切换、睡眠、stop/start、旧回调、待派发和在途预设 | 代次隔离、缓存未知、自有 busy 清理；已派发计数不因换线增加；不重放 toggle/事务 | SessionPublication/Cleanup、RuntimeSafetyTests；S2-06 |
 | D09 | Auto USB失效→TCP→USB稳定，抖动/忙事务/手动断开 | 只选同机；稳定后最终切回、无抢占/双写/无限等待；断开抑制覆盖唤醒 | S2-08 虚拟时钟；M2 先行，S2-09 核心真机 |
 | D10 | 所有页面、菜单/快捷键、Terminal/工具、记忆/任务 | 同一目标/能力门禁，未知不示成功；Terminal 外部边界明示 | S2-05 / S3；A08 另按原风险规则 |

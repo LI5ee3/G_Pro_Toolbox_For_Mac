@@ -11,6 +11,11 @@ import ToolboxConcurrency
         let state = AppCoordinator(environment: runtime.environment())
         state.adb.ip = "192.0.2.16"
         state.connectionStatus = .connected("fake")
+        // Confirmed fake ownership; this test checks the unchanged device protocol.
+        state.connection.identityRestricted = false
+        state.connection.presetIdentityKey = "192.0.2.16"
+        state.connection.memoryOwnershipConfirmed = true
+        state.connection.allowsIdentityAutomaticActions = true
         return (runtime, state)
     }
 

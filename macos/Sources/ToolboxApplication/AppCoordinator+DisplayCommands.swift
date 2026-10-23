@@ -231,7 +231,7 @@ extension AppCoordinator {
         guard isConnected else { return log("未连接") }
         // 用户在游戏模式下的主动选择同步进记忆：关掉即清记忆（避免下次回到
         // 游戏模式又被自动还原回来），选了样式则更新记忆值。
-        if !connection.identityRestricted {
+        if connection.memoryOwnershipConfirmed, connection.allowsIdentityAutomaticActions {
             if value == 0 { clearCrosshairMemory() }
             else { saveCrosshairMemory(value) }
         }

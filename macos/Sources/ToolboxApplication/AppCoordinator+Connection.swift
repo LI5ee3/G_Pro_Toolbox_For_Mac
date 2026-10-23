@@ -5,7 +5,9 @@ import MimonitorPresetCore
 
 extension AppCoordinator {
     package func autoConnectOnStartup() {
-        guard connection.mode == .tcp, connectionIntent.allowsStartupAttempt else { return }
+        guard connectionIntent.allowsStartupAttempt, connectionProfile?.error == nil else { return }
+        if connectionProfile?.profile?.selectedEndpoint != nil { connect(isAuto: true); return }
+        guard connection.mode == .tcp else { return }
         guard !isConnected else { return }
         let saved = (preferences.string(forKey: "saved_ip") ?? "")
             .trimmingCharacters(in: .whitespaces)
@@ -26,10 +28,9 @@ extension AppCoordinator {
             log("请输入有效 IPv4 或 ASCII 主机名及 1–65535 端口"); return
         }
         let request = connectionIntent.beginConnection()
-        if endpoint.tcpPort == 5555 { preferences.set(ip, forKey: "saved_ip") }
+        resetIdentity()
         connection.selectedEndpoint = endpoint
         connection.activeEndpoint = nil
-        connection.identityRestricted = false
         adb.beginSession(endpoint: endpoint)
         resetMediaVolumeSession()
         invalidatePictureRefreshesForPreset()
@@ -42,40 +43,18 @@ extension AppCoordinator {
 
         submitOperation(on: connectionQueue, work: { [adb] in
             let (ok, state) = adb.ensureConnected()
-            if ok { adb.ensureJars() }
             return (ok: ok, state: state, model: ok ? adb.getModel() : "")
         }) { result in
             let state = result.state, model = result.model
             let detail = model.isEmpty ? ip : "\(model) · \(ip)"
             if result.ok {
                 guard self.connectionIntent.isCurrent(request) else { return }
-                self.connection.activeEndpoint = endpoint
-                self.connectionStatus = .connected(detail)
-                self.log(isAuto ? "启动自动连接成功: \(detail)" : "已连接: \(detail)")
-                self.loadedPages = []
-                self.loadingPages = []
-                self.activeSource = "未知"
-                self.hdrLastState = nil
-                // scannedDevices 只存在内存里、不持久化：重启后列表是空的，
-                // 虽然自动连上了保存的 IP，下拉框却还显示占位符。
-                // 这里把当前 IP 补进列表，保证下拉框显示的就是实际连的设备。
                 if !ip.isEmpty {
                     if !model.isEmpty { self.scannedDeviceModels[ip] = model }
-                    if let idx = self.scannedDevices.firstIndex(of: ip) {
-                        self.scannedDevices.remove(at: idx)
-                    }
-                    self.scannedDevices.insert(ip, at: 0)
-                    self.selectedDevice = ip
+                    if let idx = self.scannedDevices.firstIndex(of: ip) { self.scannedDevices.remove(at: idx) }
+                    self.scannedDevices.insert(ip, at: 0); self.selectedDevice = ip
                 }
-                // 与原版一致：连接后只预刷画面和游戏两页，其余切过去时懒加载
-                self.refreshPage("picture")
-                self.refreshPage("game")
-                self.pollHdrState(force: true)
-                self.checkAutomaticTasks()
-                self.check4KState()
-                // 原版连接后还会检测保活守护状态（QTimer 1800ms）
-                self.checkGuardian()
-                self.refreshMediaVolumeState()
+                self.verifyConnectionIdentity(endpoint: endpoint, request: request, detail: detail)
             } else {
                 guard self.connectionIntent.isCurrent(request) else { return }
                 self.connection.activeEndpoint = nil
@@ -117,6 +96,7 @@ extension AppCoordinator {
     }
 
     package func disconnectAdb() {
+        resetIdentity()
         resetMediaVolumeSession()
         pendingPresetSave?.cancel()
         pendingPresetSave = nil

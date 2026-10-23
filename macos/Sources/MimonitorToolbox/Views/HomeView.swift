@@ -80,7 +80,7 @@ struct HomeView: View {
                     .accessibilityElement(children: .contain)
                     .accessibilityLabel("显示器，\(connection.isConnected ? mode : "控制尚未连接")")
 
-                    if connection.identityRestricted {
+                    if !connection.identityNotice.isEmpty {
                         Label(connection.identityNotice, systemImage: "person.crop.circle.badge.questionmark")
                             .font(.system(size: 13)).foregroundColor(Theme.warning)
                             .frame(maxWidth: .infinity, alignment: .leading)
@@ -222,6 +222,7 @@ private struct ConnectionSettingsSheet: View {
         return false
     }
     var body: some View {
+        ScrollView {
         VStack(alignment: .leading, spacing: 18) {
             HStack { Text("连接显示器").font(.system(size: 24, weight: .semibold)); Spacer(); Button("完成") { dismiss() }.toolboxAction() }
             Picker("连接方式", selection: Binding(get: { connection.mode }, set: { state.setConnectionMode($0) })) {
@@ -289,9 +290,10 @@ private struct ConnectionSettingsSheet: View {
                 Label(connection.statusText, systemImage: connection.isConnected ? "checkmark.circle" : "network")
                     .foregroundColor(connection.statusColor).font(.system(size: 14))
                 Text(connection.transportText).font(.system(size: 13)).foregroundColor(Theme.secondaryText)
-                if connection.identityRestricted {
+                if !connection.identityNotice.isEmpty {
                     Text(connection.identityNotice).font(.system(size: 13)).foregroundColor(Theme.warning)
                 }
+                ConnectionIdentityControls()
                 HStack {
                     Spacer()
                     Button(isConnecting ? "取消连接" : "断开连接") { state.disconnectAdb() }
@@ -299,7 +301,8 @@ private struct ConnectionSettingsSheet: View {
                 }
             }
         }
-        .padding(30).frame(width: 700).background(Theme.canvas).tint(Theme.accent)
+        .padding(30)
+        }.frame(width: 700).frame(maxHeight: 850).background(Theme.canvas).tint(Theme.accent)
     }
 }
 

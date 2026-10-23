@@ -8,7 +8,7 @@ extension AppCoordinator {
         disconnectAdb()
         connection.mode = mode
         connection.selectedEndpoint = nil
-        connection.identityRestricted = mode == .usb
+        resetIdentity()
     }
 
     /// Discovery has its own publication generation; it cannot select or take over a session.
@@ -36,6 +36,7 @@ extension AppCoordinator {
         let selected = serial ?? connection.selectedUSBSerial
         guard AdbEndpoint.supportsUSBSerial(selected) else { log("请明确选择枚举中的 USB 候选"); return }
         let request = connectionIntent.beginConnection()
+        resetIdentity()
         connection.mode = .usb
         connection.selectedUSBSerial = selected
         connection.selectedEndpoint = nil
@@ -63,9 +64,7 @@ extension AppCoordinator {
             case .ready:
                 guard let endpoint = result.endpoint else { return }
                 self.adb.beginSession(endpoint: endpoint)
-                self.connection.activeEndpoint = endpoint
-                self.connectionStatus = .connected("USB · \(endpoint.serial)")
-                self.log("USB 通道已就绪；\(self.connection.identityNotice)")
+                self.verifyConnectionIdentity(endpoint: endpoint, request: request, detail: "USB · \(endpoint.serial)")
             case .awaitingAuthorization:
                 self.connectionStatus = .awaitingAuthorization
                 self.log("请在显示器上确认 ADB 授权后重试，或取消连接")

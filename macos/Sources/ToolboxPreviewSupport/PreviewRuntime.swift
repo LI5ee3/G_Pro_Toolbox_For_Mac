@@ -125,6 +125,9 @@ package final class PreviewDisplay: PresetDevice {
         let shell = args.last ?? ""
         let decoded = shell.replacingOccurrences(of: "\\${IFS}", with: " ")
         if shell.contains("__mimonitor_probe__") { return result("__mimonitor_probe__") }
+        if shell == "getprop ro.serialno" || shell == "getprop ro.boot.serialno" {
+            return result(args[1] == "000PreviewOther" ? "PREVIEW-STABLE-0002" : args[1] == "000PreviewUnknown" ? "PREVIEW-STABLE-0003" : "PREVIEW-STABLE-0001")
+        }
         if shell == "getprop ro.product.model" { return result("MiTV Preview") }
         if shell.hasPrefix("settings list global") { return result(values.sorted { $0.key < $1.key }.map { "\($0.key)=\($0.value)" }.joined(separator: "\n")) }
         if unknownReadings && (shell.hasPrefix("service call audio 22") || shell.hasPrefix("service call audio 17") || shell == "settings get system volume_music_speaker") { return result("null") }
@@ -188,12 +191,22 @@ package final class PreviewRuntime {
     package let feedback = RecordingFeedback()
     private let effectLock = NSLock(), loginLock = NSLock()
     private var recordedEffects: [String] = []
+    private var connectionBackups: [String: Data] = [:]
+    package var connectionBackupCount: Int { effectLock.lock(); defer { effectLock.unlock() }; return connectionBackups.count }
     package var effects: [String] { effectLock.lock(); defer { effectLock.unlock() }; return recordedEffects }
     private var loginState = LoginItemStatus.notRegistered
     private var automationDenied = false
     package func environment(mode: AppEnvironment.Mode = .simulation) -> AppEnvironment {
         let resources = RuntimeResources(adbPath: "/mock/adb", serverPort: "0", runtime: { _ in nil }, guardianAPK: { "/mock/guardian.apk" })
         var system = SystemActions()
+        system.backupConnectionProfile = { data, identifier in
+            self.effectLock.lock(); defer { self.effectLock.unlock() }
+            if let old = self.connectionBackups[identifier], old != data {
+                throw PresetError("模拟备份内容冲突")
+            }
+            self.connectionBackups[identifier] = data
+            self.recordedEffects.append("connection.backup.memory")
+        }
         func record(_ name: String) { effectLock.lock(); defer { effectLock.unlock() }; recordedEffects.append(name) }
         system.isTrusted = { record("permission.read"); return false }
         system.promptAccessibility = { record("permission.prompt"); return false }
@@ -237,7 +250,7 @@ package final class PreviewRuntime {
             adb: AdbClient(resources: resources, execute: display.execute),
             hotkeys: HotkeyManager(driver: hotkeyDriver), feedback: feedback, scheduler: scheduler,
             system: system, now: { Date(timeIntervalSince1970: 1_800_000_000 + self.scheduler.time) },
-            calendar: Calendar(identifier: .gregorian), presetDevice: { _, _, _ in self.display })
+            calendar: Calendar(identifier: .gregorian), presetDevice: { _, _, identity in PreviewPresetDevice(display: self.display, identity: identity) })
     }
     @MainActor package func makeState(_ scenario: Scenario = .connected) -> AppCoordinator {
         loginLock.lock()
@@ -292,10 +305,31 @@ package final class PreviewRuntime {
                 }
             }
         } else if scenario != .disconnected {
+            state.connection.identityRestricted = false
+            state.connection.presetIdentityKey = display.identity
+            state.connection.allowsIdentityAutomaticActions = true
+            state.connection.memoryOwnershipConfirmed = true
+            state.connection.identityText = "已验证（内存模拟登记）"
             state.adb.ip = display.identity
             state.connection.selectedEndpoint = state.adb.endpoint
             state.connection.activeEndpoint = state.adb.endpoint
             state.connectionStatus = .connected("MiTV Preview · \(display.identity)")
+        }
+        if !isUSBScenario && scenario == .disconnected {
+            // Original disconnected fixture represents a known simulated device, with no active channel.
+            state.connection.identityRestricted = false
+            state.connection.presetIdentityKey = display.identity
+            state.connection.allowsIdentityAutomaticActions = true
+            state.connection.memoryOwnershipConfirmed = true
+        }
+        if state.connection.isConnected, let endpoint = state.adb.endpoint {
+            state.connection.identitySessionID = state.adb.session().sessionID
+            if isUSBScenario {
+                state.connection.identityEvidence = IdentityEvidence(endpoint: endpoint,
+                    sessionID: state.adb.session().sessionID, sampledAt: Date(timeIntervalSince1970: 1_800_000_000),
+                    stableIdentifier: "PREVIEW-STABLE-0001", roSerialno: "PREVIEW-STABLE-0001", roBootSerialno: "PREVIEW-STABLE-0001")
+                state.connection.identityText = "已读取模拟稳定标识，数据归属待确认"
+            }
         }
         if state.connection.isConnected {
             state.currentValues = (try? display.capture()) ?? [:]
@@ -308,4 +342,12 @@ package final class PreviewRuntime {
         }
         return state
     }
+}
+
+/// Preserve the real adapter boundary: compatibility ownership never changes the command target.
+private struct PreviewPresetDevice: PresetDevice {
+    let display: PreviewDisplay
+    let identity: String
+    func capture() throws -> [String: String] { try display.capture() }
+    func apply(_ values: [String: String]) throws -> PresetApplyReport { try display.apply(values) }
 }

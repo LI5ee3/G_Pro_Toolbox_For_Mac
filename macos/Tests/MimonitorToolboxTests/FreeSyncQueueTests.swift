@@ -27,6 +27,11 @@ import ToolboxApplication
             return runtime.display.execute(request)
         }
         state.adb.ip = "192.0.2.1"; state.connectionStatus = .connected("fake")
+        // Confirmed fake ownership; this test checks the unchanged device protocol.
+        state.connection.identityRestricted = false
+        state.connection.presetIdentityKey = "192.0.2.1"
+        state.connection.memoryOwnershipConfirmed = true
+        state.connection.allowsIdentityAutomaticActions = true
         state.freesyncMemoryEnabled = true
         state.deviceQueue.suspend()
         state.setFreesync(true); state.setFreesync(false)

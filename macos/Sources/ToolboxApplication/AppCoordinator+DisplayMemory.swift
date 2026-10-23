@@ -5,7 +5,7 @@ import MimonitorPresetCore
 
 extension AppCoordinator {
     package func toggleHdrMemory(_ enabled: Bool) {
-        guard !connection.identityRestricted else { log(connection.identityNotice); return }
+        guard connection.memoryOwnershipConfirmed, connection.allowsIdentityAutomaticActions else { log(connection.identityNotice); return }
         guard let enabled = presetControlPolicy.memoryPreferenceChange(requested: enabled) else { return }
         hdrMemoryEnabled = enabled
         preferences.set(enabled, forKey: "hdr_sdr_local_dimming_enabled")
@@ -90,7 +90,7 @@ extension AppCoordinator {
         let sdrText = m["sdr"].flatMap { RegisterMap.localDimmingNames[$0] } ?? "--"
         let hdrText = m["hdr"].flatMap { RegisterMap.localDimmingNames[$0] } ?? "--"
         let sourceText = hdrStateSource.isEmpty ? "" : "（\(hdrStateSource)）"
-        let status = connection.identityRestricted ? "已暂停（身份待确认）" : memoriesSuspendedByPreset ? "已锁定（预设生效或切换中）" : (hdrMemoryEnabled ? "已开启" : "已关闭")
+        let status = (!connection.memoryOwnershipConfirmed || !connection.allowsIdentityAutomaticActions) ? "已暂停（归属待确认）" : memoriesSuspendedByPreset ? "已锁定（预设生效或切换中）" : (hdrMemoryEnabled ? "已开启" : "已关闭")
         let text = "分区控光记忆：\(status)，当前信号：\(stateText)\(sourceText)，记忆模式：SDR=\(sdrText) / HDR=\(hdrText)"
         // 只在内容真的变了才赋值，避免无意义的观察通知，
         // 而 HDR 状态是 3 秒轮询一次，无脑赋值等于每 3 秒全量重绘一次。
@@ -99,7 +99,7 @@ extension AppCoordinator {
 
 
     package func toggleFreesyncMemory(_ enabled: Bool) {
-        guard !connection.identityRestricted else { log(connection.identityNotice); return }
+        guard connection.memoryOwnershipConfirmed, connection.allowsIdentityAutomaticActions else { log(connection.identityNotice); return }
         guard let enabled = presetControlPolicy.memoryPreferenceChange(requested: enabled) else { return }
         freesyncMemoryEnabled = enabled
         preferences.set(enabled, forKey: "freesync_mode_memory_enabled")
@@ -110,7 +110,7 @@ extension AppCoordinator {
     package func updateFreesyncMemoryStatus() {
         let saved = preferences.integer(forKey: "freesync_previous_mode")
         let savedText = saved == 0 ? "--" : (RegisterMap.sceneNames[saved] ?? "\(saved)")
-        let status = connection.identityRestricted ? "已暂停（身份待确认）" : memoriesSuspendedByPreset ? "已锁定（预设生效或切换中）" : (freesyncMemoryEnabled ? "已开启" : "已关闭")
+        let status = (!connection.memoryOwnershipConfirmed || !connection.allowsIdentityAutomaticActions) ? "已暂停（归属待确认）" : memoriesSuspendedByPreset ? "已锁定（预设生效或切换中）" : (freesyncMemoryEnabled ? "已开启" : "已关闭")
         let text = "模式记忆：\(status)，记录模式：\(savedText)"
         if freesyncMemoryStatusText != text { freesyncMemoryStatusText = text }
     }
@@ -136,7 +136,7 @@ extension AppCoordinator {
     }
 
     package func toggleCrosshairGameModeOnly(_ enabled: Bool) {
-        guard !connection.identityRestricted else { log(connection.identityNotice); return }
+        guard connection.memoryOwnershipConfirmed, connection.allowsIdentityAutomaticActions else { log(connection.identityNotice); return }
         crosshairGameModeOnly = enabled
         preferences.set(enabled, forKey: "crosshair_game_mode_only")
         log("准星仅在游戏模式下生效: \(enabled ? "开启" : "关闭")")
@@ -146,7 +146,7 @@ extension AppCoordinator {
 
     internal func updateCrosshairModeStatus() {
         let text: String
-        if connection.identityRestricted {
+        if !connection.memoryOwnershipConfirmed || !connection.allowsIdentityAutomaticActions {
             text = "身份待确认，准星联动已暂停，原设置保留"
         } else if !crosshairGameModeOnly {
             text = "已关闭，准星在所有模式下都生效"
@@ -164,7 +164,7 @@ extension AppCoordinator {
     /// 隐藏是「只要在非游戏模式看到准星就清掉」；还原只在「模式跃迁进入游戏
     /// 模式」时做一次，避免用户用显示器 OSD 主动关掉准星后又被打开。
     package func reconcileCrosshairModeState() {
-        guard !connection.identityRestricted, crosshairGameModeOnly, isConnected else { return }
+        guard connection.memoryOwnershipConfirmed, connection.allowsIdentityAutomaticActions, crosshairGameModeOnly, isConnected else { return }
         guard !crosshairReconcileBusy else { return }
         guard let mode = currentValues["picture_mode"] else { return }
         guard let raw = currentValues["front_sight_index"],

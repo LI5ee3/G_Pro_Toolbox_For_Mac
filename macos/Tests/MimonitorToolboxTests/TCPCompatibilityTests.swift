@@ -103,13 +103,15 @@ final class TCPLegacyConfigurationTests: XCTestCase {
         }
         state.autoConnectOnStartup()
         await state.waitForPendingWork()
-        XCTAssertTrue(state.isConnected)
-        XCTAssertEqual(state.adb.ip, "192.0.2.7")
-        XCTAssertEqual(runtime.preferences.string(forKey: "saved_ip"), "192.0.2.7")
+        XCTAssertEqual(state.isConnected, valid)
+        XCTAssertEqual(state.adb.ip, valid ? "192.0.2.7" : "")
+        XCTAssertEqual(runtime.preferences.string(forKey: "saved_ip"), " 192.0.2.7 ")
         XCTAssertEqual(runtime.preferences.data(forKey: "picture_presets_v1"), data)
         XCTAssertNil(runtime.preferences.object(forKey: "connection_profile_v1"))
         XCTAssertNil(runtime.preferences.object(forKey: "device_registry_v1"))
-        XCTAssertTrue(runtime.display.recordedCommands.contains("-s 192.0.2.7:5555 shell echo __mimonitor_probe__"))
+        XCTAssertEqual(runtime.display.recordedCommands.contains("-s 192.0.2.7:5555 shell echo __mimonitor_probe__"), valid)
+        XCTAssertTrue(state.connection.identityRestricted)
+        if !valid { XCTAssertTrue(runtime.display.recordedCommands.isEmpty) }
         state.stop()
         await state.waitForPendingWork()
     }

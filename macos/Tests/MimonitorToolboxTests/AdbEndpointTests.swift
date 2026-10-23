@@ -122,6 +122,9 @@ final class PresetEndpointSubmissionTests: XCTestCase {
             }))
         state.adb.beginSession(endpoint: AdbEndpoint.tcp(host: "192.0.2.1"))
         state.connectionStatus = .connected("fixture")
+        // Confirmed fake ownership; this test checks the unchanged device protocol.
+        state.connection.identityRestricted = false
+        state.connection.presetIdentityKey = "192.0.2.1"
         state.createPreset(name: "cancelled capture")
         await fulfillment(of: [received], timeout: 2)
         await state.waitForPendingWork()

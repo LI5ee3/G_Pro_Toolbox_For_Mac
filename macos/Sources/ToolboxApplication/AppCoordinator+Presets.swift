@@ -7,24 +7,24 @@ extension AppCoordinator {
     package var activePresetID: String? {
         _ = connection.connectionStatus
         guard !connection.identityRestricted else { return nil }
-        return presetConfiguration.activeDeviceIdentity == adb.ip ? presetConfiguration.activePresetID : nil
+        return presetConfiguration.activeDeviceIdentity == (connection.presetIdentityKey ?? "") ? presetConfiguration.activePresetID : nil
     }
     package var activePresetName: String {
         presetConfiguration.presets.first { $0.id == activePresetID }?.name ?? "无预设"
     }
     package var presetControlPolicy: PresetControlPolicy {
         _ = connection.connectionStatus
-        return PresetControlPolicy(configuration: presetConfiguration, deviceIdentity: adb.ip, isSwitching: isPresetBusy)
+        return PresetControlPolicy(configuration: presetConfiguration, deviceIdentity: (connection.presetIdentityKey ?? ""), isSwitching: isPresetBusy)
     }
-    package var memoriesSuspendedByPreset: Bool { connection.identityRestricted || presetControlPolicy.memoriesLocked }
+    package var memoriesSuspendedByPreset: Bool { !connection.memoryOwnershipConfirmed || !connection.allowsIdentityAutomaticActions || presetControlPolicy.memoriesLocked }
     package var effectiveHdrMemoryEnabled: Bool {
-        !connection.identityRestricted && presetControlPolicy.effectiveMemoryEnabled(savedPreference: hdrMemoryEnabled)
+        !memoriesSuspendedByPreset && presetControlPolicy.effectiveMemoryEnabled(savedPreference: hdrMemoryEnabled)
     }
     package var effectiveFreesyncMemoryEnabled: Bool {
-        !connection.identityRestricted && presetControlPolicy.effectiveMemoryEnabled(savedPreference: freesyncMemoryEnabled)
+        !memoriesSuspendedByPreset && presetControlPolicy.effectiveMemoryEnabled(savedPreference: freesyncMemoryEnabled)
     }
     package var canRestoreBaseline: Bool {
-        !connection.identityRestricted && isConnected && presetConfiguration.baseline?.deviceIdentity == adb.ip
+        !connection.identityRestricted && isConnected && presetConfiguration.baseline?.deviceIdentity == (connection.presetIdentityKey ?? "")
             && !(presetConfiguration.baseline?.values.isEmpty ?? true)
     }
 
@@ -47,7 +47,9 @@ extension AppCoordinator {
 
     package func updateAutomaticTaskStatus() {
         let wanted = PresetSchedule.activeTask(presetConfiguration.tasks, minute: currentMinute())
-        if let session = presetConfiguration.session, session.deviceIdentity != adb.ip, isConnected {
+        if connection.identityRestricted || !connection.allowsIdentityAutomaticActions {
+            automaticTaskStatus = connection.identityNotice
+        } else if let session = presetConfiguration.session, session.deviceIdentity != (connection.presetIdentityKey ?? ""), isConnected {
             automaticTaskStatus = "等待原显示器 \(session.deviceIdentity)，不会向当前设备还原"
         } else if let wanted {
             let name = presetConfiguration.presets.first { $0.id == wanted.presetID }?.name ?? "无预设"
@@ -60,13 +62,13 @@ extension AppCoordinator {
 
     package func checkAutomaticTasks() {
         updateAutomaticTaskStatus()
-        guard !connection.identityRestricted, isConnected, !isPresetOperationInFlight, presetWorker.loadError == nil else { return }
+        guard connection.allowsIdentityAutomaticActions, !connection.identityRestricted, isConnected, !isPresetOperationInFlight, presetWorker.loadError == nil else { return }
         if pendingPresetSave == nil, let id = pendingPresetSaveID, activePresetID == id,
-           pendingPresetSaveDevice == adb.ip,
+           pendingPresetSaveDevice == (connection.presetIdentityKey ?? ""),
            !presetConfiguration.applicationIncomplete {
             schedulePresetSave(id: id, request: connectionIntent.generation, revision: pictureEditRevision, delay: 1.2)
         }
-        if let session = presetConfiguration.session, session.deviceIdentity != adb.ip { return }
+        if let session = presetConfiguration.session, session.deviceIdentity != (connection.presetIdentityKey ?? "") { return }
         let minute = currentMinute()
         let wanted = PresetSchedule.activeTask(presetConfiguration.tasks, minute: minute)
         if let wanted {
@@ -115,10 +117,10 @@ extension AppCoordinator {
         }
     }
     package func renamePreset(id: String, name: String) {
-        runPresetOperation("重命名预设") { engine, _ in try engine.rename(id: id, name: name) }
+        runPresetOperation("重命名预设", requiresIdentity: false, flushAutosave: false) { engine, _ in try engine.rename(id: id, name: name) }
     }
     package func setPresetMenuBarVisibility(id: String, visible: Bool) {
-        runPresetOperation("更新预设菜单栏显示") { engine, _ in
+        runPresetOperation("更新预设菜单栏显示", requiresIdentity: false, flushAutosave: false) { engine, _ in
             try engine.setMenuBarVisibility(id: id, visible: visible)
         }
     }
@@ -129,13 +131,13 @@ extension AppCoordinator {
         }
     }
     package func saveAutomaticTask(_ task: ScheduledPresetTask) {
-        runPresetOperation("保存自动任务") { engine, _ in try engine.saveTask(task) }
+        runPresetOperation("保存自动任务", requiresIdentity: false, flushAutosave: false) { engine, _ in try engine.saveTask(task) }
     }
     package func deleteAutomaticTask(id: String) {
-        runPresetOperation("删除自动任务") { engine, _ in try engine.deleteTask(id: id) }
+        runPresetOperation("删除自动任务", requiresIdentity: false, flushAutosave: false) { engine, _ in try engine.deleteTask(id: id) }
     }
     package func moveAutomaticTask(id: String, offset: Int) {
-        runPresetOperation("调整任务顺序") { engine, _ in try engine.moveTask(id: id, offset: offset) }
+        runPresetOperation("调整任务顺序", requiresIdentity: false, flushAutosave: false) { engine, _ in try engine.moveTask(id: id, offset: offset) }
     }
 
     /// Every picture write (including hotkeys and menu-bar controls) goes through this path.
@@ -143,7 +145,7 @@ extension AppCoordinator {
     package func runPictureChange(delay: TimeInterval = 1.2, completion: (() -> Void)? = nil, _ work: @escaping @Sendable () -> Void) {
         guard isConnected, !isPresetBusy, !presetConfiguration.applicationIncomplete else { completion?(); return }
         let request = connectionIntent.generation
-        let identity = adb.ip
+        let identity = (connection.presetIdentityKey ?? "")
         let presetID = activePresetID
         pictureEditRevision &+= 1
         let revision = pictureEditRevision
@@ -156,7 +158,7 @@ extension AppCoordinator {
             self.adb.transaction(work)
             self.deviceWorkState.pictureSettleUntil = Date().addingTimeInterval(delay)
             self.publish {
-                if self.connectionIntent.isCurrent(request), self.adb.ip == identity,
+                if self.connectionIntent.isCurrent(request), (self.connection.presetIdentityKey ?? "") == identity,
                    self.activePresetID == presetID, self.pictureEditRevision == revision,
                    !self.isPresetBusy, let presetID {
                     self.schedulePresetSave(id: presetID, request: request, revision: revision, delay: delay)
@@ -186,16 +188,16 @@ extension AppCoordinator {
         environment.scheduler.after(delay, work: save)
     }
 
-    internal func runPresetOperation(_ label: String, automatic: Bool = false, refresh: Bool = false,
+    internal func runPresetOperation(_ label: String, automatic: Bool = false, refresh: Bool = false, requiresIdentity: Bool = true,
                                     navigateToPicture: Bool = false, flushAutosave: Bool = true,
                                     switchHUDTitle: String? = nil,
                                     operation: @escaping @Sendable (PresetEngine, (any PresetDevice)?) throws -> Void) {
         guard !isPresetOperationInFlight else { return }
-        guard !connection.identityRestricted else { log(connection.identityNotice); return }
+        guard !requiresIdentity || !connection.identityRestricted else { log(connection.identityNotice); return }
         let request = connectionIntent.generation
-        let identity = adb.ip
-        let connected = isConnected
-        let saveID = pendingPresetSaveDevice == identity ? pendingPresetSaveID : nil
+        let identity = (connection.presetIdentityKey ?? "")
+        let connected = requiresIdentity && isConnected
+        let saveID = requiresIdentity && pendingPresetSaveDevice == identity ? pendingPresetSaveID : nil
         pendingPresetSave?.cancel()
         pendingPresetSave = nil
         if saveID != nil { pendingPresetSaveID = nil; pendingPresetSaveDevice = nil }
@@ -266,7 +268,7 @@ extension AppCoordinator {
                    self.pendingPresetSaveID == nil || (self.pendingPresetSaveID == saveID && self.pendingPresetSaveDevice == identity) {
                     self.pendingPresetSaveID = saveID
                     self.pendingPresetSaveDevice = identity
-                    if self.pendingPresetSave == nil, self.isConnected, self.adb.ip == identity,
+                    if self.pendingPresetSave == nil, self.isConnected, (self.connection.presetIdentityKey ?? "") == identity,
                        !configuration.applicationIncomplete {
                         self.schedulePresetSave(id: saveID, request: self.connectionIntent.generation, revision: self.pictureEditRevision, delay: 3)
                     }
@@ -294,7 +296,7 @@ extension AppCoordinator {
                 }
                 if let hudToken {
                     let result = HUDOperationResult.completion(
-                        isCurrentConnection: self.isConnected && self.connectionIntent.isCurrent(request) && self.adb.ip == identity,
+                        isCurrentConnection: self.isConnected && self.connectionIntent.isCurrent(request) && (self.connection.presetIdentityKey ?? "") == identity,
                         hasError: errorText != nil, verifiedApplications: reports.map { $0.ok })
                     self.environment.feedback.finishOperation(token: hudToken, result: result,
                                                     title: result == .success ? "预设：\(self.activePresetName)" : nil)
