@@ -74,6 +74,7 @@ package struct SystemActions {
     package var tcpOpen: (String, Int, Double) -> Bool = { _, _, _ in false }
     package var ping: (String) -> Bool = { _ in false }
     package var isExecutable: (String) -> Bool = { _ in false }
+    package var observeSleep: (@escaping () -> Void) -> RuntimeCancellation = { _ in RuntimeCancellation() }
     package var observeWake: (@escaping () -> Void, @escaping () -> Void) -> RuntimeCancellation = { _, _ in RuntimeCancellation() }
     package var loginStatus: () -> LoginItemSnapshot = { LoginItemSnapshot() }
     package var reconcileLogin: (CommandCancellation) -> LoginItemSnapshot = { _ in LoginItemSnapshot() }

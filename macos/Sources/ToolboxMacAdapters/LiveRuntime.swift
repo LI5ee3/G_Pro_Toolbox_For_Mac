@@ -137,6 +137,11 @@ extension AppEnvironment {
             cancellation: AdbOperationContext.current?.cancellation ?? CommandCancellation()) }
         system.ping = { NetworkScan.ping(host: $0, cancellation: AdbOperationContext.current?.cancellation ?? CommandCancellation()) }
         system.isExecutable = { FileManager.default.isExecutableFile(atPath: $0) }
+        system.observeSleep = { sleep in
+            let center = NSWorkspace.shared.notificationCenter
+            let observer = center.addObserver(forName: NSWorkspace.willSleepNotification, object: nil, queue: .main) { _ in sleep() }
+            return RuntimeCancellation { center.removeObserver(observer) }
+        }
         system.observeWake = { systemWake, screenWake in
             let center = NSWorkspace.shared.notificationCenter
             let first = center.addObserver(forName: NSWorkspace.didWakeNotification, object: nil, queue: .main) { _ in systemWake() }

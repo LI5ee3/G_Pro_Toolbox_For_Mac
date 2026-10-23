@@ -5,14 +5,47 @@ import ToolboxDomain
 import MimonitorPresetCore
 
 extension AppCoordinator {
+    /// Cancel device work at the existing session boundary; keep operation completion accounting.
+    internal func invalidateConnectionWork() {
+        adb.cancelSession()
+        resetIdentity()
+        resetMediaVolumeSession()
+        invalidatePictureRefreshesForPreset()
+        pendingPresetSave?.cancel(); pendingPresetSave = nil
+        mediaBrightnessCommit?.cancel(); mediaBrightnessCommit = nil
+        mediaBrightnessCommitInFlight = false
+        mediaBrightnessPreview = nil; mediaBrightnessHardware = nil
+        currentValues = [:]; loadedPages = []; loadingPages = []
+        activeSource = "未知"; hdrLastState = nil
+        connection.activeEndpoint = nil
+        connectionStatus = .disconnected
+        stopSourcePolling()
+    }
+
+    internal func suspendForSleep() {
+        guard isRunning, !isSleeping else { return }
+        isSleeping = true
+        wakeRecoveryWork?.cancel(); wakeRecoveryWork = nil
+        startupWork.forEach { $0.cancel() }; startupWork.removeAll()
+        connectionIntent.invalidate()
+        invalidateConnectionWork()
+    }
+
     package func recoverAfterWake() {
+        guard isRunning else { return }
+        isSleeping = false
         environment.system.refreshOutput()
-        guard connectionIntent.allowsAutomaticRecovery else { return }
-        let request = connectionIntent.generation
-        scheduleStartup(after: 1.5) { [weak self] in
-            guard let self, self.connectionIntent.isCurrent(request) else { return }
-            self.monitorAdbServer(refreshState: true)
+        guard connectionIntent.allowsAutomaticRecovery, wakeRecoveryWork == nil else { return }
+        let request = connectionIntent.generation, lifetime = executionLifetime.token()
+        let work = DispatchWorkItem { [weak self] in
+            guard let self, self.executionLifetime.allows(lifetime) else { return }
+            self.wakeRecoveryWork = nil
+            guard !self.isSleeping, self.connectionIntent.isCurrent(request) else { return }
+            // Sleep invalidated readiness. A duplicate/screen-only wake just probes the healthy session.
+            self.monitorAdbServer()
         }
+        wakeRecoveryWork = work
+        environment.scheduler.after(1.5, work: work)
     }
 
     package var isConnected: Bool { connection.isConnected }
@@ -50,6 +83,7 @@ extension AppCoordinator {
             onCancel: @escaping @MainActor () -> Void = {},
             completion: @escaping @MainActor (Value) -> Void) {
         guard isRunning || environment.mode == .simulation else { return }
+        guard !isSleeping else { onCancel(); return }
         let lifetime = executionLifetime.token(), session = adb.session().childOperation()
         let job = BlockingExecutor(queue: queue).submit(cancellation: session.cancellation) { [adb, executionLifetime] in
             try RuntimeWorkContext.$lifetime.withValue(lifetime) {

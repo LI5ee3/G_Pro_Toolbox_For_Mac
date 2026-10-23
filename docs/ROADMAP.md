@@ -254,8 +254,8 @@ A08 若测试确认有误报，另建单一 S1 任务后再修；不能把它混
 | S2-02 | USB 会话选择、授权等待、只读探活、逻辑断开 | 30 新增、327 Swift 全量 PASS；USB 无 TCP 管理命令，严格只读探活，逻辑断开抑制恢复；本项只开放 backend；UI 由 S2-03 接入 | LOCAL_PASS（本窗口构建/CI PASS；HW_NOT_TESTED） |
 | S2-03 | 最小手动 USB/TCP 选择 UI 与模拟场景 | 24 新增、351 Swift 全量 PASS；独立 Preview 构建/四层边界与 336 样本实际交互 PASS；身份限制和手动抑制生效 | LOCAL_PASS（本窗口 CI PASS；HW_NOT_TESTED） |
 | S2-04 | 同机身份绑定与旧 IP 兼容实现 | 同机跨传输保留基线/任务；异机/冲突拒绝恢复；旧 JSON 读入、迁移失败、回滚、二次迁移测试；两个 P2 review 通过并完成控制修复链集成 | DONE_LOCAL / LOCAL_PASS（最终集成及 master CI：453 Swift / 24 Python PASS；HW_NOT_TESTED） |
-| S2-05 | 所有控制入口接入统一会话 | 音量、画面、游戏、信号源、灯光、遥控、预设、自动任务、菜单栏/快捷键、工具/Terminal 的 USB/TCP argv 契约测试；不复制业务实现 | DONE_LOCAL / LOCAL_PASS（468 Swift / 24 Python 及完整本机门禁 PASS；草稿 PR #2 / 默认 CI PASS；止于 review） |
-| S2-06 | 插拔、网络断线与睡眠任务生命周期 | 旧任务取消/晚到结果丢弃、stop/start、重枚举、局部恢复、忙状态释放和不重放写入的故障注入 | NOT_STARTED（下一项；本次停在 S2-05 review） |
+| S2-05 | 所有控制入口接入统一会话 | 音量、画面、游戏、信号源、灯光、遥控、预设、自动任务、菜单栏/快捷键、工具/Terminal 的 USB/TCP argv 契约测试；不复制业务实现 | DONE_LOCAL / LOCAL_PASS（PR #2 已合并；master 6f90cc0 CI 468 Swift / 24 Python PASS；分支引用已清理） |
+| S2-06 | 插拔、网络断线与睡眠任务生命周期 | 旧任务取消/晚到结果丢弃、stop/start、重枚举、局部恢复、忙状态释放和不重放写入的故障注入 | DONE_LOCAL / LOCAL_PASS（5 项必要新增、74 项定向验证 PASS；最终默认 CI 见草稿 PR；止于 review） |
 | S2-07 | 手动模式分层验收子门禁 M2 | USB/TCP 核心连接、控制、同机双在线、手动切换及拔插/恢复必须真机通过；首次授权/第二台设备等例外按第 6.0 节严格 Mock 并记录未实测限制；具体写入按批准执行和恢复 | HW_NOT_TESTED / 待窗口 |
 | S2-08 | M2 通过后设计并实现必需的 Auto | USB 优先 → 有线失效自动回退同机无线 TCP → 有线稳定恢复后自动回切 USB；单会话、安全切换、不重复派发、稳定窗口/冷却/退避、手动断开抑制均有确定性测试 | WAITING_M2 |
 | S2-09 | Auto 核心真机与例外 Mock 的完整阶段回归 | USB→无线 TCP→USB 自动往返、控制回读、同机身份、切换中取消/不重放和睡眠恢复必须真机；多机歧义/不可安全制造的故障严格 Mock，分列结果及限制 | WAITING_PREDECESSOR |
@@ -427,7 +427,7 @@ HW-F01 的音量/静音、HW-F02 的安全画面控制、HW-F04/05 的预设与�
 | --- | --- | --- |
 | 现状审计与路线图修订 | DONE_REMOTE | 初版证据与修订历史保留；后续 S1-08 独立执行见下行及第 8.3 节 |
 | 阶段一 | S1-01/08/10/03/04/05/06/07/09 DONE；S1-02 DONE_WITH_FINDINGS（历史）；技术门禁 PASS，G1 PASS | 276 Swift/24 Python、三种构建/实际 Preview/回滚/默认 CI 通过；用户 2026-10-22 明确确认阶段一验收通过；历史风险按原任务归属保留 |
-| 阶段二 | IN_PROGRESS；G2 NOT_PASSED | G1 已由用户确认；S2-01 至 S2-04 已合入；本次 S2-05 本机与实现默认 CI PASS、草稿 PR #2 停在 review，M2 真机待窗口；Auto 必须在 M2 后实施，核心真机闭环不能省略 |
+| 阶段二 | IN_PROGRESS；G2 NOT_PASSED | G1 已由用户确认；S2-01 至 S2-05 已合入；S2-06 独立分支交付停在草稿 PR review，M2 真机待窗口；Auto 必须在 M2 后实施，核心真机闭环不能省略 |
 | 阶段三 | LOCKED | G2 未验收；oil UI Pro 已在用户开发 Mac |
 | 阶段四 | LOCKED | G3 未验收；真实睡眠/登录/重启及最终交付均待执行 |
 | 项目结项 | NOT_COMPLETE | 不以路线图上传作为完成开发 |
@@ -563,6 +563,14 @@ HW-F01 的音量/静音、HW-F02 的安全画面控制、HW-F04/05 的预设与�
 - **覆盖/边界**：完整入口表、既有合规路径与实际修复见 [S2 验收](acceptance/S2.md#s2-05-所有控制入口接入统一会话2026-10-23)。15 项参数化 fake 测试驱动生产 Coordinator/AdbClient/AdbPresetDevice；USB 原 serial / TCP 5567 / server 5038，保留 unknown 普通手动控制、conflict 阻断、归属与本地编辑规则。没有新增框架、USB 业务副本或生命周期重构。
 - **验证**：15 项专项与完整 468 Swift（404 + 64）/24 Python PASS，无原测试减少；资源、架构、Preview 源码/依赖/产物边界、App Debug、Preview Debug、development Release 与 verify-app 全退出 0。独立证据见 `validation/S2-05-20261023/commands.json`；原检查与 workflow 不变；实现 [b4072b7](https://github.com/LI5ee3/G_Pro_Toolbox_For_Mac/commit/b4072b7f6cd0ec00021def0a47940813d0a74f6f) 已推送，[草稿 PR #2](https://github.com/LI5ee3/G_Pro_Toolbox_For_Mac/pull/2) 的 [默认 CI 39965361677](https://github.com/LI5ee3/G_Pro_Toolbox_For_Mac/actions/runs/39965361677) 再次确认 468 Swift / 24 Python 与全部构建/检查通过，build success、package skipped、artifact_count=0；临时 runner 已自动注销，runner_count=0。
 - **停止点**：本项已提交推送并保持 draft，停在 review；未合并或删除分支。结果补记只改文档，其默认 PR CI 照常执行，最终 HEAD 证据留于同目录 `final-verification.json` 与 PR 检查。未执行真机、外部 Terminal、生产 App；**HW_NOT_TESTED，M2/G2 NOT_PASSED**。下一项 S2-06，不进入 Auto 或阶段三。
+
+### 8.13 S2-05 合并收尾与 S2-06 生命周期（2026-10-23）
+
+- **顺序与基线**：PR #2 head/master 未变，复用原 review / CI 39966011125；ready 后 merge 合入 `6f90cc0deb23ecaeab9bd8cd8e499707f5f6bc5a`，无 squash/force-push。[master CI 39968235414](https://github.com/LI5ee3/G_Pro_Toolbox_For_Mac/actions/runs/39968235414) 468 Swift / 24 Python 与所有原检查通过，package skipped、artifact_count=0。确认包含后删除本地/远端 S2-05 分支引用，原工作树、七个未提交文件及历史标签保留。
+- **最小修改**：USB 监控复用现有探活与 connectUSB 重枚举/身份准入；sleep 取消旧会话和延迟工作、合并 wake；stop/start 保留用户恢复意图且重新验证；Binder 缓存匹配已有 sessionID；自动入口暂停 applicationIncomplete，身份准入回读 PresetWorker 完成账务，避免 stop/start 旧 UI 状态引起重放。
+- **必要验证**：5 项新增，74 项受影响定向验证 PASS；保留 USB/wake/自动重放、Binder 和 stop/start 账务的修复前失败证据。其余健康 TCP、取消/晚到/账务、身份、固定目标和预设时段规则复用已有覆盖。完整差异、测试映射和 CI 记录入口集中于 [S2 验收](acceptance/S2.md#s2-06-插拔网络断线与睡眠任务生命周期2026-10-23)。
+- **最终验证与停止点**：最终提交只由现有默认 CI 执行一轮完整检查，不再手动重复全量/三种构建；实际结果集中登记在草稿 PR 描述与本机 review-verification.json。无 workflow/超时/重试/协议/预设格式改动，无新框架。只提交本项文件，推送 feat/s2-06-session-lifecycle 并停在 review；不合并本项。**HW_NOT_TESTED，M2/G2 NOT_PASSED**。下一项 S2-07 / M2，不提前真机、Auto 或阶段三。
+
 
 ### 8.13 后续每个任务/阶段必填记录模板
 

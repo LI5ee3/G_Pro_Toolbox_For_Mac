@@ -101,6 +101,8 @@ public final class AppCoordinator {
     internal var identityOperationID: UUID?
     internal var observedIdentityEvidence: [IdentityEvidence] = []
     internal var discoveryGeneration = 0
+    internal var isSleeping = false
+    internal var wakeRecoveryWork: DispatchWorkItem?
     internal var monitorChecking = false
     internal var monitorTick = 0
     internal var lastMonitorFailState = ""
@@ -170,10 +172,10 @@ public final class AppCoordinator {
 
     /// The app lifetime owns live services; construction and previews never start them.
     package func start() {
+        guard !isRunning else { return }
         adb.resumeSession()
         if systemCancellation.isCancelled { systemCancellation = CommandCancellation() }
         if environment.mode == .simulation { executionLifetime.resumeIfNeeded(); return }
-        guard !isRunning else { return }
         isRunning = true
         executionLifetime.begin()
         environment.feedback.start()
@@ -233,7 +235,9 @@ public final class AppCoordinator {
 
         // 启动后自动连接上次设备（原版延迟 900ms，等窗口先出来）
         scheduleStartup(after: 0.9) { [weak self] in
-            self?.autoConnectOnStartup()
+            guard let self else { return }
+            if self.connectionIntent.allowsStartupAttempt { self.autoConnectOnStartup() }
+            else { self.monitorAdbServer() }
         }
         // adb 链路监控（对应原版 _monitor_adb_server）。
         // 每 6 秒一跳：未连接时每跳都重试（故障恢复要快），已连接时每 5 跳体检一次。
@@ -243,12 +247,16 @@ public final class AppCoordinator {
             if self.isConnected && self.monitorTick % 5 != 0 { return }
             self.monitorAdbServer()
         })
+        runtimeTasks.append(environment.system.observeSleep { [weak self] in self?.suspendForSleep() })
         runtimeTasks.append(environment.system.observeWake({ [weak self] in
-            self?.recoverAfterWake(); self?.checkAutomaticTasks()
+            self?.recoverAfterWake()
         }, { [weak self] in self?.recoverAfterWake() }))
     }
 
     package func stop() {
+        if environment.mode == .live { invalidateConnectionWork() }
+        isSleeping = false
+        wakeRecoveryWork?.cancel(); wakeRecoveryWork = nil
         resetIdentity()
         discoveryGeneration &+= 1
         connection.discoveryStatus = .idle
@@ -258,7 +266,7 @@ public final class AppCoordinator {
         settings.loginItemBusy = false
         executionLifetime.end()
         isRunning = false
-        connectionIntent.disconnect()
+        connectionIntent.invalidate()
         runtimeTasks.forEach { $0.invalidate() }; runtimeTasks.removeAll()
         startupWork.forEach { $0.cancel() }; startupWork.removeAll()
         presetTimer?.invalidate(); presetTimer = nil
@@ -289,6 +297,7 @@ public final class AppCoordinator {
         startupWork.forEach { $0.cancel() }
         presetTimer?.invalidate(); sourcePollTimer?.invalidate()
         pendingPresetSave?.cancel(); pendingRefreshWork?.cancel()
+        wakeRecoveryWork?.cancel()
         hotkeyManager.stop()
     }
 
@@ -304,23 +313,32 @@ public final class AppCoordinator {
     ///
     /// Recovery policy, authorization and cooldown belong to AdbClient.ensureConnected.
     internal func monitorAdbServer(refreshState: Bool = false) {
-        guard !monitorChecking else { return }
+        guard !isSleeping, !monitorChecking else { return }
         guard connectionIntent.allowsAutomaticRecovery else { return }
-        // USB selection is still read-only at this gate. Never reinterpret its empty TCP
-        // projection as saved_ip; typed manual recovery is introduced with the UI lifecycle.
-        guard connection.mode != .usb, adb.endpoint?.isUSB != true else { return }
         // Do not overlap monitoring with an explicit connection or scan.
         switch connectionStatus {
         case .connecting, .scanning: return
         case .disconnected, .connected, .awaitingAuthorization, .offline, .failed: break
         }
 
-        // 优先保留明确端点（包括非默认端口）；没有选择时才使用旧 TCP 保存值。
-        let saved = (preferences.string(forKey: "saved_ip") ?? "").trimmingCharacters(in: .whitespaces)
-        guard let targetEndpoint = adb.endpoint ?? connection.selectedEndpoint
-            ?? AdbEndpoint.inputTCP(host: saved, port: "5555"), !targetEndpoint.isUSB else { return }
         // Do not overlap device edits or identity commits with recovery.
         guard !isPresetOperationInFlight, !hasPendingDeviceControls, !connection.identityOperationBusy else { return }
+        let targetEndpoint: AdbEndpoint
+        if connection.mode == .usb {
+            guard AdbEndpoint.supportsUSBSerial(connection.selectedUSBSerial) else { return }
+            if !isConnected || refreshState {
+                connectUSB(); return // Fresh enumeration and the existing identity admission path.
+            }
+            guard let active = connection.activeEndpoint, active.isUSB else { return }
+            targetEndpoint = active
+        } else {
+            // Preserve a selected TCP port; a backend-only USB selection is never a TCP fallback.
+            guard adb.endpoint?.isUSB != true else { return }
+            let saved = (preferences.string(forKey: "saved_ip") ?? "").trimmingCharacters(in: .whitespaces)
+            guard let target = adb.endpoint ?? connection.selectedEndpoint
+                ?? AdbEndpoint.inputTCP(host: saved, port: "5555"), !target.isUSB else { return }
+            targetEndpoint = target
+        }
         let request = connectionIntent.generation
         if isConnected, connection.activeEndpoint == targetEndpoint, !refreshState {
             let session = adb.session()
@@ -339,14 +357,12 @@ public final class AppCoordinator {
         recoverMonitoredConnection(endpoint: targetEndpoint, request: request)
     }
 
-    /// A failed probe, explicit target change or wake is an admission boundary. Only here
+    /// A failed probe or invalidated readiness requires fresh admission. Only here
     /// invalidate the old session; restored capabilities require fresh identity verification.
     private func recoverMonitoredConnection(endpoint: AdbEndpoint, request: Int) {
-        resetIdentity()
+        if endpoint.isUSB { connectUSB(serial: endpoint.serial); return }
+        invalidateConnectionWork()
         adb.beginSession(endpoint: endpoint)
-        resetMediaVolumeSession()
-        currentValues = [:]; loadedPages = []; loadingPages = []
-        connection.activeEndpoint = nil
         connectionStatus = .connecting
         monitorChecking = true
         submitOperation(on: connectionQueue, work: { [adb] in adb.ensureConnected() }, onCancel: {
