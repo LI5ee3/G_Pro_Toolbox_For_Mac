@@ -39,6 +39,14 @@ package enum HotkeyMap {
         "8": kVK_ANSI_8, "9": kVK_ANSI_9,
     ]
 
+    /// F 键虚拟键码并不连续，正向和反向转换共用 SDK 常量映射。
+    private static let functionKeyTable: [String: Int] = [
+        "F1": kVK_F1, "F2": kVK_F2, "F3": kVK_F3,
+        "F4": kVK_F4, "F5": kVK_F5, "F6": kVK_F6,
+        "F7": kVK_F7, "F8": kVK_F8, "F9": kVK_F9,
+        "F10": kVK_F10, "F11": kVK_F11, "F12": kVK_F12,
+    ]
+
     /// keyCode -> 显示名（`keyCode(for:)` 的反向）
     private static let reverseTable: [Int: String] = {
         var m: [Int: String] = [:]
@@ -51,7 +59,7 @@ package enum HotkeyMap {
         m[kVK_DownArrow] = "↓"
         m[kVK_LeftArrow] = "←"
         m[kVK_RightArrow] = "→"
-        for n in 1...12 { m[Int(kVK_F1) + n - 1] = "F\(n)" }
+        for (name, code) in functionKeyTable { m[code] = name }
         return m
     }()
 
@@ -76,9 +84,7 @@ package enum HotkeyMap {
         if let code = ansiTables[name.uppercased()] { return CGKeyCode(code) }
         if name == "+" { return CGKeyCode(kVK_ANSI_Equal) }
         if name == "-" { return CGKeyCode(kVK_ANSI_Minus) }
-        if name.hasPrefix("F"), let n = Int(name.dropFirst()), n >= 1, n <= 12 {
-            return CGKeyCode(kVK_F1) + UInt16(n - 1)
-        }
+        if let code = functionKeyTable[name] { return CGKeyCode(code) }
         switch name {
         case "PageUp": return CGKeyCode(kVK_PageUp)
         case "PageDown": return CGKeyCode(kVK_PageDown)
