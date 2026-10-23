@@ -34,7 +34,8 @@ import MimonitorPresetCore
         await state.waitForPendingWork()
     }
     private func confirm(_ state: AppCoordinator, memories: Bool = false) async throws {
-        state.confirmConnectionOwnership(includeMemories: memories, expectedSessionID: try XCTUnwrap(state.connection.identitySessionID))
+        state.confirmConnectionOwnership(includeMemories: memories, expectedSessionID: try XCTUnwrap(state.connection.identitySessionID),
+            expectedProfileToken: state.connection.ownershipConfirmationToken)
         await state.waitForPendingWork()
     }
 
@@ -212,6 +213,108 @@ import MimonitorPresetCore
         state.stop()
     }
 
+    func testNormalPresetEditsKeepConnectionSnapshotCurrent() async throws {
+        for confirmMemories in [false, true] {
+            let runtime = PreviewRuntime()
+            var original = try JSONDecoder().decode(PresetConfiguration.self, from: legacy)
+            original.presets = [.init(id: "edited", name: "Before", values: ["picture_contrast": "66"])]
+            runtime.preferences.set(try JSONEncoder().encode(original), forKey: "picture_presets_v1")
+            let (state, _) = fixture(runtime); await connect(state, usb: false); try await confirm(state)
+            let session = state.adb.session(), evidence = state.connection.identityEvidence
+            let bound = try XCTUnwrap(state.connectionProfile?.profile?.devices.first)
+            state.renamePreset(id: "edited", name: "After"); await state.waitForPendingWork()
+            let task = ScheduledPresetTask(id: "edited-task", presetID: "edited", start: "10:00", end: "11:00", enabled: false)
+            state.saveAutomaticTask(task); await state.waitForPendingWork()
+            XCTAssertNil(state.presetError)
+            XCTAssertEqual(state.presetConfiguration.presets.first?.name, "After")
+            XCTAssertEqual(state.presetConfiguration.tasks, [task])
+            let editedBytes = runtime.preferences.data(forKey: "picture_presets_v1")
+            let before = runtime.display.recordedCommands
+
+            if confirmMemories { try await confirm(state, memories: true) }
+            else {
+                state.connection.tcpPortInput = "5566"
+                state.saveConnectionPreference(); await state.waitForPendingWork()
+            }
+
+            XCTAssertTrue(state.isConnected); XCTAssertFalse(state.connection.identityConflict)
+            XCTAssertEqual(state.adb.session().sessionID, session.sessionID)
+            XCTAssertFalse(session.cancellation.isCancelled)
+            XCTAssertEqual(state.connection.identityEvidence, evidence)
+            XCTAssertEqual(state.connection.presetIdentityKey, bound.presetIdentityKey)
+            XCTAssertEqual(state.connectionProfile?.profile?.devices.first?.deviceID, bound.deviceID)
+            if confirmMemories { XCTAssertTrue(state.connection.memoryOwnershipConfirmed) }
+            else { XCTAssertEqual(state.connectionProfile?.profile?.selectedEndpoint?.tcpPort, 5566) }
+            XCTAssertEqual(runtime.display.recordedCommands, before)
+            XCTAssertEqual(runtime.preferences.data(forKey: "picture_presets_v1"), editedBytes)
+            XCTAssertEqual(state.presetConfiguration.baseline, original.baseline)
+            XCTAssertEqual(state.presetConfiguration.presets.first?.values, original.presets.first?.values)
+            XCTAssertEqual(state.presetConfiguration.tasks, [task])
+            state.stop()
+        }
+    }
+
+    func testOrdinaryExternalSnapshotExpiryRejectsActionWithoutDisconnecting() async throws {
+        for confirmMemories in [false, true] {
+            let runtime = PreviewRuntime(); runtime.preferences.set(legacy, forKey: "picture_presets_v1")
+            let (state, _) = fixture(runtime); await connect(state, usb: false); try await confirm(state)
+            let session = state.adb.session(), evidence = state.connection.identityEvidence
+            let profileBytes = runtime.preferences.data(forKey: "connection_profile_v1")
+            let backups = runtime.connectionBackupCount
+            // Same owner, different content from an external writer; the cached review is stale.
+            let edited = Data(String(decoding: legacy, as: UTF8.self).replacingOccurrences(of: "51", with: "63").utf8)
+            runtime.preferences.set(edited, forKey: "picture_presets_v1")
+            if confirmMemories { try await confirm(state, memories: true) }
+            else {
+                state.connection.tcpPortInput = "5566"
+                state.saveConnectionPreference(); await state.waitForPendingWork()
+            }
+            XCTAssertTrue(state.connection.profileMessage.contains("重新查看"))
+            XCTAssertTrue(state.isConnected); XCTAssertFalse(state.connection.identityConflict)
+            XCTAssertFalse(state.connection.identityRestricted)
+            XCTAssertEqual(state.adb.session().sessionID, session.sessionID)
+            XCTAssertEqual(state.adb.endpoint, session.endpoint)
+            XCTAssertFalse(session.cancellation.isCancelled)
+            XCTAssertEqual(state.connection.identityEvidence, evidence)
+            XCTAssertFalse(state.connection.memoryOwnershipConfirmed)
+            XCTAssertEqual(runtime.connectionBackupCount, backups)
+            XCTAssertEqual(runtime.preferences.data(forKey: "connection_profile_v1"), profileBytes)
+            XCTAssertEqual(runtime.preferences.data(forKey: "picture_presets_v1"), edited)
+            state.stop()
+        }
+    }
+
+    func testOpenConfirmationCannotApproveOwnershipAddedByLaterPresetSave() async throws {
+        let (state, runtime) = fixture(); await connect(state, usb: false); try await confirm(state)
+        // Capture the same session/token/text that the confirmation dialog presents.
+        let session = try XCTUnwrap(state.connection.identitySessionID)
+        let token = state.connection.ownershipConfirmationToken
+        let text = state.connection.ownershipConfirmationText
+        let evidence = state.connection.identityEvidence
+        let backups = runtime.connectionBackupCount
+        XCTAssertEqual(state.connectionProfile?.ownershipKeys, [])
+        state.createPreset(name: "New baseline owner"); await state.waitForPendingWork()
+        XCTAssertNil(state.presetError)
+        XCTAssertEqual(state.connectionProfile?.ownershipKeys, [try XCTUnwrap(state.connection.presetIdentityKey)])
+        XCTAssertNotEqual(state.connection.ownershipConfirmationToken, token)
+        XCTAssertNotEqual(state.connection.ownershipConfirmationText, text)
+        let savedBytes = runtime.preferences.data(forKey: "picture_presets_v1")
+
+        state.confirmConnectionOwnership(includeMemories: true, expectedSessionID: session, expectedProfileToken: token)
+        await state.waitForPendingWork()
+        XCTAssertTrue(state.connection.profileMessage.contains("重新查看"))
+        XCTAssertFalse(state.connection.memoryOwnershipConfirmed)
+        XCTAssertTrue(state.isConnected); XCTAssertEqual(state.connection.identityEvidence, evidence)
+        XCTAssertEqual(runtime.connectionBackupCount, backups)
+        XCTAssertEqual(runtime.preferences.data(forKey: "picture_presets_v1"), savedBytes)
+
+        try await confirm(state, memories: true)
+        XCTAssertTrue(state.connection.memoryOwnershipConfirmed)
+        XCTAssertEqual(state.adb.session().sessionID, session)
+        XCTAssertEqual(runtime.preferences.data(forKey: "picture_presets_v1"), savedBytes)
+        state.stop()
+    }
+
     func testUnknownConfirmationIsSessionOnlyIdempotentAndUsesCanonicalNamespace() async throws {
         let (state, runtime) = fixture(property: "unknown\n"); await connect(state)
         XCTAssertNil(state.connection.identityEvidence)
@@ -243,7 +346,7 @@ import MimonitorPresetCore
     func testStaleConfirmationCannotBindNewSession() async throws {
         let (state, runtime) = fixture(); await connect(state)
         let old = try XCTUnwrap(state.connection.identitySessionID); await connect(state)
-        state.confirmConnectionOwnership(includeMemories: true, expectedSessionID: old)
+        state.confirmConnectionOwnership(includeMemories: true, expectedSessionID: old, expectedProfileToken: state.connection.ownershipConfirmationToken)
         await state.waitForPendingWork()
         XCTAssertTrue(state.connection.identityRestricted); XCTAssertNil(runtime.preferences.object(forKey: "connection_profile_v1"))
         XCTAssertEqual(runtime.connectionBackupCount, 0); state.stop()
@@ -252,6 +355,10 @@ import MimonitorPresetCore
     func testChangedLegacyOwnershipBeforeConfirmationFailsClosedAndPreservesBytes() async throws {
         let (state, runtime) = fixture(); await connect(state)
         runtime.preferences.set(legacy, forKey: "picture_presets_v1")
+        // A failed local edit must not silently accept an external owner's snapshot.
+        state.saveAutomaticTask(.init(id: "rejected", presetID: PicturePreset.baselineID,
+            start: "10:00", end: "11:00", enabled: false))
+        await state.waitForPendingWork(); XCTAssertNotNil(state.presetError)
         try await confirm(state)
         XCTAssertFalse(state.isConnected); XCTAssertNil(state.adb.endpoint); XCTAssertTrue(state.connection.identityConflict)
         XCTAssertEqual(runtime.preferences.data(forKey: "picture_presets_v1"), legacy)

@@ -176,7 +176,15 @@ final class ConnectionProfileStore {
     private func checked(_ expected: ConnectionProfileSnapshot) throws -> ConnectionProfileSnapshot {
         let current = snapshot()
         if let error = current.error { throw PresetError(error) }
-        guard !expected.token.isEmpty, current.token == expected.token else { throw PresetError("原配置已改变，请重新审查后确认") }
+        guard !expected.token.isEmpty, current.token == expected.token else {
+            // Ownership/registration changes are still identity protection failures.
+            guard current.ownershipKeys == expected.ownershipKeys,
+                  current.profile?.devices == expected.profile?.devices,
+                  current.profile?.memoryOwnerDeviceID == expected.profile?.memoryOwnerDeviceID else {
+                throw PresetError("配置归属或设备登记已改变，请重新审查后确认")
+            }
+            throw ConnectionProfileError.staleSnapshot
+        }
         return current
     }
     private func checkedRawToken(_ expected: ConnectionProfileSnapshot) throws {

@@ -71,3 +71,9 @@ package struct ConnectionProfileSnapshot: Equatable, Sendable {
     /// Digest of presence, property-list types and original values of all three keys.
     package let token: String
 }
+
+/// Ordinary content edits can expire a review without invalidating verified device identity.
+package enum ConnectionProfileError: LocalizedError {
+    case staleSnapshot
+    package var errorDescription: String? { "原配置已改变，请重新查看后确认" }
+}

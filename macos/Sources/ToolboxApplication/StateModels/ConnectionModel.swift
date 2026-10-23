@@ -28,6 +28,7 @@ package final class ConnectionModel {
     package var identityText = "设备身份尚未验证"
     package var profileMessage = ""
     package var ownershipConfirmationText = ""
+    package var ownershipConfirmationToken = ""
 
     package var intent = ConnectionIntent()
     package init() {}

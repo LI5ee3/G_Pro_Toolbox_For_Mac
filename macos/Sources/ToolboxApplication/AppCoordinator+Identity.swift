@@ -36,7 +36,8 @@ extension AppCoordinator {
         }
     }
 
-    private func updateOwnershipConfirmation(_ snapshot: ConnectionProfileSnapshot) {
+    internal func updateOwnershipConfirmation(_ snapshot: ConnectionProfileSnapshot) {
+        connection.ownershipConfirmationToken = snapshot.token
         let owners = snapshot.ownershipKeys
         connection.ownershipConfirmationText = owners.isEmpty
             ? "没有已归属的旧基线。确认后为当前设备建立独立预设身份。"
@@ -152,22 +153,27 @@ extension AppCoordinator {
             switch result {
             case .success(let snapshot):
                 self.connectionProfile = snapshot
+                self.updateOwnershipConfirmation(snapshot)
                 self.connection.profileMessage = snapshot.warning ?? "连接偏好已保存；当前会话保持不变"
             case .failure(let error):
                 self.connection.profileMessage = "连接偏好未提交：\(error.localizedDescription)"
+                if case ConnectionProfileError.staleSnapshot = error { return }
                 self.blockIdentity(error.localizedDescription)
             }
         }
     }
 
     /// Called only after the UI has presented the exact endpoint and old ownership to confirm.
-    package func confirmConnectionOwnership(includeMemories: Bool, expectedSessionID: UUID) {
+    package func confirmConnectionOwnership(includeMemories: Bool, expectedSessionID: UUID, expectedProfileToken: String) {
         guard isConnected, !connection.identityConflict, !connection.identityOperationBusy,
               let endpoint = connection.activeEndpoint, let expected = connectionProfile, expected.error == nil,
               expected.ownershipKeys.count <= 1 else { return }
         let session = adb.session(), request = connectionIntent.generation, operation = UUID()
         guard session.sessionID == expectedSessionID, connection.identitySessionID == expectedSessionID else {
             log("会话已变化，请重新查看并确认归属"); return
+        }
+        guard expected.token == expectedProfileToken else {
+            connection.profileMessage = "确认内容已变化，请重新查看并确认归属"; return
         }
         let evidence = connection.identityEvidence
         if evidence == nil, !connection.identityRestricted, connection.presetIdentityKey != nil {
@@ -186,7 +192,11 @@ extension AppCoordinator {
                         validateCurrent: { if session.cancellation.isCancelled { throw CancellationError() } })
                 }
                 let fresh = presetWorker.connectionProfileSnapshot()
-                guard fresh.error == nil, fresh.token == expected.token else { throw PresetError("配置已变化，请重新连接后确认") }
+                if let error = fresh.error { throw PresetError(error) }
+                guard fresh.ownershipKeys == expected.ownershipKeys, fresh.profile == expected.profile else {
+                    throw PresetError("配置归属或设备登记已改变，请重新审查后确认")
+                }
+                guard fresh.token == expected.token else { throw ConnectionProfileError.staleSnapshot }
                 return fresh
             }
         }, onCancel: { self.finishIdentityOperation(operation) }) { result in
@@ -196,6 +206,7 @@ extension AppCoordinator {
             switch result {
             case .failure(let error):
                 self.connection.profileMessage = "身份确认未提交：\(error.localizedDescription)"
+                if case ConnectionProfileError.staleSnapshot = error { return }
                 self.blockIdentity(error.localizedDescription)
             case .success(let snapshot):
                 if let evidence { self.resolveConnectionIdentity(.identified(evidence), snapshot: snapshot, endpoint: endpoint) }

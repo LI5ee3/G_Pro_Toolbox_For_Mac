@@ -227,7 +227,7 @@ extension AppCoordinator {
             // Do not re-read the mutable client endpoint or derive an address from identity.
             let device = connected && current
                 ? self.environment.presetDevice(self.adb, self.adb.operationSession?.endpoint, identity) : nil
-            let (reports, errorText, savedEdits, configuration) = self.presetWorker.withEngine { engine in
+            let ((reports, errorText, savedEdits, configuration), profile) = self.presetWorker.withEngineAndProfileSnapshot { engine in
                 var reports: [PresetApplyReport] = []
                 engine.onReport = { reports.append($0) }
                 var errorText: String?
@@ -257,6 +257,10 @@ extension AppCoordinator {
                 guard self.presetOperationID == operationID else { return }
                 self.presetOperationID = nil
                 self.presetConfiguration = configuration
+                if errorText == nil {
+                    self.connectionProfile = profile
+                    self.updateOwnershipConfirmation(profile)
+                }
                 self.isPresetOperationInFlight = false
                 self.isPresetBusy = false
                 self.presetOperationText = ""

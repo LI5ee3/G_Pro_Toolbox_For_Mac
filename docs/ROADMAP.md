@@ -253,7 +253,7 @@ A08 若测试确认有误报，另建单一 S1 任务后再修；不能把它混
 | S2-01 | 有界设备枚举与解析 | 21 新增、297 Swift 全量及架构/Preview source PASS；锁定 CLI 8 项假 server 实证，A18 限制已登记 | LOCAL_PASS（本窗口构建/CI PASS；HW_NOT_TESTED） |
 | S2-02 | USB 会话选择、授权等待、只读探活、逻辑断开 | 30 新增、327 Swift 全量 PASS；USB 无 TCP 管理命令，严格只读探活，逻辑断开抑制恢复；本项只开放 backend；UI 由 S2-03 接入 | LOCAL_PASS（本窗口构建/CI PASS；HW_NOT_TESTED） |
 | S2-03 | 最小手动 USB/TCP 选择 UI 与模拟场景 | 24 新增、351 Swift 全量 PASS；独立 Preview 构建/四层边界与 336 样本实际交互 PASS；身份限制和手动抑制生效 | LOCAL_PASS（本窗口 CI PASS；HW_NOT_TESTED） |
-| S2-04 | 同机身份绑定与旧 IP 兼容实现 | 同机跨传输保留基线/任务；异机/冲突拒绝恢复；旧 JSON 读入、迁移失败、回滚、二次迁移测试 | DONE_LOCAL / LOCAL_PASS（417 Swift / 24 Python / CI PASS；HW_NOT_TESTED） |
+| S2-04 | 同机身份绑定与旧 IP 兼容实现 | 同机跨传输保留基线/任务；异机/冲突拒绝恢复；旧 JSON 读入、迁移失败、回滚、二次迁移测试 | DONE_LOCAL / LOCAL_PASS（原 417 Swift / 24 Python / CI PASS；S2-04 review 两个 P2 修复：423 Swift / 架构与 Preview 源码边界 PASS，fix/s2-04-review 待 review / 整合 CI；HW_NOT_TESTED） |
 | S2-05 | 所有控制入口接入统一会话 | 音量、画面、游戏、信号源、灯光、遥控、预设、自动任务、菜单栏/快捷键、工具/Terminal 的 USB/TCP argv 契约测试；不复制业务实现 | NOT_STARTED（用户要求 S2-04 后停止） |
 | S2-06 | 插拔、网络断线与睡眠任务生命周期 | 旧任务取消/晚到结果丢弃、stop/start、重枚举、局部恢复、忙状态释放和不重放写入的故障注入 | NOT_STARTED（用户要求 S2-04 后停止） |
 | S2-07 | 手动模式分层验收子门禁 M2 | USB/TCP 核心连接、控制、同机双在线、手动切换及拔插/恢复必须真机通过；首次授权/第二台设备等例外按第 6.0 节严格 Mock 并记录未实测限制；具体写入按批准执行和恢复 | HW_NOT_TESTED / 待窗口 |

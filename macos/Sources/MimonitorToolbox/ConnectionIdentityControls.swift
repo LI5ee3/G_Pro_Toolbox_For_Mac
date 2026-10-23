@@ -7,6 +7,7 @@ struct ConnectionIdentityControls: View {
     @Environment(ConnectionModel.self) private var connection
     @State private var showConfirmation = false
     @State private var confirmationSession: UUID?
+    @State private var confirmationProfileToken = ""
     @State private var confirmationText = ""
     @State private var canConfirmMemories = false
 
@@ -21,6 +22,7 @@ struct ConnectionIdentityControls: View {
                     .toolboxAction().disabled(connection.identityOperationBusy || connection.identityConflict)
                 Button("确认数据归属…") {
                     confirmationSession = connection.identitySessionID
+                    confirmationProfileToken = connection.ownershipConfirmationToken
                     confirmationText = "当前端点：\(connection.transportText)\n\(connection.identityText)\n\(connection.ownershipConfirmationText)\n确认只登记归属，不部署组件或执行设备设置。全局记忆包括 HDR/SDR、FreeSync 和准星联动；已有开关值保持。身份不足时确认只限本次会话，自动功能保持暂停。"
                     canConfirmMemories = connection.identityEvidence != nil
                     showConfirmation = true
@@ -40,6 +42,6 @@ struct ConnectionIdentityControls: View {
 
     private func confirm(includeMemories: Bool) {
         guard let confirmationSession else { return }
-        state.confirmConnectionOwnership(includeMemories: includeMemories, expectedSessionID: confirmationSession)
+        state.confirmConnectionOwnership(includeMemories: includeMemories, expectedSessionID: confirmationSession, expectedProfileToken: confirmationProfileToken)
     }
 }

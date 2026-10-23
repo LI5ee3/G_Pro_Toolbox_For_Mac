@@ -21,6 +21,14 @@ package final class PresetWorker: Sendable {
     package func withEngine<Value: Sendable>(_ work: (PresetEngine) throws -> Value) rethrows -> Value {
         try state.withLock { try work($0.engine) }
     }
+    /// Capture the post-operation profile under the same non-recursive owner lock.
+    package func withEngineAndProfileSnapshot<Value: Sendable>(_ work: (PresetEngine) throws -> Value) rethrows
+        -> (Value, ConnectionProfileSnapshot) {
+        try state.withLock { state in
+            let value = try work(state.engine)
+            return (value, state.profile.snapshot())
+        }
+    }
     package func connectionProfileSnapshot() -> ConnectionProfileSnapshot {
         state.withLock { $0.profile.snapshot() }
     }
