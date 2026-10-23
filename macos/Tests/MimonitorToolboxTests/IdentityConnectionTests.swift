@@ -1,5 +1,6 @@
 import Foundation
 import XCTest
+import Synchronization
 import ToolboxConcurrency
 import ToolboxDomain
 import MimonitorPresetCore
@@ -11,10 +12,11 @@ import MimonitorPresetCore
     private let legacy = Data("{ \"presets\": [], \"tasks\": [], \"baseline\": { \"deviceIdentity\": \"192.0.2.7\", \"values\": {\"picture_contrast\":\"51\"} } }".utf8)
 
     private func fixture(_ runtime: PreviewRuntime = PreviewRuntime(), property: String? = nil,
+                         resources: RuntimeResources? = nil,
                          intercept: ((CommandRequest) -> ProcessResult?)? = nil) -> (AppCoordinator, PreviewRuntime) {
         runtime.display.configureDiscovery(rows: "\(serial) device usb:fixture model:MiTV_Fixture")
         let base = runtime.environment()
-        let adb = AdbClient(resources: base.adb.resources) { request in
+        let adb = AdbClient(resources: resources ?? base.adb.resources) { request in
             if let response = intercept?(request) { return response }
             if let property, request.arguments.last?.hasPrefix("getprop ro.") == true,
                request.arguments.last != "getprop ro.product.model" {
@@ -55,6 +57,110 @@ import MimonitorPresetCore
             XCTAssertFalse(runtime.display.recordedCommands.contains { $0.contains("push ") || $0.contains("settings put") || $0.contains("preset.apply") })
             state.stop()
         }
+    }
+
+    func testHealthyTCPMonitorPreservesVerifiedSessionAndReadings() async throws {
+        let began = expectation(description: "health probe began"), release = DispatchSemaphore(value: 0)
+        let armed = Mutex(false), jarLookups = Mutex(0)
+        let resources = RuntimeResources(adbPath: "/fake/adb", serverPort: "0", runtime: { _ in
+            jarLookups.withLock { $0 += 1 }; return nil
+        }, guardianAPK: { nil })
+        let runtime = PreviewRuntime()
+        runtime.preferences.set(true, forKey: "hdr_sdr_local_dimming_enabled")
+        let (state, _) = fixture(runtime, resources: resources, intercept: { request in
+            if request.arguments.contains("get-state"), armed.withLock({ $0 }) {
+                began.fulfill(); _ = release.wait(timeout: .now() + 3)
+            }
+            return nil
+        })
+        await connect(state, usb: false); try await confirm(state, memories: true)
+        let session = state.adb.session(), evidence = state.connection.identityEvidence
+        let status = state.statusText
+        let values = ["picture_brightness": "73", "picture_mode": "0"]
+        state.currentValues = values
+        state.loadedPages = ["picture", "game", "source"]
+        state.loadingPages = ["light"]
+        state.hdrLastState = false
+        let before = runtime.display.recordedCommands.count
+        armed.withLock { $0 = true }
+
+        state.monitorAdbServer()
+        await fulfillment(of: [began], timeout: 3)
+        XCTAssertEqual(state.adb.session().sessionID, session.sessionID)
+        XCTAssertFalse(session.cancellation.isCancelled)
+        XCTAssertEqual(state.currentValues, values)
+        XCTAssertEqual(state.statusText, status)
+        XCTAssertEqual(state.connection.identityEvidence, evidence)
+        release.signal(); await state.waitForPendingWork()
+
+        XCTAssertEqual(state.adb.session().sessionID, session.sessionID)
+        XCTAssertFalse(session.cancellation.isCancelled)
+        XCTAssertEqual(state.currentValues, values)
+        XCTAssertEqual(state.loadedPages, ["picture", "game", "source"])
+        XCTAssertEqual(state.loadingPages, ["light"])
+        XCTAssertEqual(state.statusText, status)
+        XCTAssertEqual(state.connection.identityEvidence, evidence)
+        XCTAssertTrue(state.connection.memoryOwnershipConfirmed)
+        XCTAssertEqual(state.hdrLastState, false)
+        XCTAssertEqual(jarLookups.withLock { $0 }, 0)
+        // Exactly the existing two-command health probe: no jars, initialization or memory restore.
+        XCTAssertEqual(Array(runtime.display.recordedCommands.dropFirst(before)), [
+            "-s 192.0.2.7:5555 get-state", "-s 192.0.2.7:5555 shell echo __mimonitor_probe__"])
+        state.stop()
+    }
+
+    func testFailedTCPHealthProbeReplacesSessionAndRevalidatesIdentity() async throws {
+        for differentDevice in [false, true] {
+            let probePhase = Mutex(0)
+            let (state, runtime) = fixture(intercept: { request in
+                if request.arguments.last == "echo __mimonitor_probe__",
+                   probePhase.withLock({ phase in
+                       guard phase == 1 else { return false }; phase = 2; return true
+                   }) { return ProcessResult(output: "offline", exitCode: 1) }
+                if differentDevice, probePhase.withLock({ $0 == 2 }),
+                   ["getprop ro.serialno", "getprop ro.boot.serialno"].contains(request.arguments.last ?? "") {
+                    return ProcessResult(output: "DIFFERENT-DEVICE", exitCode: 0)
+                }
+                return nil
+            })
+            await connect(state, usb: false); try await confirm(state)
+            let old = state.adb.session(), before = runtime.display.recordedCommands.count
+            probePhase.withLock { $0 = 1 }
+            state.monitorAdbServer(); await state.waitForPendingWork()
+            XCTAssertTrue(old.cancellation.isCancelled)
+            XCTAssertNotEqual(state.adb.session().sessionID, old.sessionID)
+            if differentDevice {
+                XCTAssertFalse(state.isConnected); XCTAssertNil(state.adb.endpoint)
+                XCTAssertTrue(state.connection.identityConflict)
+                XCTAssertFalse(runtime.display.recordedCommands.dropFirst(before).contains { $0.contains("settings list global") })
+            } else {
+                XCTAssertTrue(state.isConnected); XCTAssertTrue(state.connection.allowsIdentityAutomaticActions)
+                XCTAssertEqual(state.connection.identityEvidence?.sessionID, state.adb.session().sessionID)
+                XCTAssertTrue(runtime.display.recordedCommands.dropFirst(before).contains { $0.contains("settings list global") })
+            }
+            state.stop()
+        }
+    }
+
+    func testLateHealthProbeCannotRecoverDisconnectedSession() async throws {
+        let began = expectation(description: "health probe began"), release = DispatchSemaphore(value: 0)
+        let armed = Mutex(false)
+        let (state, _) = fixture(intercept: { request in
+            if request.arguments.contains("get-state"), armed.withLock({ $0 }) {
+                began.fulfill(); _ = release.wait(timeout: .now() + 3)
+            }
+            return nil
+        })
+        await connect(state, usb: false); try await confirm(state)
+        armed.withLock { $0 = true }
+        state.monitorAdbServer(); await fulfillment(of: [began], timeout: 3)
+        state.disconnectAdb(); let disconnected = state.adb.session().sessionID
+        release.signal(); await state.waitForPendingWork()
+        XCTAssertFalse(state.isConnected); XCTAssertNil(state.adb.endpoint)
+        XCTAssertNil(state.connection.identityEvidence)
+        XCTAssertEqual(state.adb.session().sessionID, disconnected)
+        XCTAssertFalse(state.monitorChecking)
+        state.stop()
     }
 
     func testExplicitSaveMirrorsOnlyDefaultTCPAndDoesNotConnect() async {

@@ -305,9 +305,6 @@ public final class AppCoordinator {
     /// Recovery policy, authorization and cooldown belong to AdbClient.ensureConnected.
     internal func monitorAdbServer(refreshState: Bool = false) {
         guard !monitorChecking else { return }
-        // A manual identity confirmation remains scoped to this exact session. A periodic
-        // timer may not silently replace it; explicit reconnect/wake requires confirmation again.
-        if isConnected, !connection.identityRestricted, !connection.allowsIdentityAutomaticActions, !refreshState { return }
         guard connectionIntent.allowsAutomaticRecovery else { return }
         // USB selection is still read-only at this gate. Never reinterpret its empty TCP
         // projection as saved_ip; typed manual recovery is introduced with the UI lifecycle.
@@ -322,14 +319,31 @@ public final class AppCoordinator {
         let saved = (preferences.string(forKey: "saved_ip") ?? "").trimmingCharacters(in: .whitespaces)
         guard let targetEndpoint = adb.endpoint ?? connection.selectedEndpoint
             ?? AdbEndpoint.inputTCP(host: saved, port: "5555"), !targetEndpoint.isUSB else { return }
-        let target = targetEndpoint.serial
-
-        // Identity validation is an admission boundary. Do not cancel an in-flight preset
-        // merely for a periodic check, and do not accept controls while revalidating.
+        // Do not overlap device edits or identity commits with recovery.
         guard !isPresetOperationInFlight, !hasPendingDeviceControls, !connection.identityOperationBusy else { return }
         let request = connectionIntent.generation
+        if isConnected, connection.activeEndpoint == targetEndpoint, !refreshState {
+            let session = adb.session()
+            monitorChecking = true
+            submitOperation(on: connectionQueue, work: { [adb] in
+                adb.transaction { adb.deviceState() == "device" && adb.transportWorks() }
+            }, onCancel: { self.monitorChecking = false }) { healthy in
+                self.monitorChecking = false
+                guard self.connectionIntent.isCurrent(request), self.connectionIntent.allowsAutomaticRecovery,
+                      self.adb.session().sessionID == session.sessionID else { return }
+                if healthy { self.lastMonitorFailState = ""; return }
+                self.recoverMonitoredConnection(endpoint: targetEndpoint, request: request)
+            }
+            return
+        }
+        recoverMonitoredConnection(endpoint: targetEndpoint, request: request)
+    }
+
+    /// A failed probe, explicit target change or wake is an admission boundary. Only here
+    /// invalidate the old session; restored capabilities require fresh identity verification.
+    private func recoverMonitoredConnection(endpoint: AdbEndpoint, request: Int) {
         resetIdentity()
-        adb.beginSession(endpoint: targetEndpoint)
+        adb.beginSession(endpoint: endpoint)
         resetMediaVolumeSession()
         currentValues = [:]; loadedPages = []; loadingPages = []
         connection.activeEndpoint = nil
@@ -342,7 +356,7 @@ public final class AppCoordinator {
             guard self.connectionIntent.isCurrent(request), self.connectionIntent.allowsAutomaticRecovery else { return }
             if result.ok {
                 self.lastMonitorFailState = ""
-                self.verifyConnectionIdentity(endpoint: targetEndpoint, request: request, detail: target)
+                self.verifyConnectionIdentity(endpoint: endpoint, request: request, detail: endpoint.serial)
             } else {
                 self.connection.activeEndpoint = nil
                 self.connectionStatus = result.state.lowercased().contains("unauthorized")
