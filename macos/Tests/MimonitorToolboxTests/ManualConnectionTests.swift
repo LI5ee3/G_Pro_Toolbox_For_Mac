@@ -241,7 +241,9 @@ private final class ManualConnectionTrace {
             runtime.scheduler.advance(by: 60)
             await state.waitForPendingWork()
 
-            XCTAssertEqual(trace.arguments, expected)
+            // S2-06 retries the same USB candidate through fresh read-only enumeration.
+            // No TCP fallback, identity admission or writes are allowed while it is unready.
+            XCTAssertEqual(trace.arguments, expected + expected)
             XCTAssertFalse(state.isConnected)
             XCTAssertNil(state.adb.endpoint)
             XCTAssertNil(state.connection.activeEndpoint)

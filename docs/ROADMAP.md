@@ -568,7 +568,7 @@ HW-F01 的音量/静音、HW-F02 的安全画面控制、HW-F04/05 的预设与�
 
 - **顺序与基线**：PR #2 head/master 未变，复用原 review / CI 39966011125；ready 后 merge 合入 `6f90cc0deb23ecaeab9bd8cd8e499707f5f6bc5a`，无 squash/force-push。[master CI 39968235414](https://github.com/LI5ee3/G_Pro_Toolbox_For_Mac/actions/runs/39968235414) 468 Swift / 24 Python 与所有原检查通过，package skipped、artifact_count=0。确认包含后删除本地/远端 S2-05 分支引用，原工作树、七个未提交文件及历史标签保留。
 - **最小修改**：USB 监控复用现有探活与 connectUSB 重枚举/身份准入；sleep 取消旧会话和延迟工作、合并 wake；stop/start 保留用户恢复意图且重新验证；Binder 缓存匹配已有 sessionID；自动入口暂停 applicationIncomplete，身份准入回读 PresetWorker 完成账务，避免 stop/start 旧 UI 状态引起重放。
-- **必要验证**：5 项新增，74 项受影响定向验证 PASS；保留 USB/wake/自动重放、Binder 和 stop/start 账务的修复前失败证据。其余健康 TCP、取消/晚到/账务、身份、固定目标和预设时段规则复用已有覆盖。完整差异、测试映射和 CI 记录入口集中于 [S2 验收](acceptance/S2.md#s2-06-插拔网络断线与睡眠任务生命周期2026-10-23)。
+- **必要验证**：5 项新增，74 项受影响定向验证及后续离线唤醒修正的 29 项验证 PASS；首轮 CI 检出的一项旧 USB 期望已按重枚举契约适配，完整结果见 S2 验收；保留 USB/wake/自动重放、Binder 和 stop/start 账务的修复前失败证据。其余健康 TCP、取消/晚到/账务、身份、固定目标和预设时段规则复用已有覆盖。完整差异、测试映射和 CI 记录入口集中于 [S2 验收](acceptance/S2.md#s2-06-插拔网络断线与睡眠任务生命周期2026-10-23)。
 - **最终验证与停止点**：最终提交只由现有默认 CI 执行一轮完整检查，不再手动重复全量/三种构建；实际结果集中登记在草稿 PR 描述与本机 review-verification.json。无 workflow/超时/重试/协议/预设格式改动，无新框架。只提交本项文件，推送 feat/s2-06-session-lifecycle 并停在 review；不合并本项。**HW_NOT_TESTED，M2/G2 NOT_PASSED**。下一项 S2-07 / M2，不提前真机、Auto 或阶段三。
 
 

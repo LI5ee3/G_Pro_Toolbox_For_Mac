@@ -35,7 +35,12 @@ extension AppCoordinator {
         guard isRunning else { return }
         isSleeping = false
         environment.system.refreshOutput()
-        guard connectionIntent.allowsAutomaticRecovery, wakeRecoveryWork == nil else { return }
+        guard connectionIntent.allowsAutomaticRecovery else {
+            // Restore offline discovery/local work after sleep without admitting any device.
+            if adb.session().cancellation.isCancelled { adb.beginSession(endpoint: nil) }
+            return
+        }
+        guard wakeRecoveryWork == nil else { return }
         let request = connectionIntent.generation, lifetime = executionLifetime.token()
         let work = DispatchWorkItem { [weak self] in
             guard let self, self.executionLifetime.allows(lifetime) else { return }

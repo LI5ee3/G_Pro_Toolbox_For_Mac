@@ -171,6 +171,12 @@ final class SessionLifecycleTests: XCTestCase {
         XCTAssertTrue(recovery.contains { $0.contains("settings list global") })
         XCTAssertFalse(recovery.contains { $0.contains("KEYCODE_DPAD_UP") || $0.contains("settings put") })
         XCTAssertNotEqual(state.dashboardVolume, 99)
+        state.disconnectAdb(); await state.waitForPendingWork()
+        sleep?(); wake?(); screenWake?()
+        let offline = runtime.display.recordedCommands.count
+        state.refreshDevices(); await state.waitForPendingWork()
+        XCTAssertEqual(Array(runtime.display.recordedCommands.dropFirst(offline)), ["devices -l"])
+        XCTAssertFalse(state.isConnected); XCTAssertFalse(state.connectionIntent.allowsAutomaticRecovery)
         state.stop(); XCTAssertEqual(observers, 0)
     }
 

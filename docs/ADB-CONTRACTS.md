@@ -61,7 +61,7 @@
 基线 `6f90cc0`；缺陷与验证见 [S2 验收](acceptance/S2.md#s2-06-插拔网络断线与睡眠任务生命周期2026-10-23)。
 
 - USB/TCP 的健康监控均保留当前 session、身份、读数和能力缓存。检测失败后取消旧会话，USB 恢复复用所选 serial 的重新枚举，TCP 沿用 ensureConnected；恢复必须重新验证身份。手动模式不跨传输回退，明确断开仍抑制轮询/重现/唤醒恢复。
-- live willSleep 取消会话和延迟设备工作，停止接收新的设备工作；保留既有操作完成账务。wake 合并待执行恢复，已健康的重复通知只探活；sleep/stop 已失效的就绪状态重新准入。stop/start 释放/重新注册原监听与计时器，并保持用户恢复意图。simulation 仍不注册 OS 服务。
+- live willSleep 取消会话和延迟设备工作，停止接收新的设备工作；保留既有操作完成账务。wake 合并待执行恢复，已健康的重复通知只探活；sleep/stop 已失效的就绪状态重新准入。stop/start 释放/重新注册原监听与计时器，并保持用户恢复意图。明确断开后的 wake 仅恢复无目标会话以允许离线枚举/本地编辑，不自动接入设备。simulation 仍不注册 OS 服务。
 - 恢复准入从 PresetWorker 的同步快照回读最终配置，再按当前时段运行原规则。applicationIncomplete 暂停自动调度，保留原基线、任务会话和人工重新应用/返回无预设路径；不自动重放部分写入。PresetEngine 的存储与规则本身不变。
 - Binder 能力验证缓存绑定原 sessionID；健康探活保留，同端点新会话首次写入重新验证，不改变命令映射、回退或音量结果语义。
 - 仅复用原取消、队列、事务锁、OwnedWorkSet、runtime lifetime 与 connection intent；没有 Auto 策略或新增重试。检测延迟仍受原轮询/超时约束；外部 Terminal/Guardian 的独立运行边界保持。全部为 fake/独立构建证据，HW_NOT_TESTED，M2/G2 NOT_PASSED。
