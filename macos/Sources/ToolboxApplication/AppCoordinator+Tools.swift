@@ -214,7 +214,15 @@ extension AppCoordinator {
             if r.succeeded && r.output.contains("Success") {
                 self.adb.shell("pm grant \(Guardian.package) android.permission.WRITE_SECURE_SETTINGS 2>/dev/null || true")
                 self.adb.shell("cmd deviceidle whitelist +\(Guardian.package) 2>/dev/null || true")
-                self.enableGuardianAccessibility()
+                do {
+                    try self.enableGuardianAccessibility()
+                } catch {
+                    self.publish {
+                        self.guardianStatus = "状态：配置失败"
+                        self.log("ADB 保活守护配置失败：\(error.localizedDescription)")
+                    }
+                    return
+                }
                 self.startGuardianCommands()
                 guard self.adb.pause(3) else { return }
                 _ = self.adb.reconnect()
@@ -236,7 +244,15 @@ extension AppCoordinator {
         guard isConnected else { return log("请先连接显示器") }
         guardianStatus = "状态：正在启动保活..."
         runBackground {
-            self.enableGuardianAccessibility()
+            do {
+                try self.enableGuardianAccessibility()
+            } catch {
+                self.publish {
+                    self.guardianStatus = "状态：配置失败"
+                    self.log("ADB 保活守护配置失败：\(error.localizedDescription)")
+                }
+                return
+            }
             self.startGuardianCommands()
             guard self.adb.pause(2) else { return }
             let s = self.readGuardianStatus()
@@ -247,19 +263,28 @@ extension AppCoordinator {
         }
     }
 
-    nonisolated internal func enableGuardianAccessibility() {
-        let current = adb.shell("settings get secure enabled_accessibility_services 2>/dev/null")
-            .trimmingCharacters(in: .whitespacesAndNewlines)
-        let services: String
-        if current.isEmpty || current == "null" {
-            services = Guardian.accessibility
-        } else if current.split(separator: ":").map(String.init).contains(Guardian.accessibility) {
-            services = current
-        } else {
-            services = "\(current):\(Guardian.accessibility)"
+    nonisolated internal func enableGuardianAccessibility() throws {
+        try adb.transaction {
+            let target = adb.serial
+            var step = "读取 enabled_accessibility_services"
+            do {
+                let current = try adb.checkedShell("settings get secure enabled_accessibility_services", target: target)
+                let services: String
+                if current.isEmpty || current == "null" {
+                    services = Guardian.accessibility
+                } else if current.split(separator: ":").map(String.init).contains(Guardian.accessibility) {
+                    services = current
+                } else {
+                    services = "\(current):\(Guardian.accessibility)"
+                }
+                step = "写入 enabled_accessibility_services"
+                try adb.checkedShell("settings put secure enabled_accessibility_services \(TerminalExecution.shellQuote(services))", target: target)
+                step = "写入 accessibility_enabled"
+                try adb.checkedShell("settings put secure accessibility_enabled 1", target: target)
+            } catch {
+                throw PresetError("\(step)失败：\(error.localizedDescription)")
+            }
         }
-        adb.shell("settings put secure enabled_accessibility_services '\(services)'")
-        adb.shell("settings put secure accessibility_enabled 1")
     }
 
     nonisolated internal func startGuardianCommands() {

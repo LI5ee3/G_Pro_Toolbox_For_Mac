@@ -406,7 +406,7 @@ public final class AppCoordinator {
     internal let mediaBrightnessCommitDelay: TimeInterval = 0.12
 
     internal var mediaVolumePreview: Int?
-    /// 最近一次真正下发到设备的音量
+    /// 最近一次成功下发的目标或读回值；命令成功不等于逐次读回确认。
     internal var mediaVolumeHardware: Int?
     /// 设备当前是否静音（nil = 未知）
     internal var mediaVolumeMuted: Bool?
@@ -416,6 +416,8 @@ public final class AppCoordinator {
     internal var mediaVolumeCommit: DispatchWorkItem?
     /// 是否有一次下发正在跑
     internal var mediaVolumeCommitInFlight = false
+    /// 只有真实用户输入产生提交意图；失败后的预览差值不能触发自动重试。
+    internal var mediaVolumePending = false
     /// 回退通道只提示一次，避免连按刷屏
     internal var mediaVolumeFallbackLogged = false
 
