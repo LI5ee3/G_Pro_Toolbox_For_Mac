@@ -1,7 +1,7 @@
 # G Pro ToolBox 最终开发路线图
 
 > 唯一项目进度基准。创建于 2026-10-22（UTC+8），同日按用户要求修订自动模式、分层验收和 CI 前置门禁。
-> 当前结论：用户于 2026-10-22 明确确认阶段一验收通过，**G1 PASS**。阶段二已授权，S2-01 至 S2-04 本机验证与默认 CI 已通过并提交推送；按用户要求在 S2-04 后停止；用户暂不能配合真机，M2 / G2 尚未通过，S2-08 Auto 仍受 M2 门禁约束，阶段三、四锁定。
+> 当前结论：用户于 2026-10-22 明确确认阶段一验收通过，**G1 PASS**。S2-01 至 S2-04 已完成本机验证；两个 S2-04 P2 review 通过后，与控制修复链集成并快进 master，集成及 master 默认 CI 均通过（453 Swift / 24 Python），已合并分支引用已清理，详见 §8.11。按用户要求在 S2-04 后停止；**HW_NOT_TESTED，M2/G2 NOT_PASSED**，S2-05/06/Auto 未开始，阶段三、四锁定。
 > 后续每次工作先读取本文件，完成一个明确子任务后更新任务状态、证据、风险和下一步；其他文档只承载设计或历史证据，不另设竞争性进度表。
 
 ## 1. 范围、基线与执行边界
@@ -253,7 +253,7 @@ A08 若测试确认有误报，另建单一 S1 任务后再修；不能把它混
 | S2-01 | 有界设备枚举与解析 | 21 新增、297 Swift 全量及架构/Preview source PASS；锁定 CLI 8 项假 server 实证，A18 限制已登记 | LOCAL_PASS（本窗口构建/CI PASS；HW_NOT_TESTED） |
 | S2-02 | USB 会话选择、授权等待、只读探活、逻辑断开 | 30 新增、327 Swift 全量 PASS；USB 无 TCP 管理命令，严格只读探活，逻辑断开抑制恢复；本项只开放 backend；UI 由 S2-03 接入 | LOCAL_PASS（本窗口构建/CI PASS；HW_NOT_TESTED） |
 | S2-03 | 最小手动 USB/TCP 选择 UI 与模拟场景 | 24 新增、351 Swift 全量 PASS；独立 Preview 构建/四层边界与 336 样本实际交互 PASS；身份限制和手动抑制生效 | LOCAL_PASS（本窗口 CI PASS；HW_NOT_TESTED） |
-| S2-04 | 同机身份绑定与旧 IP 兼容实现 | 同机跨传输保留基线/任务；异机/冲突拒绝恢复；旧 JSON 读入、迁移失败、回滚、二次迁移测试 | DONE_LOCAL / LOCAL_PASS（原 417 Swift / 24 Python / CI PASS；S2-04 review 两个 P2 修复：423 Swift / 架构与 Preview 源码边界 PASS，fix/s2-04-review 待 review / 整合 CI；HW_NOT_TESTED） |
+| S2-04 | 同机身份绑定与旧 IP 兼容实现 | 同机跨传输保留基线/任务；异机/冲突拒绝恢复；旧 JSON 读入、迁移失败、回滚、二次迁移测试；两个 P2 review 通过并完成控制修复链集成 | DONE_LOCAL / LOCAL_PASS（最终集成及 master CI：453 Swift / 24 Python PASS；HW_NOT_TESTED） |
 | S2-05 | 所有控制入口接入统一会话 | 音量、画面、游戏、信号源、灯光、遥控、预设、自动任务、菜单栏/快捷键、工具/Terminal 的 USB/TCP argv 契约测试；不复制业务实现 | NOT_STARTED（用户要求 S2-04 后停止） |
 | S2-06 | 插拔、网络断线与睡眠任务生命周期 | 旧任务取消/晚到结果丢弃、stop/start、重枚举、局部恢复、忙状态释放和不重放写入的故障注入 | NOT_STARTED（用户要求 S2-04 后停止） |
 | S2-07 | 手动模式分层验收子门禁 M2 | USB/TCP 核心连接、控制、同机双在线、手动切换及拔插/恢复必须真机通过；首次授权/第二台设备等例外按第 6.0 节严格 Mock 并记录未实测限制；具体写入按批准执行和恢复 | HW_NOT_TESTED / 待窗口 |
@@ -547,7 +547,16 @@ HW-F01 的音量/静音、HW-F02 的安全画面控制、HW-F04/05 的预设与�
 - **提交/默认 CI**：实现提交 [4532237](https://github.com/LI5ee3/G_Pro_Toolbox_For_Mac/commit/4532237315b4178036167cb5c4290946800dc725)；普通 push 触发 [39952973094](https://github.com/LI5ee3/G_Pro_Toolbox_For_Mac/actions/runs/39952973094)，2026-10-23 20:24:10–20:26:43（UTC+8）build success、package skipped、总体 success，artifact=0。远端日志确认 417 Swift / 24 Python、三种构建与架构/Preview 检查。临时 runner 退出 0/注销、凭据删除、远端 runner=0；无常驻服务。
 - **最终验收/停止**：S2-04 **DONE_LOCAL / LOCAL_PASS**，可独立工作完成；M2/G2 NOT_PASSED，核心真机 HW_NOT_TESTED。37 文件提交在两个父基点正逆补丁验证 PASS，最终源码与隔离候选/CI 相同；六份历史文档保持。CI 临时产物元数据在任务清理后未保留，已在独立干净 4532237 检出补建 development App，source_head 精确匹配、dirty_tree=false，证据 CommittedDelivery/。收尾文档同步 README/现行架构中与本项直接相关的陈旧说明，不改变业务源码；结果提交使用 [skip ci]。工作区 7 个范围外文件按用户要求保留未提交，不能把它称为全工作区干净；最终远端回读见 final-verification.json。本次停止。
 
-### 8.11 后续每个任务/阶段必填记录模板
+### 8.11 S2-04 review 后集成、master 与分支清理（2026-10-23）
+
+- **Review 与历史**：两个 P2 已通过源码及测试断言 review：`1df1513` 健康 TCP 探活保留会话；`bd9b116` 正常配置保存发布快照、固定确认 token、普通过期不误断线。复用已有集成提交 [8d23cd9b9d71b1c10bc1e27452a920a6ade05006](https://github.com/LI5ee3/G_Pro_Toolbox_For_Mac/commit/8d23cd9b9d71b1c10bc1e27452a920a6ade05006)，父节点 `bd9b116fd48968ae5f0dd2261405849de023b98d` / `627178287febf99b005ccde81cf4b56c9e54e351`；Guardian/音量/F 键/断线亮度键完整历史保留，没有重新实现或 cherry-pick。
+- **真实集成 CI**：[39959347403](https://github.com/LI5ee3/G_Pro_Toolbox_For_Mac/actions/runs/39959347403) success：453 Swift（389 + 64）、24 Python、资源、架构、Preview 源码与二进制/资源边界、App Debug、Preview Debug、development Release/产物验证全部 PASS。PR 临时检出 `1f0be59c285ed9ee87a5ff87835f9b5793ab96f3` 与集成提交完整 tree 同为 `265e8430601207e793570139c451207ba7453219`。复用原 ephemeral macOS runner 流程，workflow 与检查标准未改。
+- **master 收尾**：执行前重新确认远端仍为 `99f525568587c4a26af7ff51e1f17d3061b18fe4`；[PR #1](https://github.com/LI5ee3/G_Pro_Toolbox_For_Mac/pull/1) ready 后正常快进到 `8d23cd9b9d71b1c10bc1e27452a920a6ade05006`，GitHub 回读 merged=true。无 force-push master。master 默认 [CI 39960645975](https://github.com/LI5ee3/G_Pro_Toolbox_For_Mac/actions/runs/39960645975) 于 21:22:54–21:25:19（UTC+8）再次全部 PASS，测试数量及构建矩阵相同；Release 元数据 source_head 精确匹配、dirty_tree=false、development、team=null。两次 package skipped、artifact_count=0；临时 runner 退出 0/自动注销，无常驻服务。
+- **清理与保留**：远端 master CI 通过后重新枚举，逐个 `merge-base --is-ancestor` 核验 HEAD；删除六个已知 origin 分支，以及对应五个已有本地分支（integration 仅有远端引用）。另两个本地 `feature/bluetooth-volume` / `feature/macos-only` 也已包含并以 `git branch -d` 删除。远端删除附带各自 SHA 租约以防并发变化；没有用强制本地删除替代合并核验。当前本地与 origin 仅保留 master；第三方 upstream 跟踪引用和所有历史标签保留。完整 SHA 清单见 [S2 验收](acceptance/S2.md)。
+- **工作区保护**：原 `upstream/` 在原 `99f5255` detached HEAD 保留 7 个未提交文件（5 修改 + 2 新增）；4 个修复工作树在各自原 HEAD detached，全部目录保留。8 个既有工作树共 1763 个 tracked/非忽略 untracked 文件的内容与 mtime、HEAD、status 均逐项保持，原 7 文件完整 diff 相同；不 reset、clean 或移除工作目录。master 位于本轮隔离 `validation/S2-04-integration-20261023/checkout/`。
+- **证据与范围**：本机证据 `/Users/li5ee3/Documents/Codex/ADB/validation/S2-04-integration-20261023/` 保存两次完整 CI 日志、Release build.log/app-verification.json、清理前后引用及保护回读；原文件备份不上传。后继收尾提交仅更新本 ROADMAP 与 S2 验收，不改变已验证产品树；最终提交及其默认 CI 回读见该目录 `final-verification.json`。**HW_NOT_TESTED，M2/G2 NOT_PASSED**；不安装 App、不操作真机，不开始 S2-05、S2-06 或 Auto。
+
+### 8.12 后续每个任务/阶段必填记录模板
 
 ~~~text
 任务/阶段 ID：
