@@ -42,8 +42,13 @@ package final class ManualScheduler: RuntimeScheduling {
 package final class RecordingHotkeyDriver: HotkeyDriving {
     package private(set) var starts = 0
     package private(set) var stops = 0
-    package func start(handler: @escaping (CGEventType, CGEvent) -> Bool, onDisabled: @escaping () -> Void) -> Bool { starts += 1; return true }
-    package func stop() { stops += 1 }
+    package private(set) var handler: ((CGEventType, CGEvent) -> Bool)?
+    package func start(handler: @escaping (CGEventType, CGEvent) -> Bool, onDisabled: @escaping () -> Void) -> Bool {
+        starts += 1
+        self.handler = handler
+        return true
+    }
+    package func stop() { stops += 1; handler = nil }
 }
 
 package final class RecordingFeedback: FeedbackPresenting {

@@ -197,11 +197,11 @@ public final class AppCoordinator {
             guard let self, self.hotkeyDebugEnabled else { return }
             self.log("媒体键诊断: 类型 \(keyType) \(isDown ? "按下" : "抬起")")
         }
-        // 媒体键拦截门：亮度键看多屏焦点，音量键看当前默认音频输出，其余一律放行。
+        // 媒体键拦截门：亮度键看连接与多屏焦点，音量键看当前默认音频输出，其余一律放行。
         hotkeyManager.shouldHandleMediaKey = { [weak self] keyType in
             guard let self else { return true }
             if HotkeyManager.isBrightnessKeyType(keyType) {
-                return self.shouldHandleMediaBrightnessForFocus()
+                return self.isConnected && self.shouldHandleMediaBrightnessForFocus()
             }
             if HotkeyManager.isVolumeKeyType(keyType) {
                 return self.shouldHandleNativeVolume()
