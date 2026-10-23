@@ -1,6 +1,6 @@
 # S1-03：统一端点、设备身份、会话与状态设计
 
-本文主体是 **S1-03 设计契约，不是全部已实现功能说明**。唯一进度基准为 [ROADMAP](ROADMAP.md)；原设计审查固定到 `a41519a459c36762b8726a4a58507428c8b1b697`，2026-10-22（UTC+8）。S1-04/05 及 S2-01 至 S2-04 的实现事实单独列在第 0 节；第 0 节未落实的设计仍须按各自门禁执行。第 1 节及文末固定源码链接保留 S1-03 历史审查事实。
+本文主体是 **S1-03 设计契约，不是全部已实现功能说明**。唯一进度基准为 [ROADMAP](ROADMAP.md)；原设计审查固定到 `a41519a459c36762b8726a4a58507428c8b1b697`，2026-10-22（UTC+8）。S1-04/05 及 S2-01 至 S2-05 的实现事实单独列在第 0 节；第 0 节未落实的设计仍须按各自门禁执行。第 1 节及文末固定源码链接保留 S1-03 历史审查事实。
 
 
 ## 0. S1-04 实施边界（2026-10-22）
@@ -31,7 +31,7 @@
 - S2-01 新增 [AdbDiscovery](../macos/Sources/ToolboxDomain/AdbDiscovery.swift) 与显式 `discoverDevices()`：3 秒单次查询、完整结果先检查再解析 stdout；有界列表/原字段/未知状态/重复 serial 均保留或诊断。发现不改变会话，不自动选择。锁定 CLI 会隐藏一种非法长度头为空成功（A18），不宣称能检测其已丢失的信息。
 - S2-02 为 `AdbEndpoint` 增加 USB 和 `isUSB`，原 TCP 字节与 argv 保留。[validateUSBSelection](../macos/Sources/ToolboxApplication/Backend/AdbClient+USB.swift) 每次重新枚举、全部候选唯一匹配，再核实类型、授权和严格 shell 探活；缺类型证据时仅补查所选候选 `get-devpath`，unknown/裸路径不算 USB。返回的 ready 只是通道证据，不激活或授予业务身份能力。
 - USB connect/disconnect 不发 TCP CLI，USB ensureConnected 不进入 TCP/server 恢复；coordinator 的旧 monitor 明确阻止 USB 被 saved_ip 替代。TCP deviceState/transportWorks 收紧完整成功 stdout 的精确判据，命令/期限/次序及其他 legacy shell 保持。
-- S2-03 已接入手动 USB/TCP UI；S2-04 的身份/配置实现见下节。S2-05 控制入口、S2-06 生命周期及 Auto 仍未实施；M2 前不设计或实现 Auto。本机测试不代替真实应用/固件验证。
+- S2-03 已接入手动 USB/TCP UI；S2-04 的身份/配置实现见下节。S2-05 控制入口审查与最小修正见 §0.4；S2-06 生命周期及 Auto 仍未实施；M2 前不设计或实现 Auto。本机测试不代替真实应用/固件验证。
 
 
 ### 0.3 S2-04 实现边界（2026-10-23）
@@ -45,6 +45,16 @@
 - PresetWorker 同一同步所有者执行备份→原值/会话再核对→整 envelope 写入→回读，失败不启用新绑定；只撤销仍属于本次写入的 envelope，不覆盖外部修改。备份保留三个键的缺失、类型和原值，内容 SHA-256，真实 adapter 目录 0700 / 文件 0600；Preview 完全内存。UserDefaults 回读不等于断电持久事务，也不提供跨进程 CAS；其他写入者仍须隔离。
 - 恢复 API 仅在当前摘要匹配、备份校验与再次备份成功后恢复新连接键；不倒写之后编辑的旧 JSON/saved_ip。旧版忽略 envelope，可能按 saved_ip 恢复 TCP；新 device:<UUID> 所有权不能承诺与旧版无损兼容。生产偏好恢复未执行。
 - S2-04 只把现有 TCP 恢复纳入身份验证；没有实现 USB 插拔恢复、willSleep 生命周期或 Auto。确认动作自身不部署 helper/执行设备设置，后续经验证重连沿用原初始化；已有自动功能的时序仍受后续生命周期验收约束。
+
+### 0.4 S2-05 控制入口边界（2026-10-23）
+
+基于已审阅 master `d94664a`；逐入口路由表、测试与构建/CI 的实际状态见 [S2 验收](acceptance/S2.md#s2-05-所有控制入口接入统一会话2026-10-23)。既有提交时 AdbSession、FIFO、withSession/transaction、预设固定端点适配器继续使用，不新增路由或权限框架。
+
+- 音量辅助目标比较使用完整 AdbEndpoint，覆盖 USB 原 serial 与 TCP 端口；既有 mediaMuteIntent、取消/晚到隔离、Binder 回退与成功/失败语义保持。显示不再固定为网络 ADB。
+- TCP 输入区的诊断明确针对本次填写的有效 host/port。仅当填写端点等于提交时已连接 TCP 会话时追加设备状态；USB 活动或另一 TCP 时不把该会话状态混入填写地址报告。有效地址允许离线诊断；不扩展 USB 诊断系统。
+- openAdbShell 要求有效且未取消的提交时会话，继续生成转义后的固定 `-s` 脚本及独立 server 配置。openAdbCmd 保留离线通用能力，无设备绑定或全局 ANDROID_SERIAL。已经提交/打开的外部 Terminal 保留系统操作边界，不承诺随设备会话取消。
+- unknown 的已就绪手动通道仍允许普通单次控制，预设/自动任务/记忆规则与本地配置编辑规则沿用 S2-04；conflict 继续通过原断开、取消及清空端点阻断目标。
+
 
 ## 1. 审查事实与设计决策
 

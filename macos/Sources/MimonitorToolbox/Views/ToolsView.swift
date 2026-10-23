@@ -406,7 +406,7 @@ struct HotkeyConfigSheet: View {
                             }
                             Spacer()
                         }
-                        Text("音量加减、静音键通过已连接的网络 ADB 控制此显示器。需要辅助功能权限。")
+                        Text("音量加减、静音键通过当前已连接的 USB/TCP ADB 会话控制此显示器。需要辅助功能权限。")
                             .font(.system(size: 13))
                             .foregroundStyle(Theme.secondaryText)
 

@@ -31,12 +31,12 @@ extension AppCoordinator {
     }
 
 
-    /// 信号源页停留期间每 2 秒轮询一次：显示器可能被遥控器/按键切走，
-    /// 这个页面要反映实时状态（对应原版 _start_source_polling）。
+    /// TCP 输入区的诊断：固定本次填写的地址，不把其他活动端点的状态混入结果。
     package func runDiagnostics() {
         log("===== 网络诊断 =====")
-        let ip = ipInput.trimmingCharacters(in: .whitespaces)
-        let connected = isConnected
+        let endpoint = AdbEndpoint.inputTCP(host: ipInput.trimmingCharacters(in: .whitespacesAndNewlines),
+            port: connection.tcpPortInput.trimmingCharacters(in: .whitespacesAndNewlines))
+        let connectedTarget = isConnected && endpoint != nil && adb.session().endpoint == endpoint
         runBackground {
             var lines: [String] = []
 
@@ -47,20 +47,24 @@ extension AppCoordinator {
             let subnets = self.environment.system.subnets()
             lines.append("本机网段: \(subnets.isEmpty ? "❌ 未识别" : "✅ " + subnets.joined(separator: ", "))")
 
-            if ip.isEmpty {
-                lines.append("⚠️ 未填写显示器 IP，跳过连通性测试")
-            } else {
+            if let endpoint, let port = endpoint.tcpPort {
+                let ip = endpoint.tcpHost
+                lines.append("诊断填写的 TCP 地址：\(endpoint.serial)")
                 let sameSubnet = subnets.contains { ip.hasPrefix($0 + ".") }
                 lines.append("与目标同网段: \(sameSubnet ? "✅" : "❌ 不在同一网段")")
                 lines.append("ping \(ip): \(self.environment.system.ping(ip) ? "✅ 通" : "❌ 不通")")
-                let tcp = self.environment.system.tcpOpen(ip, 5555, 2.0)
-                lines.append("TCP \(ip):5555: \(tcp ? "✅ 开放" : "❌ 连不上")")
+                let tcp = self.environment.system.tcpOpen(ip, Int(port), 2.0)
+                lines.append("TCP \(endpoint.serial): \(tcp ? "✅ 开放" : "❌ 连不上")")
                 if !tcp {
                     lines.append("  → 端口不可达；请检查设备无线调试、网络隔离和系统局域网权限")
                 }
-                if connected {
+                if connectedTarget {
                     lines.append("adb 设备状态: \(self.adb.deviceState())")
+                } else {
+                    lines.append("填写地址不是当前已连接的 TCP 端点，未查询 adb 设备状态")
                 }
+            } else {
+                lines.append("⚠️ 请填写有效的 TCP 主机与端口，跳过连通性测试")
             }
 
             lines.append("提示: 连接失败不能确定局域网授权状态；设备离线或网络隔离也会导致失败")
@@ -90,9 +94,12 @@ extension AppCoordinator {
 
     /// 进入显示器上的 adb shell。
     package func openAdbShell() {
-        guard isConnected else { log("请先连接显示器"); return }
-        openTerminal(title: "Mimonitor · Shell · \(adb.serial)",
-                     command: "adb -s \(TerminalExecution.shellQuote(adb.serial)) shell")
+        let session = adb.session()
+        guard isConnected, let endpoint = session.endpoint, !session.cancellation.isCancelled else {
+            log("请先连接显示器"); return
+        }
+        openTerminal(title: "Mimonitor · Shell · \(endpoint.serial)",
+                     command: "adb -s \(TerminalExecution.shellQuote(endpoint.serial)) shell")
     }
 
     /// 打开一个配好环境的终端：PATH 里有 adb，端口也设好了，直接敲 `adb devices` 就能用。
