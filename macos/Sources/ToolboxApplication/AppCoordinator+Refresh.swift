@@ -142,6 +142,10 @@ extension AppCoordinator {
                 jniVals = self.adb.jniBatchGet(keys: jniKeys)
             }
 
+            // A transient transport loss can leave both stages empty after admission.
+            // Keep partial readings, but do not cache or announce an unread page as loaded.
+            let incomplete = (!settingsKeys.isEmpty && settingsVals.isEmpty)
+                || (!jniKeys.isEmpty && jniVals.isEmpty)
             var merged = settingsVals
             for (k, v) in jniVals { merged[k] = v }
             self.applyJniOverrides(&merged)
@@ -172,6 +176,12 @@ extension AppCoordinator {
                     self.activeSource = RegisterMap.sourceNames[n] ?? s
                 }
                 self.loadingPages.remove(page)
+                if incomplete {
+                    self.loadedPages.remove(page)
+                    self.pageAppearTimes[page] = nil
+                    self.log("\(page) 页面读取不完整；保留已读数据，等待下次刷新")
+                    return
+                }
                 if let t0 = self.pageAppearTimes[page] {
                     let ms = Int(self.environment.now().timeIntervalSince(t0) * 1000)
                     self.pageAppearTimes[page] = nil

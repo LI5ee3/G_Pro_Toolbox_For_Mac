@@ -300,25 +300,33 @@ extension AppCoordinator {
     }
 
     nonisolated internal func readGuardianStatus() -> GuardianStatus {
-        let acc = adb.shell("settings get secure enabled_accessibility_services 2>/dev/null")
+        var readFailure: String?
+        func read(_ command: String) -> String {
+            guard readFailure == nil else { return "" }
+            do { return try adb.checkedShell(command, target: adb.serial) }
+            catch { readFailure = "\(command)：\(error.localizedDescription)"; return "" }
+        }
+        let acc = read("settings get secure enabled_accessibility_services 2>/dev/null")
             .trimmingCharacters(in: .whitespacesAndNewlines)
-        let path = adb.shell("pm path \(Guardian.package) 2>/dev/null")
+        // Missing package/PID is a valid empty result; ADB transport failure still fails checkedShell.
+        let path = read("pm path \(Guardian.package) 2>/dev/null || true")
             .trimmingCharacters(in: .whitespacesAndNewlines)
-        let pid = adb.shell("pidof \(Guardian.package) 2>/dev/null")
+        let pid = read("pidof \(Guardian.package) 2>/dev/null || true")
             .trimmingCharacters(in: .whitespacesAndNewlines)
-        let mask = adb.shell("getprop persist.appcontrol_w_mask 2>/dev/null")
+        let mask = read("getprop persist.appcontrol_w_mask 2>/dev/null")
             .trimmingCharacters(in: .whitespacesAndNewlines)
-        let adbEnabled = adb.shell("settings get global adb_enabled 2>/dev/null")
+        let adbEnabled = read("settings get global adb_enabled 2>/dev/null")
             .trimmingCharacters(in: .whitespacesAndNewlines)
-        let wifiEnabled = adb.shell("settings get global adb_wifi_enabled 2>/dev/null")
+        let wifiEnabled = read("settings get global adb_wifi_enabled 2>/dev/null")
             .trimmingCharacters(in: .whitespacesAndNewlines)
-        let servicePort = adb.shell("getprop service.adb.tcp.port 2>/dev/null")
+        let servicePort = read("getprop service.adb.tcp.port 2>/dev/null")
             .trimmingCharacters(in: .whitespacesAndNewlines)
-        let persistPort = adb.shell("getprop persist.adb.tcp.port 2>/dev/null")
+        let persistPort = read("getprop persist.adb.tcp.port 2>/dev/null")
             .trimmingCharacters(in: .whitespacesAndNewlines)
-        let adbd = adb.shell("getprop init.svc.adbd 2>/dev/null")
+        let adbd = read("getprop init.svc.adbd 2>/dev/null")
             .trimmingCharacters(in: .whitespacesAndNewlines)
-        let stopped = adb.shell("dumpsys package \(Guardian.package) 2>/dev/null | grep stopped=true | head -n 1").isEmpty == false
+        let stopped = read("dumpsys package \(Guardian.package) 2>/dev/null | grep stopped=true | head -n 1").isEmpty == false
+        if let readFailure { log("ADB 保活守护读取失败：\(readFailure)") }
         return GuardianStatus(
             installed: !path.isEmpty && path.hasPrefix("package:"),
             pid: pid,
@@ -329,7 +337,8 @@ extension AppCoordinator {
             persistPort: persistPort,
             adbd: adbd,
             mask: mask,
-            stopped: stopped
+            stopped: stopped,
+            readFailure: readFailure
         )
     }
 
