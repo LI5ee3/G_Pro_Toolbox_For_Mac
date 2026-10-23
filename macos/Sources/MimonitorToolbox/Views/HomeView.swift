@@ -244,7 +244,7 @@ private struct ConnectionSettingsSheet: View {
                     }
                     HStack {
                         Button("扫描内网") { state.scanNet() }.toolboxAction()
-                        Button("网络诊断") { state.runDiagnostics() }.toolboxAction()
+                        Button("诊断填写地址") { state.runDiagnostics() }.toolboxAction()
                     }
                 }
                 Picker("已扫描设备", selection: Binding(get: { connection.selectedDevice }, set: { state.selectScannedDevice($0) })) {

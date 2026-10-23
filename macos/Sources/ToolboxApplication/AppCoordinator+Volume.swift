@@ -27,8 +27,8 @@ extension AppCoordinator {
     }
 
     // Main-thread state is checked before queued work and before publishing its result.
-    internal func mediaSessionIsCurrent(_ request: Int, target: String) -> Bool {
-        isConnected && connectionIntent.isCurrent(request) && adb.ip == target
+    internal func mediaSessionIsCurrent(_ request: Int, target: AdbEndpoint?) -> Bool {
+        isConnected && connectionIntent.isCurrent(request) && target != nil && adb.endpoint == target
     }
 
     /// 默认音频输出是否就是目标显示器 —— 音量键接管门。
@@ -46,7 +46,7 @@ extension AppCoordinator {
         guard isConnected else { return }
         guard !mediaVolumePending, !mediaVolumeCommitInFlight else { return }
         guard mediaVolumePreview == nil || mediaVolumePreview == mediaVolumeHardware else { return }
-        let request = connectionIntent.generation, target = adb.ip
+        let request = connectionIntent.generation, target = adb.session().endpoint
         let intent = mediaMuteIntent
         runBackground {
             guard !self.adb.operationCancelled else { return }
@@ -131,7 +131,7 @@ extension AppCoordinator {
         guard mediaVolumeHardware != value || unmute else { return }
         mediaVolumeNeedsUnmute = false
         mediaVolumeCommitInFlight = true
-        let request = connectionIntent.generation, target = adb.ip
+        let request = connectionIntent.generation, target = adb.session().endpoint
         let cancellation = adb.session().cancellation
         runBackground(onCancel: {
             guard self.mediaSessionIsCurrent(request, target: target),
@@ -189,7 +189,7 @@ extension AppCoordinator {
             // 状态未知（刚连接/被外部改过）：先回读再切换
             mediaMuteIntent += 1
             let intent = mediaMuteIntent
-            let request = connectionIntent.generation, target = adb.ip
+            let request = connectionIntent.generation, target = adb.session().endpoint
             runBackground {
                 guard !self.adb.operationCancelled else { return }
                 let current = self.adb.mediaMuted()
@@ -220,7 +220,7 @@ extension AppCoordinator {
         }
         guard writeToDevice else { return }
         let intent = mediaMuteIntent
-        let request = connectionIntent.generation, target = adb.ip
+        let request = connectionIntent.generation, target = adb.session().endpoint
         runBackground {
             guard !self.adb.operationCancelled else { return }
             let result = Result { try self.adb.setMediaMuted(muted) }
@@ -238,7 +238,10 @@ extension AppCoordinator {
 
     /// Explicit on-screen controls target the display regardless of Mac's audio output.
     package var dashboardVolumeAvailable: Bool { isConnected }
-    package var dashboardVolumeTransport: String { "网络 ADB" }
+    package var dashboardVolumeTransport: String {
+        guard isConnected, let endpoint = adb.session().endpoint else { return "ADB 未连接" }
+        return "\(endpoint.isUSB ? "USB" : "TCP") ADB · \(endpoint.serial)"
+    }
 
     package func setDashboardVolume(_ value: Int) {
         guard isConnected else { return }
@@ -261,7 +264,7 @@ extension AppCoordinator {
         mediaMuteIntent += 1
         let intent = mediaMuteIntent
         let request = connectionIntent.generation
-        let target = adb.ip
+        let target = adb.session().endpoint
         dashboardVolumeError = nil
         if let known = mediaVolumeMuted {
             mediaVolumeMuted = !known; dashboardMuted = !known
@@ -281,8 +284,8 @@ extension AppCoordinator {
                 }
             }
             self.publish {
-                guard self.isConnected, self.connectionIntent.isCurrent(request),
-                      self.adb.ip == target, self.mediaMuteIntent == intent else { return }
+                guard self.mediaSessionIsCurrent(request, target: target),
+                      self.mediaMuteIntent == intent else { return }
                 switch result {
                 case .success(let applied):
                     self.applyMediaMute(applied.muted, writeToDevice: false)
