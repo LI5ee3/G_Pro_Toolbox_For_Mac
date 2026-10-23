@@ -410,6 +410,8 @@ public final class AppCoordinator {
     internal var mediaVolumeHardware: Int?
     /// 设备当前是否静音（nil = 未知）
     internal var mediaVolumeMuted: Bool?
+    /// 静音/解除静音的最新用户意图，防止旧完成结果覆盖较新的预览或错误。
+    internal var mediaMuteIntent = 0
     /// 连按期间出现过「静音状态下按音量键」，收尾时需要先解除静音
     internal var mediaVolumeNeedsUnmute = false
     /// 待下发的收尾任务（尾部去抖）

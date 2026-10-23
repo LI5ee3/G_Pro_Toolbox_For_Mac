@@ -323,4 +323,118 @@ final class MediaControlCoordinatorTests: XCTestCase {
         XCTAssertNil(state.dashboardVolumeError)
         XCTAssertEqual(runtime.display.recordedCommands.filter { $0.contains("audio 10") }.count, 2)
     }
+
+    func testNativeMuteInterleavingKeepsThreeDistinctToggleTargets() async {
+        let runtime = PreviewRuntime()
+        let secondWriteStarted = expectation(description: "A published; B held in executor")
+        let releaseSecondWrite = DispatchSemaphore(value: 0)
+        defer { releaseSecondWrite.signal() }
+        var targets: [Bool] = [] // Only read after the worker barrier or completion.
+        let state = fixture(runtime) { request in
+            let command = request.arguments.last!
+            if command.contains("audio 10") {
+                targets.append(command.contains("i32 -100"))
+                if targets.count == 2 {
+                    // A queues its MainActor publication before this serial worker starts B.
+                    // The main-queue marker therefore runs after A's callback, with B blocked.
+                    DispatchQueue.main.async { secondWriteStarted.fulfill() }
+                    XCTAssertEqual(releaseSecondWrite.wait(timeout: .now() + 5), .success)
+                }
+            }
+            return runtime.display.execute(request)
+        }
+        state.deviceQueue.suspend()
+        state.toggleMediaMute() // A: true
+        state.toggleMediaMute() // B: false
+        XCTAssertEqual(state.mediaVolumeMuted, false)
+        state.deviceQueue.resume()
+        await fulfillment(of: [secondWriteStarted], timeout: 3)
+        XCTAssertEqual(state.mediaVolumeMuted, false)
+        XCTAssertEqual(state.dashboardMuted, false)
+        state.toggleMediaMute() // C must derive true from B's preview, not A's completion.
+        XCTAssertEqual(state.mediaVolumeMuted, true)
+        releaseSecondWrite.signal()
+        await state.waitForPendingWork()
+        XCTAssertEqual(targets, [true, false, true])
+        XCTAssertEqual(runtime.display.recordedCommands.filter { $0.contains("audio 17") }.count, 1)
+        XCTAssertTrue(runtime.display.muted)
+        XCTAssertEqual(state.mediaVolumeMuted, true)
+        XCTAssertEqual(state.dashboardMuted, true)
+        XCTAssertNil(state.dashboardVolumeError)
+    }
+
+    func testOldMuteFailureDoesNotClearNewerPreviewOrErrorState() async {
+        let runtime = PreviewRuntime()
+        let secondWriteStarted = expectation(description: "A failure published; B held in executor")
+        let releaseSecondWrite = DispatchSemaphore(value: 0)
+        defer { releaseSecondWrite.signal() }
+        var writes = 0
+        let state = fixture(runtime) { request in
+            let command = request.arguments.last!
+            if command.contains("audio 10") {
+                writes += 1
+                if writes == 2 {
+                    DispatchQueue.main.async { secondWriteStarted.fulfill() }
+                    XCTAssertEqual(releaseSecondWrite.wait(timeout: .now() + 5), .success)
+                }
+            }
+            // A's Binder write can succeed, but its first verification cannot confirm it.
+            if command.contains("audio 17"), writes == 1 { return ProcessResult(output: "", exitCode: 1) }
+            return runtime.display.execute(request)
+        }
+        state.deviceQueue.suspend()
+        state.toggleMediaMute()
+        state.toggleMediaMute()
+        state.deviceQueue.resume()
+        await fulfillment(of: [secondWriteStarted], timeout: 3)
+        XCTAssertEqual(state.mediaVolumeMuted, false)
+        XCTAssertEqual(state.dashboardMuted, false)
+        XCTAssertNil(state.dashboardVolumeError) // B's current error state must survive A's failure.
+        releaseSecondWrite.signal()
+        await state.waitForPendingWork()
+        XCTAssertFalse(runtime.display.muted)
+        XCTAssertEqual(state.dashboardMuted, false)
+        XCTAssertNil(state.dashboardVolumeError)
+        XCTAssertEqual(runtime.display.recordedCommands.filter { $0.contains("audio 22") }.count, 0)
+    }
+
+    func testOldMuteCompletionCannotOverrideLaterVolumeUnmuteIntent() async {
+        for failFirstRead in [false, true] {
+            for nativeVolumeKey in [false, true] {
+                let runtime = PreviewRuntime()
+                let unmuteStarted = expectation(description: "old mute completed; volume unmute held")
+                let releaseUnmute = DispatchSemaphore(value: 0)
+                defer { releaseUnmute.signal() }
+                var muteWrites = 0
+                let state = fixture(runtime) { request in
+                    let command = request.arguments.last!
+                    if command.contains("audio 10") {
+                        muteWrites += 1
+                        if muteWrites == 2 {
+                            DispatchQueue.main.async { unmuteStarted.fulfill() }
+                            XCTAssertEqual(releaseUnmute.wait(timeout: .now() + 5), .success)
+                        }
+                    }
+                    if failFirstRead, command.contains("audio 17"), muteWrites == 1 {
+                        return ProcessResult(output: "", exitCode: 1)
+                    }
+                    return runtime.display.execute(request)
+                }
+                state.deviceQueue.suspend()
+                state.toggleMediaMute()
+                if nativeVolumeKey { state.adjustMediaVolume(increase: true) }
+                else { state.setDashboardVolume(27) }
+                state.deviceQueue.resume()
+                await fulfillment(of: [unmuteStarted], timeout: 3)
+                XCTAssertEqual(state.mediaVolumeMuted, false)
+                XCTAssertEqual(state.dashboardMuted, false)
+                XCTAssertNil(state.dashboardVolumeError)
+                releaseUnmute.signal()
+                await state.waitForPendingWork()
+                XCTAssertFalse(runtime.display.muted)
+                XCTAssertEqual(state.dashboardMuted, false)
+                XCTAssertNil(state.dashboardVolumeError)
+            }
+        }
+    }
 }

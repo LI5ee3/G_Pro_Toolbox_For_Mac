@@ -17,6 +17,7 @@ extension AppCoordinator {
         set { volume.dashboardVolumeError = newValue }
     }
     internal func resetMediaVolumeSession() {
+        mediaMuteIntent += 1
         mediaVolumeCommit?.cancel(); mediaVolumeCommit = nil
         mediaVolumeCommitInFlight = false
         mediaVolumePending = false
@@ -80,6 +81,7 @@ extension AppCoordinator {
         }
 
         // 静音时按音量键先解除静音（和 macOS/Android 原生行为一致）
+        mediaMuteIntent += 1
         if mediaVolumeMuted == true { mediaVolumeNeedsUnmute = true }
         mediaVolumePreview = next
         mediaVolumePending = true
@@ -183,12 +185,15 @@ extension AppCoordinator {
             applyMediaMute(!known)
         } else {
             // 状态未知（刚连接/被外部改过）：先回读再切换
+            mediaMuteIntent += 1
+            let intent = mediaMuteIntent
             let request = connectionIntent.generation, target = adb.ip
             runBackground {
                 guard !self.adb.operationCancelled else { return }
                 let current = self.adb.mediaMuted()
                 self.publish {
-                    guard self.mediaSessionIsCurrent(request, target: target) else { return }
+                    guard self.mediaSessionIsCurrent(request, target: target),
+                          self.mediaMuteIntent == intent else { return }
                     guard let current else {
                         self.reportMediaControlFailure("无法读取显示器静音状态，未执行切换")
                         return
@@ -200,6 +205,7 @@ extension AppCoordinator {
     }
 
     internal func applyMediaMute(_ muted: Bool, writeToDevice: Bool = true) {
+        if writeToDevice { mediaMuteIntent += 1 }
         dashboardVolumeError = nil
         mediaVolumeMuted = muted
         dashboardMuted = muted
@@ -211,16 +217,16 @@ extension AppCoordinator {
             environment.feedback.show(title: "静音", value: muted ? "开" : "关")
         }
         guard writeToDevice else { return }
+        let intent = mediaMuteIntent
         let request = connectionIntent.generation, target = adb.ip
         runBackground {
             guard !self.adb.operationCancelled else { return }
             let result = Result { try self.adb.setMediaMuted(muted) }
             self.publish {
-                guard self.mediaSessionIsCurrent(request, target: target) else { return }
+                guard self.mediaSessionIsCurrent(request, target: target),
+                      self.mediaMuteIntent == intent else { return }
                 switch result {
                 case .success(let channel):
-                    self.dashboardVolumeError = nil
-                    self.mediaVolumeMuted = muted; self.dashboardMuted = muted
                     self.logMediaFallback(channel, control: "静音")
                 case .failure(let error): self.reportMediaControlFailure(error.localizedDescription)
                 }
@@ -234,6 +240,7 @@ extension AppCoordinator {
 
     package func setDashboardVolume(_ value: Int) {
         guard isConnected else { return }
+        mediaMuteIntent += 1
         let value = clamp(value, 0, 100)
         if mediaVolumeMuted == true { mediaVolumeNeedsUnmute = true }
         dashboardVolumeError = nil
@@ -249,6 +256,8 @@ extension AppCoordinator {
 
     package func toggleDashboardMute() {
         guard isConnected else { return }
+        mediaMuteIntent += 1
+        let intent = mediaMuteIntent
         let request = connectionIntent.generation
         let target = adb.ip
         dashboardVolumeError = nil
@@ -271,7 +280,7 @@ extension AppCoordinator {
             }
             self.publish {
                 guard self.isConnected, self.connectionIntent.isCurrent(request),
-                      self.adb.ip == target else { return }
+                      self.adb.ip == target, self.mediaMuteIntent == intent else { return }
                 switch result {
                 case .success(let applied):
                     self.applyMediaMute(applied.muted, writeToDevice: false)
