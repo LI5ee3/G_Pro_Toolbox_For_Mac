@@ -1,7 +1,7 @@
 # G Pro ToolBox 最终开发路线图
 
 > 唯一项目进度基准。创建于 2026-10-22（UTC+8），同日按用户要求修订自动模式、分层验收和 CI 前置门禁。
-> 当前结论：**G1 PASS**。S2-01 至 S2-04 已完成本机验证并合入 master；本次以 `d94664af460a4a83508dc2c1fc510d9606a6f134` 为固定基线，用户新授权的 **S2-05 已通过本机门禁**（468 Swift / 24 Python），提交/草稿 PR/CI 待完成，实施/证据见 §8.12。**HW_NOT_TESTED，M2/G2 NOT_PASSED**；S2-06、Auto 未开始，阶段三、四锁定。
+> 当前结论：**G1 PASS**。S2-01 至 S2-04 已完成本机验证并合入 master；本次以 `d94664af460a4a83508dc2c1fc510d9606a6f134` 为固定基线，用户新授权的 **S2-05 已通过本机门禁**（468 Swift / 24 Python），草稿 PR #2 的实现默认 CI 已通过，停在 review，实施/证据见 §8.12。**HW_NOT_TESTED，M2/G2 NOT_PASSED**；S2-06、Auto 未开始，阶段三、四锁定。
 > 后续每次工作先读取本文件，完成一个明确子任务后更新任务状态、证据、风险和下一步；其他文档只承载设计或历史证据，不另设竞争性进度表。
 
 ## 1. 范围、基线与执行边界
@@ -254,7 +254,7 @@ A08 若测试确认有误报，另建单一 S1 任务后再修；不能把它混
 | S2-02 | USB 会话选择、授权等待、只读探活、逻辑断开 | 30 新增、327 Swift 全量 PASS；USB 无 TCP 管理命令，严格只读探活，逻辑断开抑制恢复；本项只开放 backend；UI 由 S2-03 接入 | LOCAL_PASS（本窗口构建/CI PASS；HW_NOT_TESTED） |
 | S2-03 | 最小手动 USB/TCP 选择 UI 与模拟场景 | 24 新增、351 Swift 全量 PASS；独立 Preview 构建/四层边界与 336 样本实际交互 PASS；身份限制和手动抑制生效 | LOCAL_PASS（本窗口 CI PASS；HW_NOT_TESTED） |
 | S2-04 | 同机身份绑定与旧 IP 兼容实现 | 同机跨传输保留基线/任务；异机/冲突拒绝恢复；旧 JSON 读入、迁移失败、回滚、二次迁移测试；两个 P2 review 通过并完成控制修复链集成 | DONE_LOCAL / LOCAL_PASS（最终集成及 master CI：453 Swift / 24 Python PASS；HW_NOT_TESTED） |
-| S2-05 | 所有控制入口接入统一会话 | 音量、画面、游戏、信号源、灯光、遥控、预设、自动任务、菜单栏/快捷键、工具/Terminal 的 USB/TCP argv 契约测试；不复制业务实现 | DONE_LOCAL / LOCAL_PASS（468 Swift / 24 Python 及完整本机门禁 PASS；草稿 PR/CI 待建，止于 review） |
+| S2-05 | 所有控制入口接入统一会话 | 音量、画面、游戏、信号源、灯光、遥控、预设、自动任务、菜单栏/快捷键、工具/Terminal 的 USB/TCP argv 契约测试；不复制业务实现 | DONE_LOCAL / LOCAL_PASS（468 Swift / 24 Python 及完整本机门禁 PASS；草稿 PR #2 / 默认 CI PASS；止于 review） |
 | S2-06 | 插拔、网络断线与睡眠任务生命周期 | 旧任务取消/晚到结果丢弃、stop/start、重枚举、局部恢复、忙状态释放和不重放写入的故障注入 | NOT_STARTED（下一项；本次停在 S2-05 review） |
 | S2-07 | 手动模式分层验收子门禁 M2 | USB/TCP 核心连接、控制、同机双在线、手动切换及拔插/恢复必须真机通过；首次授权/第二台设备等例外按第 6.0 节严格 Mock 并记录未实测限制；具体写入按批准执行和恢复 | HW_NOT_TESTED / 待窗口 |
 | S2-08 | M2 通过后设计并实现必需的 Auto | USB 优先 → 有线失效自动回退同机无线 TCP → 有线稳定恢复后自动回切 USB；单会话、安全切换、不重复派发、稳定窗口/冷却/退避、手动断开抑制均有确定性测试 | WAITING_M2 |
@@ -427,7 +427,7 @@ HW-F01 的音量/静音、HW-F02 的安全画面控制、HW-F04/05 的预设与�
 | --- | --- | --- |
 | 现状审计与路线图修订 | DONE_REMOTE | 初版证据与修订历史保留；后续 S1-08 独立执行见下行及第 8.3 节 |
 | 阶段一 | S1-01/08/10/03/04/05/06/07/09 DONE；S1-02 DONE_WITH_FINDINGS（历史）；技术门禁 PASS，G1 PASS | 276 Swift/24 Python、三种构建/实际 Preview/回滚/默认 CI 通过；用户 2026-10-22 明确确认阶段一验收通过；历史风险按原任务归属保留 |
-| 阶段二 | IN_PROGRESS；G2 NOT_PASSED | G1 已由用户确认；S2-01 至 S2-04 已合入；本次 S2-05 本机 PASS、草稿 PR/CI 待建并停在 review，M2 真机待窗口；Auto 必须在 M2 后实施，核心真机闭环不能省略 |
+| 阶段二 | IN_PROGRESS；G2 NOT_PASSED | G1 已由用户确认；S2-01 至 S2-04 已合入；本次 S2-05 本机与实现默认 CI PASS、草稿 PR #2 停在 review，M2 真机待窗口；Auto 必须在 M2 后实施，核心真机闭环不能省略 |
 | 阶段三 | LOCKED | G2 未验收；oil UI Pro 已在用户开发 Mac |
 | 阶段四 | LOCKED | G3 未验收；真实睡眠/登录/重启及最终交付均待执行 |
 | 项目结项 | NOT_COMPLETE | 不以路线图上传作为完成开发 |
@@ -561,8 +561,8 @@ HW-F01 的音量/静音、HW-F02 的安全画面控制、HW-F04/05 的预设与�
 - **基线与保护**：开始 fetch 后 `origin/master` 仍为 `d94664af460a4a83508dc2c1fc510d9606a6f134`，没有新增差异。独立干净工作树 `s2-05-control-routing` / `feat/s2-05-control-routing`；原 upstream 七个未提交文件及其他工作树保持，未混入旧改动。
 - **最小修改**：保留既有 `runBackground → submitOperation → withSession/transaction`。音量的辅助目标判等改用完整端点，传输显示区分 USB/TCP；保留成功/失败、mediaMuteIntent、旧回调/轮询隔离。诊断属于 TCP 输入区，使用填写的 host/port 快照；仅与当前 TCP 会话完整端点相同时查询设备状态。Shell 检查有效未取消会话，再沿用已转义的固定 `-s` 脚本；通用 ADB Terminal 仍可离线使用。
 - **覆盖/边界**：完整入口表、既有合规路径与实际修复见 [S2 验收](acceptance/S2.md#s2-05-所有控制入口接入统一会话2026-10-23)。15 项参数化 fake 测试驱动生产 Coordinator/AdbClient/AdbPresetDevice；USB 原 serial / TCP 5567 / server 5038，保留 unknown 普通手动控制、conflict 阻断、归属与本地编辑规则。没有新增框架、USB 业务副本或生命周期重构。
-- **验证**：15 项专项与完整 468 Swift（404 + 64）/24 Python PASS，无原测试减少；资源、架构、Preview 源码/依赖/产物边界、App Debug、Preview Debug、development Release 与 verify-app 全退出 0。独立证据见 `validation/S2-05-20261023/commands.json`；原检查与 workflow 不变，默认 CI 待独立分支草稿 PR。
-- **停止点**：本项提交推送后停在 review。未执行真机、外部 Terminal、生产 App；**HW_NOT_TESTED，M2/G2 NOT_PASSED**。下一项 S2-06，不进入 Auto 或阶段三。
+- **验证**：15 项专项与完整 468 Swift（404 + 64）/24 Python PASS，无原测试减少；资源、架构、Preview 源码/依赖/产物边界、App Debug、Preview Debug、development Release 与 verify-app 全退出 0。独立证据见 `validation/S2-05-20261023/commands.json`；原检查与 workflow 不变；实现 [b4072b7](https://github.com/LI5ee3/G_Pro_Toolbox_For_Mac/commit/b4072b7f6cd0ec00021def0a47940813d0a74f6f) 已推送，[草稿 PR #2](https://github.com/LI5ee3/G_Pro_Toolbox_For_Mac/pull/2) 的 [默认 CI 39965361677](https://github.com/LI5ee3/G_Pro_Toolbox_For_Mac/actions/runs/39965361677) 再次确认 468 Swift / 24 Python 与全部构建/检查通过，build success、package skipped、artifact_count=0；临时 runner 已自动注销，runner_count=0。
+- **停止点**：本项已提交推送并保持 draft，停在 review；未合并或删除分支。结果补记只改文档，其默认 PR CI 照常执行，最终 HEAD 证据留于同目录 `final-verification.json` 与 PR 检查。未执行真机、外部 Terminal、生产 App；**HW_NOT_TESTED，M2/G2 NOT_PASSED**。下一项 S2-06，不进入 Auto 或阶段三。
 
 ### 8.13 后续每个任务/阶段必填记录模板
 
