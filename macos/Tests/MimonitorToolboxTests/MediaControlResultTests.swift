@@ -240,6 +240,167 @@ final class MediaControlCoordinatorTests: XCTestCase {
         XCTAssertEqual(commands.filter { $0.contains("audio 22") }.count, 1)
     }
 
+    func testOldPollCannotReplaceNewVolumePreviewOrTrailingTarget() async {
+        for nativeVolumeKey in [false, true] {
+            let runtime = PreviewRuntime()
+            runtime.display.volume = 4
+            runtime.display.muted = true
+            let pollRead = expectation(description: "old poll readings captured")
+            let firstWriteStarted = expectation(description: "poll published; first volume write held")
+            let releasePoll = DispatchSemaphore(value: 0)
+            let releaseFirstWrite = DispatchSemaphore(value: 0)
+            defer { releasePoll.signal(); releaseFirstWrite.signal() }
+            var muteReads = 0
+            var targets: [Int] = [] // Confined to the worker until a barrier or completion.
+            let state = fixture(runtime) { request in
+                let command = request.arguments.last!
+                if command.contains("audio 12") {
+                    targets.append(Int(command.split(separator: " ")[7])!)
+                    if targets.count == 1 {
+                        // The poll's MainActor publication is queued before this marker.
+                        DispatchQueue.main.async { firstWriteStarted.fulfill() }
+                        XCTAssertEqual(releaseFirstWrite.wait(timeout: .now() + 5), .success)
+                    }
+                }
+                let result = runtime.display.execute(request)
+                if command.contains("audio 17") {
+                    muteReads += 1
+                    if muteReads == 1 {
+                        DispatchQueue.main.async { pollRead.fulfill() }
+                        XCTAssertEqual(releasePoll.wait(timeout: .now() + 5), .success)
+                    }
+                }
+                return result
+            }
+            state.seedSimulationReadings(volume: 10, muted: true)
+            state.mediaVolumeNativeOSD = false
+            state.mediaVolumeStep = 5
+            state.refreshMediaVolumeState()
+            await fulfillment(of: [pollRead], timeout: 3)
+
+            let first = nativeVolumeKey ? 15 : 27
+            let latest = nativeVolumeKey ? 20 : 39
+            if nativeVolumeKey {
+                state.adjustMediaVolume(increase: true)
+                state.adjustMediaVolume(increase: true)
+            } else {
+                state.setDashboardVolume(first)
+                state.setDashboardVolume(latest)
+            }
+            XCTAssertEqual(state.mediaVolumePreview, latest)
+            XCTAssertEqual(state.dashboardVolume, latest)
+            releasePoll.signal()
+            await fulfillment(of: [firstWriteStarted], timeout: 3)
+            XCTAssertEqual(state.mediaVolumePreview, latest)
+            XCTAssertEqual(state.mediaVolumeHardware, 10)
+            XCTAssertEqual(state.dashboardVolume, latest)
+            XCTAssertEqual(state.currentValues["volume_music_speaker"], String(latest))
+            XCTAssertEqual(state.mediaVolumeMuted, false)
+            XCTAssertEqual(state.dashboardMuted, false)
+            XCTAssertTrue(state.mediaVolumePending)
+            XCTAssertTrue(state.mediaVolumeCommitInFlight)
+
+            releaseFirstWrite.signal()
+            await state.waitForPendingWork()
+            XCTAssertEqual(state.mediaVolumeHardware, first)
+            XCTAssertEqual(state.mediaVolumePreview, latest)
+            XCTAssertTrue(state.mediaVolumePending)
+            runtime.scheduler.advance(by: 0.2)
+            await state.waitForPendingWork()
+            XCTAssertEqual(targets, [first, latest])
+            XCTAssertEqual(runtime.display.volume, latest)
+            XCTAssertFalse(runtime.display.muted)
+            XCTAssertEqual(state.mediaVolumeHardware, latest)
+            XCTAssertEqual(state.dashboardVolume, latest)
+            XCTAssertFalse(state.mediaVolumePending)
+            XCTAssertFalse(state.mediaVolumeCommitInFlight)
+            XCTAssertNil(state.dashboardVolumeError)
+            let count = runtime.display.recordedCommands.count
+            runtime.scheduler.advance(by: 3)
+            await state.waitForPendingWork()
+            XCTAssertEqual(runtime.display.recordedCommands.count, count)
+        }
+    }
+
+    func testOldPollCannotReplaceNewMuteIntentWithoutVolumeCommitFlags() async {
+        for nativeMuteKey in [false, true] {
+            for initiallyMuted in [false, true] {
+                let runtime = PreviewRuntime()
+                runtime.display.muted = initiallyMuted
+                let pollRead = expectation(description: "old mute reading captured")
+                let muteWriteStarted = expectation(description: "poll published; mute write held")
+                let releasePoll = DispatchSemaphore(value: 0)
+                let releaseMuteWrite = DispatchSemaphore(value: 0)
+                defer { releasePoll.signal(); releaseMuteWrite.signal() }
+                var muteReads = 0
+                let state = fixture(runtime) { request in
+                    let command = request.arguments.last!
+                    if command.contains("audio 10") {
+                        DispatchQueue.main.async { muteWriteStarted.fulfill() }
+                        XCTAssertEqual(releaseMuteWrite.wait(timeout: .now() + 5), .success)
+                    }
+                    let result = runtime.display.execute(request)
+                    if command.contains("audio 17") {
+                        muteReads += 1
+                        if muteReads == 1 {
+                            DispatchQueue.main.async { pollRead.fulfill() }
+                            XCTAssertEqual(releasePoll.wait(timeout: .now() + 5), .success)
+                        }
+                    }
+                    return result
+                }
+                state.seedSimulationReadings(volume: 10, muted: initiallyMuted)
+                state.refreshMediaVolumeState()
+                await fulfillment(of: [pollRead], timeout: 3)
+                if nativeMuteKey { state.toggleMediaMute() }
+                else { state.toggleDashboardMute() }
+                XCTAssertEqual(state.dashboardMuted, !initiallyMuted)
+                XCTAssertFalse(state.mediaVolumePending)
+                XCTAssertFalse(state.mediaVolumeCommitInFlight)
+                releasePoll.signal()
+                await fulfillment(of: [muteWriteStarted], timeout: 3)
+                // These volume-only guards cannot distinguish a stale mute poll.
+                XCTAssertFalse(state.mediaVolumePending)
+                XCTAssertFalse(state.mediaVolumeCommitInFlight)
+                XCTAssertEqual(state.mediaVolumeMuted, !initiallyMuted)
+                XCTAssertEqual(state.dashboardMuted, !initiallyMuted)
+                XCTAssertNil(state.dashboardVolumeError)
+                releaseMuteWrite.signal()
+                await state.waitForPendingWork()
+                XCTAssertEqual(runtime.display.muted, !initiallyMuted)
+                XCTAssertEqual(state.mediaVolumeMuted, !initiallyMuted)
+                XCTAssertEqual(state.dashboardMuted, !initiallyMuted)
+                XCTAssertNil(state.dashboardVolumeError)
+                XCTAssertEqual(runtime.display.recordedCommands.filter { $0.contains("audio 10") }.count, 1)
+                XCTAssertFalse(runtime.display.recordedCommands.contains { $0.contains("audio 12") })
+            }
+        }
+    }
+
+    func testPollAcceptsExternalVolumeAndMuteChangesWithoutCreatingUserIntent() async {
+        let runtime = PreviewRuntime()
+        let state = fixture(runtime, execute: runtime.display.execute)
+        let intent = state.mediaMuteIntent
+        for (volume, muted) in [(38, true), (71, false)] {
+            runtime.display.volume = volume
+            runtime.display.muted = muted
+            state.refreshMediaVolumeState()
+            await state.waitForPendingWork()
+            XCTAssertEqual(state.mediaVolumePreview, volume)
+            XCTAssertEqual(state.mediaVolumeHardware, volume)
+            XCTAssertEqual(state.dashboardVolume, volume)
+            XCTAssertEqual(state.mediaVolumeMuted, muted)
+            XCTAssertEqual(state.dashboardMuted, muted)
+            XCTAssertEqual(state.mediaMuteIntent, intent)
+            XCTAssertFalse(state.mediaVolumePending)
+            XCTAssertFalse(state.mediaVolumeCommitInFlight)
+            XCTAssertNil(state.dashboardVolumeError)
+        }
+        XCTAssertEqual(runtime.display.recordedCommands.filter { $0.contains("audio 22") }.count, 2)
+        XCTAssertEqual(runtime.display.recordedCommands.filter { $0.contains("audio 17") }.count, 2)
+        XCTAssertFalse(runtime.display.recordedCommands.contains { $0.contains("audio 12") || $0.contains("audio 10") })
+    }
+
     func testCancelledCommitReleasesBusyStateWithoutSendingCommands() async {
         let runtime = PreviewRuntime()
         let state = fixture(runtime, execute: runtime.display.execute)

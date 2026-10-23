@@ -47,12 +47,14 @@ extension AppCoordinator {
         guard !mediaVolumePending, !mediaVolumeCommitInFlight else { return }
         guard mediaVolumePreview == nil || mediaVolumePreview == mediaVolumeHardware else { return }
         let request = connectionIntent.generation, target = adb.ip
+        let intent = mediaMuteIntent
         runBackground {
             guard !self.adb.operationCancelled else { return }
             let volume = self.adb.mediaVolume()
             let muted = self.adb.mediaMuted()
             self.publish {
-                guard self.mediaSessionIsCurrent(request, target: target) else { return }
+                guard self.mediaSessionIsCurrent(request, target: target),
+                      self.mediaMuteIntent == intent else { return }
                 if let volume {
                     self.mediaVolumePreview = volume
                     self.mediaVolumeHardware = volume
