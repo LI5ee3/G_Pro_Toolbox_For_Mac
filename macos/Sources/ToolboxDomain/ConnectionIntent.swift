@@ -24,8 +24,13 @@ package struct ConnectionIntent: Sendable {
     }
 
     package mutating func disconnect() {
-        scanRequest = nil
         allowsAutomaticRecovery = false
+        invalidate()
+    }
+
+    /// Runtime suspension invalidates callbacks without overriding the user's recovery intent.
+    package mutating func invalidate() {
+        scanRequest = nil
         generation &+= 1
     }
 

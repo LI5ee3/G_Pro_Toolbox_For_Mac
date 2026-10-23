@@ -48,11 +48,15 @@ extension AppCoordinator {
     internal func verifyConnectionIdentity(endpoint: AdbEndpoint, request: Int, detail: String) {
         let session = adb.session(), sampledAt = environment.now()
         submitOperation(on: connectionQueue, work: { [adb, presetWorker] in
-            (adb.probeIdentity(endpoint: endpoint, sessionID: session.sessionID, sampledAt: sampledAt),
-             presetWorker.connectionProfileSnapshot())
+            let identity = adb.probeIdentity(endpoint: endpoint, sessionID: session.sessionID, sampledAt: sampledAt)
+            let (configuration, profile) = presetWorker.withEngineAndProfileSnapshot { $0.configuration }
+            return (identity, profile, configuration)
         }) { result in
             guard self.connectionIntent.isCurrent(request), self.adb.session().sessionID == session.sessionID else { return }
             if case .cancelled = result.0 { self.disconnectAdb(); return }
+            // A stopped lifetime may have discarded UI publication of a cancelled preset's
+            // accounting. Read the worker's final state before automatic tasks can resume.
+            self.presetConfiguration = result.2
             self.connection.activeEndpoint = endpoint
             self.connectionStatus = .connected(detail)
             self.resolveConnectionIdentity(result.0, snapshot: result.1, endpoint: endpoint)

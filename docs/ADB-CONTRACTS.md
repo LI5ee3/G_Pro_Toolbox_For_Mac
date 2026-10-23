@@ -1,6 +1,6 @@
 # S1-03：统一端点、设备身份、会话与状态设计
 
-本文主体是 **S1-03 设计契约，不是全部已实现功能说明**。唯一进度基准为 [ROADMAP](ROADMAP.md)；原设计审查固定到 `a41519a459c36762b8726a4a58507428c8b1b697`，2026-10-22（UTC+8）。S1-04/05 及 S2-01 至 S2-05 的实现事实单独列在第 0 节；第 0 节未落实的设计仍须按各自门禁执行。第 1 节及文末固定源码链接保留 S1-03 历史审查事实。
+本文主体是 **S1-03 设计契约，不是全部已实现功能说明**。唯一进度基准为 [ROADMAP](ROADMAP.md)；原设计审查固定到 `a41519a459c36762b8726a4a58507428c8b1b697`，2026-10-22（UTC+8）。S1-04/05 及 S2-01 至 S2-06 的实现事实单独列在第 0 节；第 0 节未落实的设计仍须按各自门禁执行。第 1 节及文末固定源码链接保留 S1-03 历史审查事实。
 
 
 ## 0. S1-04 实施边界（2026-10-22）
@@ -31,7 +31,7 @@
 - S2-01 新增 [AdbDiscovery](../macos/Sources/ToolboxDomain/AdbDiscovery.swift) 与显式 `discoverDevices()`：3 秒单次查询、完整结果先检查再解析 stdout；有界列表/原字段/未知状态/重复 serial 均保留或诊断。发现不改变会话，不自动选择。锁定 CLI 会隐藏一种非法长度头为空成功（A18），不宣称能检测其已丢失的信息。
 - S2-02 为 `AdbEndpoint` 增加 USB 和 `isUSB`，原 TCP 字节与 argv 保留。[validateUSBSelection](../macos/Sources/ToolboxApplication/Backend/AdbClient+USB.swift) 每次重新枚举、全部候选唯一匹配，再核实类型、授权和严格 shell 探活；缺类型证据时仅补查所选候选 `get-devpath`，unknown/裸路径不算 USB。返回的 ready 只是通道证据，不激活或授予业务身份能力。
 - USB connect/disconnect 不发 TCP CLI，USB ensureConnected 不进入 TCP/server 恢复；coordinator 的旧 monitor 明确阻止 USB 被 saved_ip 替代。TCP deviceState/transportWorks 收紧完整成功 stdout 的精确判据，命令/期限/次序及其他 legacy shell 保持。
-- S2-03 已接入手动 USB/TCP UI；S2-04 的身份/配置实现见下节。S2-05 控制入口审查与最小修正见 §0.4；S2-06 生命周期及 Auto 仍未实施；M2 前不设计或实现 Auto。本机测试不代替真实应用/固件验证。
+- S2-03 已接入手动 USB/TCP UI；S2-04 的身份/配置实现见下节。S2-05 控制入口审查与最小修正见 §0.4；S2-06 生命周期见 §0.5；Auto 仍未实施；M2 前不设计或实现 Auto。本机测试不代替真实应用/固件验证。
 
 
 ### 0.3 S2-04 实现边界（2026-10-23）
@@ -54,6 +54,17 @@
 - TCP 输入区的诊断明确针对本次填写的有效 host/port。仅当填写端点等于提交时已连接 TCP 会话时追加设备状态；USB 活动或另一 TCP 时不把该会话状态混入填写地址报告。有效地址允许离线诊断；不扩展 USB 诊断系统。
 - openAdbShell 要求有效且未取消的提交时会话，继续生成转义后的固定 `-s` 脚本及独立 server 配置。openAdbCmd 保留离线通用能力，无设备绑定或全局 ANDROID_SERIAL。已经提交/打开的外部 Terminal 保留系统操作边界，不承诺随设备会话取消。
 - unknown 的已就绪手动通道仍允许普通单次控制，预设/自动任务/记忆规则与本地配置编辑规则沿用 S2-04；conflict 继续通过原断开、取消及清空端点阻断目标。
+
+
+### 0.5 S2-06 生命周期边界（2026-10-23）
+
+基线 `6f90cc0`；缺陷与验证见 [S2 验收](acceptance/S2.md#s2-06-插拔网络断线与睡眠任务生命周期2026-10-23)。
+
+- USB/TCP 的健康监控均保留当前 session、身份、读数和能力缓存。检测失败后取消旧会话，USB 恢复复用所选 serial 的重新枚举，TCP 沿用 ensureConnected；恢复必须重新验证身份。手动模式不跨传输回退，明确断开仍抑制轮询/重现/唤醒恢复。
+- live willSleep 取消会话和延迟设备工作，停止接收新的设备工作；保留既有操作完成账务。wake 合并待执行恢复，已健康的重复通知只探活；sleep/stop 已失效的就绪状态重新准入。stop/start 释放/重新注册原监听与计时器，并保持用户恢复意图。明确断开后的 wake 仅恢复无目标会话以允许离线枚举/本地编辑，不自动接入设备。simulation 仍不注册 OS 服务。
+- 恢复准入从 PresetWorker 的同步快照回读最终配置，再按当前时段运行原规则。applicationIncomplete 暂停自动调度，保留原基线、任务会话和人工重新应用/返回无预设路径；不自动重放部分写入。PresetEngine 的存储与规则本身不变。
+- Binder 能力验证缓存绑定原 sessionID；健康探活保留，同端点新会话首次写入重新验证，不改变命令映射、回退或音量结果语义。
+- 仅复用原取消、队列、事务锁、OwnedWorkSet、runtime lifetime 与 connection intent；没有 Auto 策略或新增重试。检测延迟仍受原轮询/超时约束；外部 Terminal/Guardian 的独立运行边界保持。全部为 fake/独立构建证据，HW_NOT_TESTED，M2/G2 NOT_PASSED。
 
 
 ## 1. 审查事实与设计决策

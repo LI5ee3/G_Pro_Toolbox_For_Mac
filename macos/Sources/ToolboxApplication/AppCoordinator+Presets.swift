@@ -62,7 +62,8 @@ extension AppCoordinator {
 
     package func checkAutomaticTasks() {
         updateAutomaticTaskStatus()
-        guard connection.allowsIdentityAutomaticActions, !connection.identityRestricted, isConnected, !isPresetOperationInFlight, presetWorker.loadError == nil else { return }
+        guard connection.allowsIdentityAutomaticActions, !connection.identityRestricted, isConnected,
+              !isPresetOperationInFlight, !presetConfiguration.applicationIncomplete, presetWorker.loadError == nil else { return }
         if pendingPresetSave == nil, let id = pendingPresetSaveID, activePresetID == id,
            pendingPresetSaveDevice == (connection.presetIdentityKey ?? ""),
            !presetConfiguration.applicationIncomplete {
