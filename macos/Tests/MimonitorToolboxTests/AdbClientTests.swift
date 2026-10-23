@@ -14,7 +14,7 @@ final class AdbClientTests: XCTestCase {
           *) exit 9 ;;
         esac
         """) { client in
-            XCTAssertTrue(client.setMediaVolume(27))
+            XCTAssertEqual(try client.setMediaVolume(27), .binder)
             let calls = try String(contentsOfFile: client.adbPath + ".calls", encoding: .utf8)
             XCTAssertEqual(calls.split(separator: "\n").count, 2)
             XCTAssertFalse(calls.contains("input keyevent"))
@@ -31,7 +31,7 @@ final class AdbClientTests: XCTestCase {
           *) exit 9 ;;
         esac
         """) { client in
-            XCTAssertFalse(client.setMediaVolume(12))
+            XCTAssertEqual(try client.setMediaVolume(12), .keyevent)
             let calls = try String(contentsOfFile: client.adbPath + ".calls", encoding: .utf8)
             XCTAssertTrue(calls.contains("input keyevent KEYCODE_VOLUME_UP KEYCODE_VOLUME_UP"))
         }
@@ -44,7 +44,7 @@ final class AdbClientTests: XCTestCase {
           'service call audio 17 i32 3') echo 'Result: Parcel(00000000 00000001)' ;;
           *) exit 9 ;;
         esac
-        """) { client in XCTAssertTrue(client.setMediaMuted(true)) }
+        """) { client in XCTAssertEqual(try client.setMediaMuted(true), .binder) }
     }
 
     func testDeviceStateAloneDoesNotProveTransportIsUsable() throws {

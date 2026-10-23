@@ -425,84 +425,111 @@ package final class AdbClient {
     /// txn 不可用时回退 settings。
     package func mediaVolume() -> Int? {
         return transaction {
-            let output = shell("service call audio \(AudioServiceTxn.getStreamVolumeForMute) i32 \(Self.streamMusic)")
-            if let value = Self.parseServiceCallInt(output), (0...100).contains(value) {
+            if let output = try? checkedShell("service call audio \(AudioServiceTxn.getStreamVolumeForMute) i32 \(Self.streamMusic)", target: serial),
+               Self.serviceCallSucceeded(output),
+               let value = Self.parseServiceCallInt(output), (0...100).contains(value) {
                 return value
             }
-            let raw = shell("settings get system volume_music_speaker")
-                .trimmingCharacters(in: .whitespacesAndNewlines)
+            guard let raw = try? checkedShell("settings get system volume_music_speaker", target: serial) else { return nil }
             return Int(raw)
         }
     }
 
     /// 媒体流当前是否静音。
     package func mediaMuted() -> Bool? {
-        let output = shell("service call audio \(AudioServiceTxn.isStreamMute) i32 \(Self.streamMusic)")
-        guard let value = Self.parseServiceCallInt(output) else { return nil }
-        return value != 0
-    }
-
-    /// 绝对设置媒体音量（0~100）。返回是否走了 binder 快速通道。
-    /// binder 不可用时退回 `input keyevent` 逐级调整（先读当前值再补差值）。
-    @discardableResult
-    package func setMediaVolume(_ value: Int, unmuteFirst: Bool = false) -> Bool {
-        return transaction {
-            let target = max(0, min(100, value))
-            if unmuteFirst { _ = setMediaMuted(false) }
-            if mediaVolumeBinderVerified != false {
-                let output = shell("service call audio \(AudioServiceTxn.setStreamVolume) i32 \(Self.streamMusic) i32 \(target) i32 0 s16 \(Self.binderShellPackage)")
-                if Self.serviceCallSucceeded(output) {
-                    if mediaVolumeBinderVerified == nil {
-                        // 首次调用回读确认真的生效：ROM 若改了 transaction code，
-                        // service call 也可能"成功"地调到了别的方法。
-                        let applied = mediaVolume() == target
-                        mediaVolumeBinderVerified = applied
-                        if applied { return true }
-                    } else {
-                        return true
-                    }
-                } else {
-                    mediaVolumeBinderVerified = false
-                }
-            }
-            applyMediaVolumeByKeyEvent(target)
-            return false
+        transaction {
+            guard let output = try? checkedShell("service call audio \(AudioServiceTxn.isStreamMute) i32 \(Self.streamMusic)", target: serial),
+                  Self.serviceCallSucceeded(output), let value = Self.parseServiceCallInt(output) else { return nil }
+            return value != 0
         }
     }
 
-    /// 设置/解除媒体流静音。返回是否走了 binder 快速通道。
+    /// 成功命令的通道；alreadyAtTarget 表示读回已等于目标，无需写入。
+    /// 命令执行成功不表示每次都做了硬件读回。失败或无法确认时抛出错误。
+    package enum MediaControlChannel: Sendable {
+        case binder, keyevent, alreadyAtTarget
+    }
+
+    /// 绝对设置媒体音量（0~100）。返回成功通道。
+    /// binder 不可用时退回 `input keyevent` 逐级调整（先读当前值再补差值）。
     @discardableResult
-    package func setMediaMuted(_ muted: Bool) -> Bool {
-        return transaction {
+    package func setMediaVolume(_ value: Int, unmuteFirst: Bool = false) throws -> MediaControlChannel {
+        return try transaction {
+            let target = max(0, min(100, value))
+            if unmuteFirst {
+                do { _ = try setMediaMuted(false) }
+                catch { throw PresetError("解除静音失败，未设置音量：\(error.localizedDescription)") }
+            }
             if mediaVolumeBinderVerified != false {
-                let direction = muted ? Self.adjustMute : Self.adjustUnmute
-                let output = shell("service call audio \(AudioServiceTxn.adjustStreamVolume) i32 \(Self.streamMusic) i32 \(direction) i32 0 s16 \(Self.binderShellPackage)")
-                if Self.serviceCallSucceeded(output) {
+                if let output = try? checkedShell("service call audio \(AudioServiceTxn.setStreamVolume) i32 \(Self.streamMusic) i32 \(target) i32 0 s16 \(Self.binderShellPackage)", target: serial),
+                   Self.serviceCallSucceeded(output) {
                     if mediaVolumeBinderVerified == nil {
-                        let applied = mediaMuted() == muted
+                        // 首次调用回读确认真的生效：ROM 若改了 transaction code，
+                        // service call 也可能"成功"地调到了别的方法。
+                        guard let current = mediaVolume() else {
+                            throw PresetError("音量命令已执行，但无法读回确认结果")
+                        }
+                        let applied = current == target
                         mediaVolumeBinderVerified = applied
-                        if applied { return true }
+                        if applied { return .binder }
                     } else {
-                        return true
+                        return .binder
                     }
                 } else {
                     mediaVolumeBinderVerified = false
                 }
             }
-            // keyevent 的静音键是 toggle：调用方刚把目标状态算成当前状态的反面，正好对上。
-            shell("input keyevent KEYCODE_VOLUME_MUTE")
-            return false
+            return try applyMediaVolumeByKeyEvent(target)
+        }
+    }
+
+    /// 设置/解除媒体流静音。toggle 回退只在可信读数与目标不同时执行一次。
+    @discardableResult
+    package func setMediaMuted(_ muted: Bool) throws -> MediaControlChannel {
+        return try transaction {
+            var current: Bool?
+            if mediaVolumeBinderVerified != false {
+                let direction = muted ? Self.adjustMute : Self.adjustUnmute
+                if let output = try? checkedShell("service call audio \(AudioServiceTxn.adjustStreamVolume) i32 \(Self.streamMusic) i32 \(direction) i32 0 s16 \(Self.binderShellPackage)", target: serial),
+                   Self.serviceCallSucceeded(output) {
+                    if mediaVolumeBinderVerified == nil {
+                        current = mediaMuted()
+                        guard let current else {
+                            // 写入可能已经生效；未知状态下再 toggle 会撤销目标操作。
+                            throw PresetError("静音命令已执行，但无法读回确认结果")
+                        }
+                        let applied = current == muted
+                        mediaVolumeBinderVerified = applied
+                        if applied { return .binder }
+                    } else {
+                        return .binder
+                    }
+                } else {
+                    mediaVolumeBinderVerified = false
+                }
+            }
+            try checkCancellation()
+            guard let current = current ?? mediaMuted() else {
+                throw PresetError("无法读取当前静音状态，未执行静音切换")
+            }
+            guard current != muted else { return .alreadyAtTarget }
+            try checkedShell("input keyevent KEYCODE_VOLUME_MUTE", target: serial)
+            return .keyevent
         }
     }
 
     /// binder 不可用时的退路：先读当前值，再用 `input keyevent` 逐级补齐差值。
-    private func applyMediaVolumeByKeyEvent(_ target: Int) {
-        guard let current = mediaVolume() else { return }
+    private func applyMediaVolumeByKeyEvent(_ target: Int) throws -> MediaControlChannel {
+        try checkCancellation()
+        guard let current = mediaVolume() else {
+            throw PresetError("无法读取当前音量，未执行音量按键回退")
+        }
         let delta = target - current
-        guard delta != 0 else { return }
+        guard delta != 0 else { return .alreadyAtTarget }
         let key = delta > 0 ? "KEYCODE_VOLUME_UP" : "KEYCODE_VOLUME_DOWN"
         let batch = Array(repeating: key, count: min(abs(delta), 100)).joined(separator: " ")
-        shell("input keyevent \(batch)")
+        try checkedShell("input keyevent \(batch)", target: serial)
+        return .keyevent
     }
 
     /// `service call` 是否执行成功（没有 binder 异常）。抽出来方便单测。

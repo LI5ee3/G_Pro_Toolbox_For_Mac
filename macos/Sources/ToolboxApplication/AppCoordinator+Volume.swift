@@ -17,8 +17,10 @@ extension AppCoordinator {
         set { volume.dashboardVolumeError = newValue }
     }
     internal func resetMediaVolumeSession() {
+        mediaMuteIntent += 1
         mediaVolumeCommit?.cancel(); mediaVolumeCommit = nil
         mediaVolumeCommitInFlight = false
+        mediaVolumePending = false
         mediaVolumePreview = nil; mediaVolumeHardware = nil; mediaVolumeMuted = nil
         mediaVolumeNeedsUnmute = false; mediaVolumeFallbackLogged = false
         dashboardVolume = nil; dashboardMuted = nil
@@ -42,14 +44,17 @@ extension AppCoordinator {
     /// 连按/待下发期间跳过，避免把预览基准带偏。
     package func refreshMediaVolumeState() {
         guard isConnected else { return }
+        guard !mediaVolumePending, !mediaVolumeCommitInFlight else { return }
         guard mediaVolumePreview == nil || mediaVolumePreview == mediaVolumeHardware else { return }
         let request = connectionIntent.generation, target = adb.ip
+        let intent = mediaMuteIntent
         runBackground {
             guard !self.adb.operationCancelled else { return }
             let volume = self.adb.mediaVolume()
             let muted = self.adb.mediaMuted()
             self.publish {
-                guard self.mediaSessionIsCurrent(request, target: target) else { return }
+                guard self.mediaSessionIsCurrent(request, target: target),
+                      self.mediaMuteIntent == intent else { return }
                 if let volume {
                     self.mediaVolumePreview = volume
                     self.mediaVolumeHardware = volume
@@ -78,8 +83,11 @@ extension AppCoordinator {
         }
 
         // 静音时按音量键先解除静音（和 macOS/Android 原生行为一致）
+        mediaMuteIntent += 1
         if mediaVolumeMuted == true { mediaVolumeNeedsUnmute = true }
         mediaVolumePreview = next
+        mediaVolumePending = true
+        dashboardVolumeError = nil
         mediaVolumeMuted = false
         dashboardVolume = next
         dashboardMuted = false
@@ -116,24 +124,59 @@ extension AppCoordinator {
 
     /// 把当前预览值绝对写到设备。目标值和已下发值相同时跳过，避免空跑一次。
     internal func commitMediaVolume() {
-        guard isConnected, let value = mediaVolumePreview else { return }
+        guard isConnected, !mediaVolumeCommitInFlight, mediaVolumePending,
+              let value = mediaVolumePreview else { return }
+        mediaVolumePending = false
         let unmute = mediaVolumeNeedsUnmute
         guard mediaVolumeHardware != value || unmute else { return }
         mediaVolumeNeedsUnmute = false
         mediaVolumeCommitInFlight = true
         let request = connectionIntent.generation, target = adb.ip
-        runBackground {
-            guard !self.adb.operationCancelled else { return }
-            let usedBinder = self.adb.setMediaVolume(value, unmuteFirst: unmute)
+        let cancellation = adb.session().cancellation
+        runBackground(onCancel: {
+            guard self.mediaSessionIsCurrent(request, target: target),
+                  self.adb.session().cancellation === cancellation else { return }
+            self.failMediaVolumeCommit("音量提交已取消", restoreUnmute: unmute)
+        }) {
+            let result = Result { try self.adb.setMediaVolume(value, unmuteFirst: unmute) }
             self.publish {
                 guard self.mediaSessionIsCurrent(request, target: target) else { return }
                 self.mediaVolumeCommitInFlight = false
-                self.mediaVolumeHardware = value
-                if !usedBinder, !self.mediaVolumeFallbackLogged {
-                    self.mediaVolumeFallbackLogged = true
-                    self.log("音量键: AudioService binder 不可用，已回退 input keyevent")
+                switch result {
+                case .success(let channel):
+                    self.mediaVolumeHardware = value
+                    self.dashboardVolumeError = nil
+                    self.logMediaFallback(channel, control: "音量")
+                case .failure(let error):
+                    self.failMediaVolumeCommit(error.localizedDescription, restoreUnmute: unmute)
                 }
             }
+        }
+    }
+
+    private func failMediaVolumeCommit(_ detail: String, restoreUnmute: Bool) {
+        mediaVolumeCommitInFlight = false
+        if restoreUnmute, mediaVolumeMuted != true { mediaVolumeNeedsUnmute = true }
+        // 失败命令也可能部分生效，旧缓存不再用于跳过下一次真实输入。
+        mediaVolumeHardware = nil
+        if !mediaVolumePending {
+            mediaVolumeCommit?.cancel(); mediaVolumeCommit = nil
+            mediaVolumePreview = nil
+        }
+        reportMediaControlFailure(detail)
+    }
+
+    private func reportMediaControlFailure(_ detail: String) {
+        dashboardVolumeError = detail
+        mediaVolumeMuted = nil; dashboardMuted = nil
+        log("音量/静音操作失败：\(detail)")
+        refreshMediaVolumeState()
+    }
+
+    private func logMediaFallback(_ channel: AdbClient.MediaControlChannel, control: String) {
+        if channel == .keyevent, !mediaVolumeFallbackLogged {
+            mediaVolumeFallbackLogged = true
+            log("\(control): AudioService binder 不可用，input keyevent 已执行成功")
         }
     }
 
@@ -144,12 +187,19 @@ extension AppCoordinator {
             applyMediaMute(!known)
         } else {
             // 状态未知（刚连接/被外部改过）：先回读再切换
+            mediaMuteIntent += 1
+            let intent = mediaMuteIntent
             let request = connectionIntent.generation, target = adb.ip
             runBackground {
                 guard !self.adb.operationCancelled else { return }
-                let current = self.adb.mediaMuted() ?? false
+                let current = self.adb.mediaMuted()
                 self.publish {
-                    guard self.mediaSessionIsCurrent(request, target: target) else { return }
+                    guard self.mediaSessionIsCurrent(request, target: target),
+                          self.mediaMuteIntent == intent else { return }
+                    guard let current else {
+                        self.reportMediaControlFailure("无法读取显示器静音状态，未执行切换")
+                        return
+                    }
                     self.applyMediaMute(!current)
                 }
             }
@@ -157,6 +207,8 @@ extension AppCoordinator {
     }
 
     internal func applyMediaMute(_ muted: Bool, writeToDevice: Bool = true) {
+        if writeToDevice { mediaMuteIntent += 1 }
+        dashboardVolumeError = nil
         mediaVolumeMuted = muted
         dashboardMuted = muted
         // 更新的静音动作覆盖掉「按键先解除静音」的意图，避免收尾提交把它又打开
@@ -167,15 +219,18 @@ extension AppCoordinator {
             environment.feedback.show(title: "静音", value: muted ? "开" : "关")
         }
         guard writeToDevice else { return }
+        let intent = mediaMuteIntent
         let request = connectionIntent.generation, target = adb.ip
         runBackground {
             guard !self.adb.operationCancelled else { return }
-            let usedBinder = self.adb.setMediaMuted(muted)
+            let result = Result { try self.adb.setMediaMuted(muted) }
             self.publish {
-                guard self.mediaSessionIsCurrent(request, target: target) else { return }
-                if !usedBinder, !self.mediaVolumeFallbackLogged {
-                    self.mediaVolumeFallbackLogged = true
-                    self.log("静音键: AudioService binder 不可用，已回退 input keyevent")
+                guard self.mediaSessionIsCurrent(request, target: target),
+                      self.mediaMuteIntent == intent else { return }
+                switch result {
+                case .success(let channel):
+                    self.logMediaFallback(channel, control: "静音")
+                case .failure(let error): self.reportMediaControlFailure(error.localizedDescription)
                 }
             }
         }
@@ -187,6 +242,7 @@ extension AppCoordinator {
 
     package func setDashboardVolume(_ value: Int) {
         guard isConnected else { return }
+        mediaMuteIntent += 1
         let value = clamp(value, 0, 100)
         if mediaVolumeMuted == true { mediaVolumeNeedsUnmute = true }
         dashboardVolumeError = nil
@@ -194,6 +250,7 @@ extension AppCoordinator {
         dashboardMuted = false
         dashboardVolume = value
         mediaVolumePreview = value
+        mediaVolumePending = true
         currentValues["volume_music_speaker"] = String(value)
         if !mediaVolumeCommitInFlight, mediaVolumeCommit == nil { commitMediaVolume() }
         scheduleMediaVolumeTrailing()
@@ -201,29 +258,36 @@ extension AppCoordinator {
 
     package func toggleDashboardMute() {
         guard isConnected else { return }
+        mediaMuteIntent += 1
+        let intent = mediaMuteIntent
         let request = connectionIntent.generation
         let target = adb.ip
         dashboardVolumeError = nil
+        if let known = mediaVolumeMuted {
+            mediaVolumeMuted = !known; dashboardMuted = !known
+            mediaVolumeNeedsUnmute = false
+        }
         runBackground {
             guard !self.adb.operationCancelled else { return }
             // Keep the read and mutation together: two rapid clicks must toggle twice.
-            let result: (muted: Bool, usedBinder: Bool)? = self.adb.transaction {
-                guard let current = self.adb.mediaMuted() else { return nil }
-                guard !self.adb.operationCancelled else { return nil }
-                let next = !current
-                return (next, self.adb.setMediaMuted(next))
+            let result = Result {
+                try self.adb.transaction {
+                    guard let current = self.adb.mediaMuted() else {
+                        throw PresetError("无法读取显示器静音状态，未执行切换")
+                    }
+                    try self.adb.checkCancellation()
+                    let next = !current
+                    return (muted: next, channel: try self.adb.setMediaMuted(next))
+                }
             }
             self.publish {
                 guard self.isConnected, self.connectionIntent.isCurrent(request),
-                      self.adb.ip == target else { return }
-                guard let result else {
-                    self.dashboardVolumeError = "无法读取显示器静音状态，请刷新连接后重试。"
-                    return
-                }
-                self.applyMediaMute(result.muted, writeToDevice: false)
-                if !result.usedBinder, !self.mediaVolumeFallbackLogged {
-                    self.mediaVolumeFallbackLogged = true
-                    self.log("静音控制: AudioService binder 不可用，已回退 input keyevent")
+                      self.adb.ip == target, self.mediaMuteIntent == intent else { return }
+                switch result {
+                case .success(let applied):
+                    self.applyMediaMute(applied.muted, writeToDevice: false)
+                    self.logMediaFallback(applied.channel, control: "静音控制")
+                case .failure(let error): self.reportMediaControlFailure(error.localizedDescription)
                 }
             }
         }

@@ -41,7 +41,7 @@ final class AdbSessionTests: XCTestCase {
         let adb = client { _ in XCTFail("empty -s executed"); return ProcessResult(output: "", exitCode: 0) }
         XCTAssertEqual(adb.shell("input keyevent KEYCODE_POWER"), "未连接显示器")
     }
-    func testBinderCapabilityIsSeparateForEachDisplay() {
+    func testBinderCapabilityIsSeparateForEachDisplay() throws {
         var calls: [String] = []
         let adb = client { request in
             calls.append(request.arguments.joined(separator: " "))
@@ -49,8 +49,8 @@ final class AdbSessionTests: XCTestCase {
             if request.arguments.last?.contains("audio 22") == true { return ProcessResult(output: "Result: Parcel(00000000 0000000c)", exitCode: 0) }
             return ProcessResult(output: "Result: Parcel(00000000)", exitCode: 0)
         }
-        adb.ip = "192.0.2.1"; XCTAssertFalse(adb.setMediaVolume(12))
-        adb.ip = "192.0.2.2"; XCTAssertTrue(adb.setMediaVolume(12))
+        adb.ip = "192.0.2.1"; XCTAssertThrowsError(try adb.setMediaVolume(12))
+        adb.ip = "192.0.2.2"; XCTAssertEqual(try adb.setMediaVolume(12), .binder)
         XCTAssertTrue(calls.contains { $0.contains("192.0.2.2:5555 shell service call audio 12") })
     }
     func testTimedOutPartialOutputCannotProveTransportOrPassCheckedShell() {
