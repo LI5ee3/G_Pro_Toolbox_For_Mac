@@ -23,28 +23,51 @@ enum Theme {
             appearance.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua ? dark : light
         })
     }
-    static let canvas = adaptive(NSColor(srgbRed: 0.967, green: 0.976, blue: 0.989, alpha: 1),
-                                 NSColor(srgbRed: 0.075, green: 0.087, blue: 0.12, alpha: 1))
-    static let card = adaptive(.white, NSColor(srgbRed: 0.115, green: 0.13, blue: 0.17, alpha: 1))
-    static let control = adaptive(NSColor(srgbRed: 0.934, green: 0.948, blue: 0.975, alpha: 1),
-                                  NSColor(srgbRed: 0.17, green: 0.19, blue: 0.25, alpha: 1))
-    static let stroke = adaptive(NSColor(srgbRed: 0.84, green: 0.88, blue: 0.94, alpha: 1),
-                                 NSColor(srgbRed: 0.25, green: 0.29, blue: 0.37, alpha: 1))
-    static let secondaryText = adaptive(NSColor(srgbRed: 0.32, green: 0.38, blue: 0.48, alpha: 1),
-                                       NSColor(srgbRed: 0.7, green: 0.76, blue: 0.86, alpha: 1))
+    static let canvas = adaptive(NSColor(white: 0.96, alpha: 1), NSColor(white: 0.10, alpha: 1))
+    static let card = adaptive(.white, NSColor(white: 0.14, alpha: 1))
+    static let control = adaptive(NSColor(white: 0.94, alpha: 1), NSColor(white: 0.21, alpha: 1))
+    static let stroke = adaptive(NSColor(white: 0.78, alpha: 1), NSColor(white: 0.36, alpha: 1))
+    static let secondaryText = adaptive(NSColor(white: 0.38, alpha: 1), NSColor(white: 0.76, alpha: 1))
+    static let sectionFont = Font.system(size: 14, weight: .semibold)
+    static let controlRadius: CGFloat = 8
+    static let sectionRadius: CGFloat = 12
+}
+
+// The SDK accessibility environment values are read-only. This package-only hook lets
+// the safe Preview exercise the same rendering branches without changing system settings.
+// Live hosts leave all overrides false and continue to use the system values.
+package struct ToolboxPreviewAccessibility {
+    package var reduceTransparency = false
+    package var reduceMotion = false
+    package var increasedContrast = false
+    package init() {}
+}
+
+private struct ToolboxPreviewAccessibilityKey: EnvironmentKey {
+    static let defaultValue = ToolboxPreviewAccessibility()
+}
+
+extension EnvironmentValues {
+    package var toolboxPreviewAccessibility: ToolboxPreviewAccessibility {
+        get { self[ToolboxPreviewAccessibilityKey.self] }
+        set { self[ToolboxPreviewAccessibilityKey.self] = newValue }
+    }
 }
 
 /// Liquid Glass is reserved for floating navigation and control surfaces.
 /// Text-heavy parameter groups retain opaque backgrounds.
 private struct ToolboxGlassSurface: ViewModifier {
     @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
+    @Environment(\.colorSchemeContrast) private var contrast
+    @Environment(\.toolboxPreviewAccessibility) private var preview
     let cornerRadius: CGFloat
     func body(content: Content) -> some View {
-        if !reduceTransparency {
+        if !reduceTransparency && !preview.reduceTransparency && contrast != .increased && !preview.increasedContrast {
             content.glassEffect(.regular, in: .rect(cornerRadius: cornerRadius))
         } else {
             content.background(Theme.card, in: RoundedRectangle(cornerRadius: cornerRadius))
-                .overlay(RoundedRectangle(cornerRadius: cornerRadius).stroke(Theme.stroke.opacity(0.7)))
+                .overlay(RoundedRectangle(cornerRadius: cornerRadius)
+                    .stroke(contrast == .increased || preview.increasedContrast ? Color.primary.opacity(0.55) : Theme.stroke))
         }
     }
 }
@@ -52,27 +75,29 @@ private struct ToolboxGlassSurface: ViewModifier {
 struct ToolboxActionStyle: ButtonStyle {
     @Environment(\.isEnabled) private var isEnabled
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.colorSchemeContrast) private var contrast
+    @Environment(\.toolboxPreviewAccessibility) private var preview
     func makeBody(configuration: Configuration) -> some View {
+        let reducedMotion = reduceMotion || preview.reduceMotion
+        let increasedContrast = contrast == .increased || preview.increasedContrast
         configuration.label
             .font(.system(size: 13, weight: .medium))
             .padding(.horizontal, 12).padding(.vertical, 7)
             .background(configuration.isPressed ? Theme.control : Theme.card,
-                        in: RoundedRectangle(cornerRadius: 8))
-            .overlay(RoundedRectangle(cornerRadius: 8).stroke(Theme.stroke.opacity(0.8)))
-            .opacity(isEnabled ? 1 : 0.45)
-            .scaleEffect(configuration.isPressed && !reduceMotion ? 0.98 : 1)
-            .animation(reduceMotion ? nil : .easeOut(duration: 0.14), value: configuration.isPressed)
+                        in: RoundedRectangle(cornerRadius: Theme.controlRadius))
+            .overlay(RoundedRectangle(cornerRadius: Theme.controlRadius)
+                .stroke(increasedContrast ? Color.primary.opacity(0.55) : Theme.stroke))
+            .opacity(isEnabled ? 1 : increasedContrast ? 0.7 : 0.5)
+            .scaleEffect(configuration.isPressed && !reducedMotion ? 0.98 : 1)
+            .animation(reducedMotion ? nil : .easeOut(duration: 0.14), value: configuration.isPressed)
     }
 }
 
 private struct ToolboxActionModifier: ViewModifier {
-    @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
     let prominent: Bool
     @ViewBuilder func body(content: Content) -> some View {
         if prominent {
-            if !reduceTransparency {
-                content.controlSize(.large).buttonStyle(.glassProminent)
-            } else { content.controlSize(.large).buttonStyle(.borderedProminent) }
+            content.controlSize(.large).buttonStyle(.borderedProminent).tint(Theme.accent)
         } else { content.buttonStyle(ToolboxActionStyle()) }
     }
 }
@@ -96,11 +121,13 @@ struct ToolboxGlassGroup<Content: View>: View {
 /// A small, interruptible response shared by the screen controls and navigation.
 struct ControlPressStyle: ButtonStyle {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.toolboxPreviewAccessibility) private var preview
     func makeBody(configuration: Configuration) -> some View {
+        let reducedMotion = reduceMotion || preview.reduceMotion
         configuration.label
             .opacity(configuration.isPressed ? 0.76 : 1)
-            .scaleEffect(configuration.isPressed && !reduceMotion ? 0.98 : 1)
-            .animation(reduceMotion ? nil : .easeOut(duration: 0.16), value: configuration.isPressed)
+            .scaleEffect(configuration.isPressed && !reducedMotion ? 0.98 : 1)
+            .animation(reducedMotion ? nil : .easeOut(duration: 0.16), value: configuration.isPressed)
     }
 }
 
@@ -141,38 +168,55 @@ extension View {
 // MARK: - 卡片容器
 
 struct SectionCard<Content: View>: View {
+    @Environment(\.colorSchemeContrast) private var contrast
+    @Environment(\.toolboxPreviewAccessibility) private var preview
     let title: String
     @ViewBuilder let content: Content
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text(title).font(.system(size: 15, weight: .semibold))
+            Text(title).font(Theme.sectionFont)
             content
         }
-        .padding(18)
+        .padding(16)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(Theme.card, in: RoundedRectangle(cornerRadius: 16))
-        .overlay(RoundedRectangle(cornerRadius: 16).stroke(Theme.stroke.opacity(0.65), lineWidth: 1))
+        .background(Theme.card, in: RoundedRectangle(cornerRadius: Theme.sectionRadius))
+        .overlay(RoundedRectangle(cornerRadius: Theme.sectionRadius)
+            .stroke(contrast == .increased || preview.increasedContrast ? Color.primary.opacity(0.55) : Theme.stroke))
     }
 }
 
 // MARK: - 可选中按钮（对应 ToggleButton）
 
 struct SelectableButton: View {
+    @Environment(\.isEnabled) private var isEnabled
+    @Environment(\.colorSchemeContrast) private var contrast
+    @Environment(\.toolboxPreviewAccessibility) private var preview
     let title: String
     let isSelected: Bool
     let action: () -> Void
 
     var body: some View {
+        let increasedContrast = contrast == .increased || preview.increasedContrast
         Button(action: action) {
-            Text(title)
-                .font(.callout)
+            HStack(spacing: 6) {
+                Image(systemName: "checkmark")
+                    .font(.system(size: 10, weight: .bold))
+                    .opacity(isSelected ? 1 : 0)
+                    .accessibilityHidden(true)
+                Text(title)
+            }
+                .font(.system(size: 13, weight: isSelected ? .semibold : .regular))
                 .frame(minWidth: 56)
-                .padding(.horizontal, 14)
-                .padding(.vertical, 6)
-                .background(isSelected ? Color.accentColor : Theme.control)
-                .foregroundColor(isSelected ? Theme.onAccent : .primary)
-                .clipShape(RoundedRectangle(cornerRadius: 8))
+                .padding(.horizontal, 12)
+                .padding(.vertical, 7)
+                .foregroundStyle(.primary)
+                .background(isSelected ? Theme.accent.opacity(0.12) : Theme.control)
+                .background(Theme.card)
+                .clipShape(RoundedRectangle(cornerRadius: Theme.controlRadius))
+                .overlay(RoundedRectangle(cornerRadius: Theme.controlRadius)
+                    .stroke(increasedContrast ? Color.primary.opacity(0.65) : isSelected ? Theme.accent : Theme.stroke))
+                .opacity(isEnabled ? 1 : increasedContrast ? 0.7 : 0.5)
         }
         .buttonStyle(ControlPressStyle())
         .accessibilityAddTraits(isSelected ? .isSelected : [])
@@ -189,7 +233,7 @@ struct ButtonGroupSection: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text(title).font(.system(size: 14, weight: .semibold))
+            Text(title).font(Theme.sectionFont)
             HStack(spacing: 8) {
                 ForEach(options) { opt in
                     SelectableButton(title: opt.label,
@@ -280,6 +324,8 @@ struct FastSlider: View {
 // MARK: - 滑条行（对应 _add_slider，松手提交）
 
 struct SliderRow: View {
+    @Environment(\.colorSchemeContrast) private var contrast
+    @Environment(\.toolboxPreviewAccessibility) private var preview
     let title: String
     let range: ClosedRange<Double>
     let externalValue: Int
@@ -300,23 +346,25 @@ struct SliderRow: View {
 
     var body: some View {
         HStack(spacing: 12) {
-            Text(title).frame(width: 96, alignment: .leading)
+            Text(title).font(.system(size: 13, weight: .medium))
+                .frame(width: 96, alignment: .leading)
             FastSlider(value: $value, range: range, step: 1) { v in
                 onCommit(Int(v))
             }
             .accessibilityLabel(title)
             Text("\(Int(value))")
+                .font(.system(size: 13, weight: .semibold))
                 .monospacedDigit()
                 .frame(width: 44, alignment: .trailing)
-                .foregroundColor(.secondary)
+                .foregroundColor(.primary)
         }
-        // 和按钮组一样套一层卡片：原版每个滑条也是独立的 SimpleCardWidget
-        // （pages.py:_add_slider）。这样滑条标签才能和「画面模式」「色温」的
-        // 标题左边对齐，视觉上落在同一条竖线上。
+        // Keep the existing row alignment and FastSlider submission behavior.
         .padding(.horizontal, 16)
         .padding(.vertical, 12)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(Theme.card.opacity(0.65), in: RoundedRectangle(cornerRadius: 12))
+        .background(Theme.card, in: RoundedRectangle(cornerRadius: Theme.sectionRadius))
+        .overlay(RoundedRectangle(cornerRadius: Theme.sectionRadius)
+            .stroke(contrast == .increased || preview.increasedContrast ? Color.primary.opacity(0.55) : Theme.stroke))
         .onChange(of: externalValue) { _, newValue in
             value = Double(newValue)
         }
@@ -331,7 +379,7 @@ struct PageHeader: View {
 
     var body: some View {
         HStack {
-            Text(title).font(.system(size: 23, weight: .semibold))
+            Text(title).font(.system(size: 22, weight: .semibold))
             Spacer()
             Button(action: onRefresh) {
                 Label("刷新", systemImage: "arrow.clockwise")

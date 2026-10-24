@@ -17,9 +17,10 @@ struct MenuBarPanel: View {
         VStack(alignment: .leading, spacing: 0) {
             // 状态行
             HStack(spacing: 8) {
-                Circle()
-                    .fill(connection.statusColor)
-                    .frame(width: 8, height: 8)
+                Image(systemName: connection.statusSymbol)
+                    .foregroundStyle(connection.statusColor)
+                    .frame(width: 12)
+                    .accessibilityHidden(true)
                 Text(connection.statusText)
                     .font(.system(size: 14, weight: .medium))
                     .lineLimit(1)

@@ -5,8 +5,21 @@ import ToolboxApplication
 extension ConnectionModel {
     var statusColor: Color {
         switch connectionStatus {
-        case .disconnected, .connecting, .scanning, .awaitingAuthorization, .offline, .failed: return Theme.warning
+        case .disconnected, .connecting, .scanning: return Theme.secondaryText
+        case .awaitingAuthorization, .offline, .failed: return Theme.warning
         case .connected: return Theme.success
+        }
+    }
+
+    var statusSymbol: String {
+        switch connectionStatus {
+        case .disconnected: return "cable.connector.slash"
+        case .connecting: return "arrow.triangle.2.circlepath"
+        case .scanning: return "magnifyingglass"
+        case .awaitingAuthorization: return "person.badge.key"
+        case .offline: return "network.slash"
+        case .failed: return "exclamationmark.triangle.fill"
+        case .connected: return "checkmark.circle.fill"
         }
     }
 }
