@@ -254,12 +254,15 @@ struct ToolsView: View {
                 Button("重新检测") { state.check4KState() }
                     .toolboxAction()
             }
-            Text("当前：\(tools.is4KUI ? "4K · 3840×2160 / DPI 640" : "1080p · 1920×1080 / DPI 320")")
+            Text(tools.fourKReadFailure == nil
+                 ? "当前：\(tools.is4KUI ? "4K · 3840×2160 / DPI 640" : "1080p · 1920×1080 / DPI 320")"
+                 : "当前：未知（读取失败，请重新检测）")
                 .foregroundStyle(Theme.secondaryText)
             Toggle("启用 4K UI", isOn: Binding(
                 get: { tools.is4KUI },
                 set: { pending4K = $0; show4KConfirm = true }
             ))
+            .disabled(tools.fourKReadFailure != nil)
             Text("仅改变显示器内置系统界面的分辨率。切换前会再次确认，确认后显示器将重启。")
                 .font(.system(size: 13)).foregroundStyle(Theme.secondaryText)
         }

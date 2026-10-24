@@ -23,14 +23,16 @@ internal struct GuardianStatus {
     package let adbd: String
     package let mask: String
     package let stopped: Bool
+    package let readFailure: String?
 
     package var ok: Bool {
-        installed && !pid.isEmpty && adbEnabled && adbWifiEnabled
+        readFailure == nil && installed && !pid.isEmpty && adbEnabled && adbWifiEnabled
             && servicePort == "5555" && persistPort == "5555"
             && adbd == "running" && accessibility && mask == "-134250497" && !stopped
     }
 
     package var summary: String {
+        if readFailure != nil { return "状态：未知（保活读取失败）" }
         if ok { return "状态：✅ 正常（已安装 · 保活运行中 · 端口 5555 · 无障碍已授权）" }
         var parts: [String] = []
         if !installed { parts.append("未安装") }

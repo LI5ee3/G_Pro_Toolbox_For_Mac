@@ -285,6 +285,58 @@ final class ControlRoutingTests: XCTestCase {
             s.stop()
         }
     }
+    func test4KReadFailureStaysUnknownAndSuccessfulReadRecovers() async {
+        for endpoint in RoutingFixture.endpoints {
+            for command in ["wm size", "wm density"] {
+                for failure in [ProcessResult(output: "error: closed", exitCode: 1),
+                                ProcessResult(output: "error: device offline", exitCode: 0),
+                                ProcessResult(output: "", exitCode: 0),
+                                ProcessResult(output: "Override size: invalid\nOverride density: invalid", exitCode: 0),
+                                ProcessResult(standardOutput: "Override size: 3840x2160", exitCode: -1, outcome: .timedOut),
+                                ProcessResult(standardOutput: "Override density: 640", exitCode: 0, outcome: .exited, outputTruncated: true)] {
+                    var shouldFail = true
+                    var hasOverride = true
+                    let f = RoutingFixture(endpoint) { request in
+                        let shell = request.arguments.last!
+                        if shouldFail && shell == command { return failure }
+                        if shell == "wm size" {
+                            return ProcessResult(output: "Physical size: 1920x1080" + (hasOverride ? "\nOverride size: 3840x2160" : ""), exitCode: 0)
+                        }
+                        if shell == "wm density" {
+                            return ProcessResult(output: "Physical density: 320" + (hasOverride ? "\nOverride density: 640" : ""), exitCode: 0)
+                        }
+                        return nil
+                    }
+                    let s = f.state
+                    s.check4KState(); await s.waitForPendingWork()
+                    XCTAssertNotNil(s.tools.fourKReadFailure)
+                    XCTAssertFalse(s.logLines.contains { $0.contains("4K UI 检测:") })
+
+                    shouldFail = false
+                    s.check4KState(); await s.waitForPendingWork()
+                    XCTAssertTrue(s.is4KUI)
+                    XCTAssertNil(s.tools.fourKReadFailure)
+
+                    shouldFail = true
+                    let logCount = s.logLines.count
+                    s.check4KState(); await s.waitForPendingWork()
+                    XCTAssertTrue(s.is4KUI) // A failed read must not overwrite the last successful value.
+                    XCTAssertNotNil(s.tools.fourKReadFailure)
+                    XCTAssertTrue(s.logLines.dropFirst(logCount).contains { $0.contains("4K UI 读取失败") })
+                    XCTAssertFalse(s.logLines.dropFirst(logCount).contains { $0.contains("4K UI 检测:") })
+
+                    shouldFail = false; hasOverride = false
+                    f.clear()
+                    s.check4KState(); await s.waitForPendingWork()
+                    XCTAssertFalse(s.is4KUI)
+                    XCTAssertNil(s.tools.fourKReadFailure)
+                    assertShells(f, endpoint, ["wm size", "wm density"])
+                    s.stop()
+                }
+            }
+        }
+    }
+
     private var guardianStart: [String] {
         ["settings get secure enabled_accessibility_services",
          "settings put secure enabled_accessibility_services '0:\(Guardian.accessibility)'",
@@ -293,8 +345,8 @@ final class ControlRoutingTests: XCTestCase {
          "am broadcast -a \(Guardian.package).ACTION_KEEP_ALIVE -p \(Guardian.package) >/dev/null"]
     }
     private var guardianReads: [String] {
-        ["settings get secure enabled_accessibility_services 2>/dev/null", "pm path \(Guardian.package) 2>/dev/null",
-         "pidof \(Guardian.package) 2>/dev/null", "getprop persist.appcontrol_w_mask 2>/dev/null",
+        ["settings get secure enabled_accessibility_services 2>/dev/null", "pm path \(Guardian.package) 2>/dev/null || true",
+         "pidof \(Guardian.package) 2>/dev/null || true", "getprop persist.appcontrol_w_mask 2>/dev/null",
          "settings get global adb_enabled 2>/dev/null", "settings get global adb_wifi_enabled 2>/dev/null",
          "getprop service.adb.tcp.port 2>/dev/null", "getprop persist.adb.tcp.port 2>/dev/null",
          "getprop init.svc.adbd 2>/dev/null", "dumpsys package \(Guardian.package) 2>/dev/null | grep stopped=true | head -n 1"]

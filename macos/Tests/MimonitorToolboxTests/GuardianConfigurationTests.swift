@@ -92,4 +92,28 @@ final class GuardianConfigurationTests: XCTestCase {
             }
         }
     }
+
+    func testGuardianTransportFailurePublishesUnknownInsteadOfDeviceFaults() async {
+        for failure in [ProcessResult(output: "error: closed", exitCode: 1),
+                        ProcessResult(output: "", exitCode: 1),
+                        ProcessResult(output: "error: device offline", exitCode: 0),
+                        ProcessResult(standardOutput: "package:/partial", exitCode: -1, outcome: .timedOut),
+                        ProcessResult(standardOutput: "package:/partial", exitCode: 0, outcome: .exited, outputTruncated: true)] {
+            let state = fixture { _ in failure }
+            state.checkGuardian(); await state.waitForPendingWork()
+            XCTAssertTrue(state.guardianStatus.contains("未知"), state.guardianStatus)
+            XCTAssertFalse(state.guardianStatus.contains("未安装"))
+            XCTAssertFalse(state.guardianStatus.contains("被停止"))
+            XCTAssertTrue(state.logLines.contains { $0.contains("读取失败") })
+            state.stop()
+        }
+    }
+
+    func testSuccessfulAbsentGuardianReadStillReportsDeviceState() async {
+        let state = fixture { _ in ProcessResult(output: "", exitCode: 0) }
+        state.checkGuardian(); await state.waitForPendingWork()
+        XCTAssertTrue(state.guardianStatus.contains("未安装"))
+        XCTAssertFalse(state.guardianStatus.contains("未知"))
+        state.stop()
+    }
 }
