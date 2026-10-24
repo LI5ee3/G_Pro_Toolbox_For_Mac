@@ -54,6 +54,6 @@ final class CoordinatorRegressionTests: XCTestCase {
         XCTAssertEqual(runtime.display.volume, 27)
         XCTAssertEqual(state.volume.dashboardVolume, 27)
         XCTAssertFalse(state.volume.dashboardMuted ?? true)
-        XCTAssertTrue(runtime.display.recordedCommands.contains { $0.contains("service call audio 12 i32 3 i32 27 i32 0 s16 com.android.shell") })
+        XCTAssertEqual(runtime.display.recordedCommands.filter { $0.contains("service call audio 12 i32 3 i32 27 i32 0 s16 com.android.shell") }.count, 1)
     }
 }

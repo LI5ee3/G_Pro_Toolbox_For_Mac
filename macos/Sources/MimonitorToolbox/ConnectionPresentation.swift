@@ -3,6 +3,40 @@ import SwiftUI
 import ToolboxApplication
 
 extension ConnectionModel {
+    var statusTitle: String {
+        switch connectionStatus {
+        case .disconnected: return "未连接"
+        case .connecting: return "连接中"
+        case .scanning: return "扫描中"
+        case .awaitingAuthorization: return "等待授权"
+        case .offline: return "设备离线"
+        case .failed: return "连接失败"
+        case .connected: return "已连接"
+        }
+    }
+
+    var deviceDisplayName: String {
+        guard case .connected(let detail) = connectionStatus else { return "Redmi G Pro" }
+        let name = detail.components(separatedBy: " · ").first ?? "Redmi G Pro"
+        return name == "USB" || name.hasPrefix("MiTV") || name == ipInput ? "Redmi G Pro" : name
+    }
+
+    var activeControlText: String {
+        guard let endpoint = activeEndpoint else { return "无活动 ADB 控制通道" }
+        return "\(endpoint.isUSB ? "USB" : "TCP") · \(endpoint.serial)"
+    }
+
+    var recoveryText: String {
+        intent.allowsAutomaticRecovery ? "同传输自动恢复已启用" : "自动恢复已暂停；明确连接后恢复"
+    }
+
+    var connectionInProgress: Bool {
+        switch connectionStatus {
+        case .connecting, .scanning: return true
+        default: return false
+        }
+    }
+
     var statusColor: Color {
         switch connectionStatus {
         case .disconnected, .connecting, .scanning: return Theme.secondaryText
