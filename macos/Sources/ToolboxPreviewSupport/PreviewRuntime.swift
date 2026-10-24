@@ -84,6 +84,8 @@ package final class PreviewDisplay: PresetDevice {
         "picture_blue_gain": "1024", "picture_local_dimming": "3", "picture_dynamic_definition": "0",
         "picture_response_time": "2", "tv_picture_advanced_video_color_space": "6", "freesync": "0", "mode_320": "0",
         "mitv.tvplayer.hdmi.last.source": "29", "front_sight_index": "0", "game_mode": "0",
+        "mt_game_dynamic_ft": "0", "mt_game_scope": "0", "mt_game_scope_night": "0",
+        "monitor_menu_fps_counter": "0", "monitor_menu_stopwatch": "0", "monitor_menu_timer": "0",
         "atmosphere_light_switcher_pm2": "4", "atmosphere_light_illumination": "9",
         "atmosphere_light_color_temp": "1", "atmosphere_light_color_value": "0"
     ]
@@ -189,6 +191,7 @@ package final class PreviewRuntime {
         case usbConnected = "USB 已连接", usbUnauthorized = "USB 待授权", usbOffline = "USB 离线"
         case multipleDevices = "多台候选", dualTransport = "USB 与 TCP 同时在线"
         case connecting = "连接中", connectionFailure = "连接失败"
+        case hdrCustom = "HDR 与 RGB"
     }
     package let preferences = MemoryPreferences()
     package let scheduler = ManualScheduler()
@@ -272,6 +275,11 @@ package final class PreviewRuntime {
         state.ipInput = display.identity
         display.failWrites = scenario == .failure
         display.unknownReadings = scenario == .unknown
+        if scenario == .hdrCustom {
+            display.values["picture_mode"] = "11"
+            display.values["picture_color_temperature"] = "3"
+            display.values["settings_display_hdr_color_tone"] = "0"
+        }
         let usbSerial = "000PreviewUSB"
         let usbState = scenario == .usbUnauthorized ? "unauthorized" : scenario == .usbOffline ? "offline" : "device"
         var rows = "\(display.identity):5555 device model:MiTV_Preview transport_id:1"
@@ -340,8 +348,8 @@ package final class PreviewRuntime {
         if state.connection.isConnected {
             state.currentValues = (try? display.capture()) ?? [:]
             if scenario == .unknown {
-                state.currentValues["mode_320"] = "-1"
-                state.currentValues["freesync"] = "-1"
+                // A connected channel can still have no parameter snapshot.
+                state.currentValues = [:]
             }
             state.loadedPages = AppCoordinator.refreshablePages
             state.seedSimulationReadings(volume: scenario == .unknown ? nil : 10, muted: scenario == .unknown ? nil : false)

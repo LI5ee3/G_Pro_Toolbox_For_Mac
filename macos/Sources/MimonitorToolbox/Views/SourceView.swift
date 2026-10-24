@@ -7,80 +7,46 @@ struct SourceView: View {
     @Environment(ConnectionModel.self) private var connection
     @Environment(PictureModel.self) private var picture
 
-    private var selectedSource: Int {
-        picture.intValue("mitv.tvplayer.hdmi.last.source", default: -1)
+    private var selectedSource: Int { picture.intValue("mitv.tvplayer.hdmi.last.source", default: -1) }
+    private var sourceName: String {
+        guard let option = OptionLists.source.first(where: { $0.value == selectedSource }) else { return "—" }
+        return option.label == "DP" ? "DisplayPort" : option.label
     }
 
     var body: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 28) {
+            VStack(alignment: .leading, spacing: 24) {
                 PageHeader(title: "信号源切换") { state.forceRefreshPage("source") }
 
-                MonitorHardwareView {
-                    VStack(spacing: 10) {
-                        Text("当前信号源")
-                            .font(.system(size: 12, weight: .medium))
-                            .foregroundStyle(Theme.secondaryText)
-                        Text(picture.activeSource)
-                            .font(.system(size: 32, weight: .semibold, design: .rounded))
-                            .foregroundStyle(Theme.accent)
-                            .lineLimit(1)
-                            .minimumScaleFactor(0.65)
-                        Label(connection.isConnected ? "已连接" : "未连接", systemImage: connection.isConnected ? "checkmark.circle.fill" : "circle")
-                            .font(.system(size: 11))
-                            .foregroundStyle(Theme.secondaryText)
-                    }
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-                    .background(Theme.control)
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("当前视频输入").font(Theme.sectionFont)
+                    Text(sourceName).font(.system(size: 24, weight: .semibold))
+                        .accessibilityLabel("当前视频输入：\(sourceName == "—" ? "未知" : sourceName)")
                 }
-                .frame(height: 290)
-                .frame(maxWidth: .infinity)
-                .accessibilityElement(children: .combine)
 
-                VStack(alignment: .leading, spacing: 14) {
-                    Text("选择信号源").font(.system(size: 15, weight: .semibold))
-                    LazyVGrid(columns: [GridItem(.adaptive(minimum: 130), spacing: 12)], spacing: 12) {
-                        ForEach(OptionLists.source) { opt in
-                            sourceButton(opt)
+                VStack(alignment: .leading, spacing: 12) {
+                    Text("选择视频输入").font(Theme.sectionFont)
+                    HStack(spacing: 8) {
+                        ForEach(OptionLists.source) { option in
+                            SelectableButton(title: option.label, isSelected: selectedSource == option.value) {
+                                state.setSource(option.value)
+                            }
+                            .accessibilityLabel("切换到 \(option.label)")
                         }
                     }
                 }
+
+                Divider()
+                VStack(alignment: .leading, spacing: 8) {
+                    LabeledContent("ADB 控制") { Text(connection.activeControlText).textSelection(.enabled) }
+                    Text("USB-C 属于视频输入；ADB 控制通道可独立选择。")
+                        .foregroundStyle(Theme.secondaryText)
+                }.font(.system(size: 13))
             }
-            .padding(28)
-            .frame(maxWidth: 1000)
-            .frame(maxWidth: .infinity)
+            .padding(24).frame(maxWidth: 970, alignment: .leading)
+            .frame(maxWidth: .infinity, alignment: .leading)
         }
         .onAppear { state.refreshPage("source") }
         .loadingOverlay(picture.loadingPages.contains("source"))
-    }
-
-    private func sourceButton(_ option: Option) -> some View {
-        let selected = selectedSource == option.value
-        return Button {
-            state.setSource(option.value)
-        } label: {
-            VStack(spacing: 12) {
-                HStack {
-                    Image(systemName: option.value == 30 ? "cable.connector" : "display")
-                        .font(.system(size: 21, weight: .regular))
-                    Spacer()
-                    Image(systemName: selected ? "checkmark.circle.fill" : "circle")
-                        .font(.system(size: 16))
-                        .opacity(selected ? 1 : 0.3)
-                }
-                Text(option.label)
-                    .font(.system(size: 15, weight: .medium))
-                    .frame(maxWidth: .infinity, alignment: .leading)
-            }
-            .foregroundColor(selected ? Theme.accent : .primary)
-            .padding(14)
-            .frame(maxWidth: .infinity)
-            .contentShape(RoundedRectangle(cornerRadius: 8))
-        }
-        .toolboxAction()
-        .overlay(RoundedRectangle(cornerRadius: 8).stroke(selected ? Theme.accent : .clear, lineWidth: 1.5))
-        .accessibilityLabel("切换到 \(option.label)")
-        .accessibilityValue(selected ? "已选择" : "未选择")
-        .help("切换到 \(option.label)")
     }
 }
