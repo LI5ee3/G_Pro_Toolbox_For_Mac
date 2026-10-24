@@ -342,27 +342,34 @@ package final class AdbClient {
     }
 
     /// 解析 `wm size` 的 Override size（移植自原版 _check_4k_state）。
-    /// 没有 Override 时返回 nil，表示用的是面板原生分辨率。
-    package func getOverrideSize() -> (width: Int, height: Int)? {
-        for line in shell("wm size").split(separator: "\n") where line.contains("Override size") {
-            guard let colon = line.lastIndex(of: ":") else { return nil }
+    /// 沿用上游 Python _check_4k_state 的 checked 查询；只有成功读到无 Override 才返回 nil。
+    package func getOverrideSize() throws -> (width: Int, height: Int)? {
+        let output = try checkedShell("wm size", target: serial)
+        for line in output.split(separator: "\n") where line.contains("Override size") {
+            guard let colon = line.lastIndex(of: ":") else { throw PresetError("wm size 返回无效结果：\(output)") }
             let parts = line[line.index(after: colon)...]
                 .trimmingCharacters(in: .whitespaces)
                 .split(separator: "x")
             guard parts.count == 2,
                   let w = Int(parts[0].trimmingCharacters(in: .whitespaces)),
-                  let h = Int(parts[1].trimmingCharacters(in: .whitespaces)) else { return nil }
+                  let h = Int(parts[1].trimmingCharacters(in: .whitespaces)) else { throw PresetError("wm size 返回无效结果：\(output)") }
             return (w, h)
         }
+        guard output.contains("Physical size:") else { throw PresetError("wm size 未返回有效分辨率：\(output)") }
         return nil
     }
 
     /// 读取 `wm density` 的 Override 值（同样是 UI 缩放的判据之一）。
-    package func getOverrideDensity() -> Int? {
-        for line in shell("wm density").split(separator: "\n") where line.contains("Override density") {
-            guard let colon = line.lastIndex(of: ":") else { return nil }
-            return Int(line[line.index(after: colon)...].trimmingCharacters(in: .whitespaces))
+    package func getOverrideDensity() throws -> Int? {
+        let output = try checkedShell("wm density", target: serial)
+        for line in output.split(separator: "\n") where line.contains("Override density") {
+            guard let colon = line.lastIndex(of: ":"),
+                  let density = Int(line[line.index(after: colon)...].trimmingCharacters(in: .whitespaces)) else {
+                throw PresetError("wm density 返回无效结果：\(output)")
+            }
+            return density
         }
+        guard output.contains("Physical density:") else { throw PresetError("wm density 未返回有效密度：\(output)") }
         return nil
     }
 

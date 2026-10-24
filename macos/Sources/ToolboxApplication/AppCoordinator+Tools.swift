@@ -165,18 +165,26 @@ extension AppCoordinator {
     package func check4KState() {
         guard isConnected else { return }
         runBackground {
-            let override = self.adb.getOverrideSize()
-            let density = self.adb.getOverrideDensity()
-            self.publish {
-                let is4k = override.map { $0.width > 1920 || $0.height > 1080 } ?? false
-                let changed = (self.is4KUI != is4k)
-                if changed { self.is4KUI = is4k }
-                // 只在状态变化时记日志：工具页每次出现都会检测一遍，
-                // 无脑记录会把日志刷满
-                if changed || override == nil {
-                    let sizeText = override.map { "\($0.width)×\($0.height)" } ?? "无 Override（面板原生）"
-                    let densityText = density.map { "，DPI \($0)" } ?? ""
-                    self.log("4K UI 检测: \(is4k ? "已开启" : "未开启")（\(sizeText)\(densityText)）")
+            do {
+                let override = try self.adb.getOverrideSize()
+                let density = try self.adb.getOverrideDensity()
+                self.publish {
+                    self.tools.fourKReadFailure = nil
+                    let is4k = override.map { $0.width > 1920 || $0.height > 1080 } ?? false
+                    let changed = (self.is4KUI != is4k)
+                    if changed { self.is4KUI = is4k }
+                    // 只在状态变化时记日志：工具页每次出现都会检测一遍，
+                    // 无脑记录会把日志刷满
+                    if changed || override == nil {
+                        let sizeText = override.map { "\($0.width)×\($0.height)" } ?? "无 Override（面板原生）"
+                        let densityText = density.map { "，DPI \($0)" } ?? ""
+                        self.log("4K UI 检测: \(is4k ? "已开启" : "未开启")（\(sizeText)\(densityText)）")
+                    }
+                }
+            } catch {
+                self.publish {
+                    self.tools.fourKReadFailure = error.localizedDescription
+                    self.log("4K UI 读取失败：\(error.localizedDescription)")
                 }
             }
         }

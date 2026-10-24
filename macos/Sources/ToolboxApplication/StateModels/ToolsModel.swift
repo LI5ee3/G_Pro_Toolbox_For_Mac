@@ -8,6 +8,7 @@ package final class ToolsModel {
     package var guardianStatus = "状态：未检测"
     package var hdrMemoryEnabled = false
     package var is4KUI = false
+    package var fourKReadFailure: String?
     package var freesyncMemoryEnabled = false
     package var hdrMemoryStatusText = ""
     package var freesyncMemoryStatusText = ""
