@@ -29,6 +29,10 @@ private final class S301Fixture {
     var showConnection = false
     var showLogs = false
     var showOwnership = false
+    var confirmationSession: UUID?
+    var confirmationProfileToken = ""
+    var confirmationText = ""
+    var canConfirmMemories = false
     var draftMode = ManualConnectionMode.tcp
     var usbSelected = false
     var host = "192.0.2.27"
@@ -43,8 +47,6 @@ private final class S301Fixture {
     var response = "快速"
     var dynamicDefinition = "关"
     var lightSensor = false
-    var ownershipMessage = ""
-    var savedMessage = ""
     var showReset = false
     var gains: [String: Double] = ["红色增益": 1024, "绿色增益": 1024, "蓝色增益": 1024]
     init(_ sample: S301Sample) {
@@ -85,6 +87,45 @@ private final class S301Fixture {
     func disconnect() {
         actions.disconnectAdb()
         sample = .ready
+    }
+    func diagnoseDraft() {
+        let connection = actions.connection
+        let previousHost = connection.ipInput, previousPort = connection.tcpPortInput
+        defer { connection.ipInput = previousHost; connection.tcpPortInput = previousPort }
+        connection.ipInput = host
+        connection.tcpPortInput = port
+        // runDiagnostics captures these inputs synchronously; it never changes the session.
+        actions.runDiagnostics()
+    }
+    func saveCurrentConnectionPreference() {
+        let connection = actions.connection
+        guard connected, let endpoint = connection.activeEndpoint else { return }
+        let previousHost = connection.ipInput, previousPort = connection.tcpPortInput
+        let previousSelection = connection.selectedEndpoint
+        defer {
+            connection.ipInput = previousHost; connection.tcpPortInput = previousPort
+            connection.selectedEndpoint = previousSelection
+        }
+        if endpoint.isUSB { connection.selectedEndpoint = endpoint }
+        else {
+            connection.ipInput = endpoint.tcpHost
+            connection.tcpPortInput = String(endpoint.tcpPort ?? 5555)
+        }
+        // The existing entry point captures the save target before starting async work.
+        actions.saveConnectionPreference()
+    }
+    func prepareOwnershipConfirmation() {
+        let connection = actions.connection
+        confirmationSession = connection.identitySessionID
+        confirmationProfileToken = connection.ownershipConfirmationToken
+        confirmationText = "当前端点：\(connection.transportText)\n\(connection.identityText)\n\(connection.ownershipConfirmationText)\n确认只登记归属，不部署组件或执行设备设置。全局记忆包括 HDR/SDR、FreeSync 和准星联动；已有开关值保持。身份不足时确认只限本次会话，自动功能保持暂停。"
+        canConfirmMemories = connection.identityEvidence != nil
+        showOwnership = true
+    }
+    func confirmOwnership(includeMemories: Bool) {
+        guard let confirmationSession else { return }
+        actions.confirmConnectionOwnership(includeMemories: includeMemories, expectedSessionID: confirmationSession,
+                                            expectedProfileToken: confirmationProfileToken)
     }
     func commitBacklight(_ value: Double) {
         actions.setPictureSlider(title: "背光", value: Int(value), jniKey: "g_disp__disp_back_light",
@@ -523,7 +564,7 @@ private struct S301Connection: View {
                                 VStack(alignment: .leading, spacing: 7) { Text("IP 地址或主机名"); TextField("", text: $f.host).accessibilityLabel("IP 地址或主机名").focused($focusHost).textFieldStyle(.roundedBorder).onSubmit { f.connect() } }
                                 VStack(alignment: .leading, spacing: 7) { Text("端口"); TextField("", text: $f.port).accessibilityLabel("ADB 端口").textFieldStyle(.roundedBorder) }.frame(width: 90)
                             }
-                            HStack { Button("扫描内网") { f.actions.scanNet() }; Button("诊断填写地址") { f.actions.runDiagnostics() } }
+                            HStack { Button("扫描内网") { f.actions.scanNet() }; Button("诊断填写地址") { f.diagnoseDraft() } }
                         } else {
                             Button { f.usbSelected = true } label: {
                                 HStack {
@@ -560,9 +601,9 @@ private struct S301Connection: View {
                         VStack(alignment: .leading, spacing: 12) {
                             Text(f.actions.connection.identityText).textSelection(.enabled)
                             if !f.actions.connection.identityNotice.isEmpty { Text(f.actions.connection.identityNotice).foregroundStyle(.secondary) }
-                            Button("确认数据归属…") { f.showOwnership = true }.disabled(!f.connected)
+                            Button("确认数据归属…") { f.prepareOwnershipConfirmation() }
+                                .disabled(!f.connected || f.actions.connection.identityConflict || f.actions.connection.identityOperationBusy)
                             Text("保存连接偏好与确认预设、全局记忆归属分别进行。").foregroundStyle(.secondary)
-                            if !f.ownershipMessage.isEmpty { Text(f.ownershipMessage) }
                         }.padding(.top, 12)
                     }
                     Text("控制通道不改变视频输入。").foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
@@ -570,7 +611,8 @@ private struct S301Connection: View {
             }
             Divider()
             HStack(spacing: 12) {
-                Button("保存连接偏好") { f.actions.saveConnectionPreference(); f.savedMessage = f.actions.connection.profileMessage }.disabled(!f.connected)
+                Button("保存当前连接偏好") { f.saveCurrentConnectionPreference() }
+                    .disabled(!f.connected || f.actions.connection.identityConflict || f.actions.connection.identityOperationBusy)
                 Spacer()
                 if f.sample == .working { Button("取消连接") { f.disconnect() } }
                 else {
@@ -579,20 +621,20 @@ private struct S301Connection: View {
                         .disabled((f.host.trimmingCharacters(in: .whitespaces).isEmpty && f.draftMode == .tcp) || (f.draftMode == .usb && !f.usbSelected))
                 }
             }.padding(20)
-            if !f.savedMessage.isEmpty { Text(f.savedMessage).padding(.horizontal, 24).padding(.bottom, 16) }
+            if f.actions.connection.identityOperationBusy {
+                HStack(spacing: 8) { ProgressView().controlSize(.small); Text("正在提交连接信息…") }
+                    .padding(.horizontal, 24).padding(.bottom, 16)
+            } else if !f.actions.connection.profileMessage.isEmpty {
+                Text(f.actions.connection.profileMessage).fixedSize(horizontal: false, vertical: true)
+                    .padding(.horizontal, 24).padding(.bottom, 16)
+            }
         }.frame(width: 620).frame(maxHeight: 700)
         .confirmationDialog("确认当前设备的数据归属", isPresented: $f.showOwnership, titleVisibility: .visible) {
-            Button("仅确认预设归属") { confirmOwnership(false) }
-            if f.actions.connection.identityEvidence != nil { Button("确认预设与全局记忆归属") { confirmOwnership(true) } }
+            if f.canConfirmMemories { Button("确认预设与全局记忆归属") { f.confirmOwnership(includeMemories: true) } }
+            Button("仅确认预设归属") { f.confirmOwnership(includeMemories: false) }
             Button("取消", role: .cancel) { }
-        } message: { Text("\(f.endpoint)\n\(f.actions.connection.identityText)\n确认只登记归属。身份不足时仅限本次会话，自动任务保持暂停。") }
+        } message: { Text(f.confirmationText) }
         .onAppear { focusHost = f.draftMode == .tcp }
-    }
-    private func confirmOwnership(_ memories: Bool) {
-        guard let session = f.actions.connection.identitySessionID else { return }
-        f.actions.confirmConnectionOwnership(includeMemories: memories, expectedSessionID: session,
-                                            expectedProfileToken: f.actions.connection.ownershipConfirmationToken)
-        f.ownershipMessage = f.actions.connection.profileMessage
     }
 }
 

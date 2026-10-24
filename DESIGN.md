@@ -77,7 +77,7 @@
 
 ## 可视交付与打开方式
 
-截图集中于 [`docs/design/S3-01/`](docs/design/S3-01/)，为**实际运行的原生 SwiftUI 安全 Preview 截图**，非生图/HTML 仿真，也不是生产 App 实测。所有画面中的 TCP `192.0.2.27:5555`、USB `000PreviewUSB`、稳定标识 `PREVIEW-STABLE-0001`、音量 10、背光 45、标准模式、DP 输入均为沿用/整理的明确模拟数据；不代表现用显示器读数。
+截图集中于 [`docs/design/S3-01/`](docs/design/S3-01/)，为**实际运行的原生 SwiftUI 安全 Preview 截图**，非生图/HTML 仿真，也不是生产 App 实测。所有画面中的活动 TCP `192.0.2.27:5555`、草稿 TCP `198.51.100.42:5566`、USB `000PreviewUSB`、稳定标识 `PREVIEW-STABLE-0001`、音量 10、背光 45、标准模式、DP 输入均为沿用/整理的明确模拟数据；不代表现用显示器读数。
 
 ![S3-01 推荐方案原生截图总览](docs/design/S3-01/stitch.png)
 
@@ -85,6 +85,7 @@
 | --- | --- | --- |
 | 主窗口 | [浅色](docs/design/S3-01/home-light.jpg) · [1020×740 紧凑](docs/design/S3-01/home-compact-light.jpg) | 十个入口常驻；高频控制在上半窗；底部内容可滚动 |
 | 手动连接 | [活动 TCP / 选择 USB](docs/design/S3-01/connection-usb-light.jpg) | 活动端点与候选独立；明确勾选；切换前说明结束当前会话 |
+| 连接交互跟进 | [草稿 B / 保存活动 A](docs/design/S3-01/connection-draft-save-light.jpg) · [完整归属确认](docs/design/S3-01/connection-ownership-light.jpg) | 保存对象明确，结果随模型发布；确认依据在弹窗打开时固定 |
 | 密集参数 | [深色上部](docs/design/S3-01/picture-dark.jpg) · [滚动到底部](docs/design/S3-01/picture-dark-lower.jpg) | 连续参数列、对齐的原生选项、范围、提交说明 |
 | 菜单栏 | [浅色快捷面板](docs/design/S3-01/menubar-light.jpg) | 音量/静音/背光优先，低频管理集中到“更多” |
 | 必要状态 | [未知读数](docs/design/S3-01/home-unknown-light.jpg) · [已断开/恢复暂停](docs/design/S3-01/connection-disconnected.jpg) · [等待授权](docs/design/S3-01/connection-authorization-light.jpg) · [执行中](docs/design/S3-01/connection-working-light.jpg) · [失败与重试](docs/design/S3-01/connection-failed-light.jpg) | 未知不等于 0；输入保留；取消与恢复意图可见 |
@@ -118,6 +119,13 @@ xcodebuild -project macos/Toolbox.xcodeproj -scheme ToolboxPreviews -configurati
 - **关键模拟流程读回**：浏览 USB 保留当前 TCP；明确提交后活动端点变为模拟 USB；断开后恢复暂停。失败重试保留 TCP 输入并可回到模拟连接；菜单静音/解除静音、音量原生增减、主窗口跳转可用。核对 `⌘K`、Tab/Shift-Tab、Return、Escape 及参数原生菜单的标签/选项；未做完整 VoiceOver 或真机手感验收。
 - **oil 独立看图复核完成三轮**：发现并修正 USB 未显式选中、密集滑块刻度、菜单管理区过重、参数选项外框不齐和深色分组灰字偏暗；删掉三处重复说明。末轮对六张相关截图逐项复核为修好/做到位、未观察到本批新问题，静态视觉评分 **9/10**。末轮未评动效与未知/授权状态；这些状态由本轮原型和补充截图单独说明，评分不是用户确认或 G3 通过。
 - **环境保护读回一致**：原七个文件的 SHA-256/大小/mtime、原工作树状态、历史标签和其他工作树未变；现用 App 的全部 11 个文件及其 mtime 未变，App/5038 server 原 PID 与启动时间保持。临时 Preview 已退出，其 App 与构建输出已清理，仅保留提案源码和截图。
+
+2026-10-24 PR #5 原型交互跟进（基线 `bb765c96e45647a7850788f82d467fad3b1a5ac7`）：继续使用当前已安装的 **oil-ui-pro 0.24.2**，按其交互与状态规则修复指定问题；未执行技能升级、重新设计或新一轮评分。
+
+- “诊断填写地址”点击时临时传入草稿 host/port，既有入口同步固定诊断对象后恢复原输入；不调用传输切换或连接方法。“保存当前连接偏好”明确只保存活动端点，调用既有保存入口时使用该端点，不保存未连接候选，也不改掉草稿。忙碌时显示提交中，结束后直接显示 `profileMessage`；移除发起异步操作后立即复制结果的做法。
+- 归属确认沿用生产 `ConnectionIdentityControls` 的方式：打开时固定 session、profile token、包含当前端点/身份/旧数据归属的完整文案和可用选项；确认提交这份依据，由原业务校验拒绝过期确认。
+- 仅构建安全 Preview、检查隔离边界，并从本文件直接提取 Fixture 编译临时探针，复用现有内存 fake 和异步完成屏障：A 连接时诊断 B，A 的端点/session/传输保持；候选不同时读回的保存目标仍是活动 TCP/USB；忙碌→成功及旧快照失败的消息发布正确，失败不改原配置；弹窗完整依据固定后，profile token 或 session 改变均由已有校验拒绝。实际 UI 亦读回诊断 B 的日志、保存结果和完整确认文案。未跑全量回归、生产构建或真机检查，未新增测试框架。
+- 只更新五张受保存文案影响的连接截图及依赖总览，补充上述两张交互截图；首页、画面、菜单栏原图保持。临时 Preview、探针和本轮构建输出在检查后清理。方向仍为待 review 提案，S3-02 未启动，M2/G2、Auto、G3 状态不变。
 
 ## 历史记录：Pro B（2026-10-21/22）
 
