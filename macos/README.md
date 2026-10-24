@@ -52,7 +52,7 @@ CI 要求在线且带 `toolbox-macos27` 标签的 macOS 27 ARM64 runner；没有
 
 在 Mac mini M4、Redmi G Pro 32U 2026（P32UEA-RGP，固件 OS3.0.120.0.UFFMAMN）上，前序实机测试中电源键待机唤醒约 18 秒恢复 ADB、Android 重启约 41 秒首次连通且约 58 秒起稳定、DP 息屏唤醒约 28 秒恢复 ADB。这些是该设备和网络下的观察结果，其他型号和固件仍需实测。
 
-本分支已实现手动 USB/TCP 选择，设备工作固定使用提交时的 endpoint；预设使用经明确确认的兼容身份键，保留旧 JSON。连接本身不写偏好；请在连接设置中显式保存，旧全局记忆另需确认归属。S2-04 仅本机/模拟验证通过，真实同机身份及恢复仍待 M2；Auto 未实现。现有 TCP 恢复集中在 `ensureConnected`：未授权退出；目标重连失败后仅按 25 秒冷却进行有界 server 查询，再决定目标重试。应用不显式循环 kill-server，但官方 adb 查询仍可能启动缺失 server 或协调版本；详见 [ADB-CONTRACTS 第 0 节](../docs/ADB-CONTRACTS.md)。
+本分支已实现手动 USB/TCP 选择，设备工作固定使用提交时的 endpoint；预设使用经明确确认的兼容身份键，保留旧 JSON。连接本身不写偏好；请在连接设置中显式保存，旧全局记忆另需确认归属。S2-01 至 S2-06 已合入，当前候选已完成真实 TCP 接入和默认 `5038` 交接；完整历史 M2/G2 仍为 NOT_PASSED，Auto 继续暂缓（DEFERRED）。本次交接不代表全部控制、预设、任务或恢复场景通过。现有 TCP 恢复集中在 `ensureConnected`：未授权退出；目标重连失败后仅按 25 秒冷却进行有界 server 查询，再决定目标重试。应用不显式循环 kill-server，但官方 adb 查询仍可能启动缺失 server 或协调版本；详见 [ADB-CONTRACTS 第 0 节](../docs/ADB-CONTRACTS.md)。
 
 ### Type-C 有线 ADB 的硬件验证（2026-10-22）
 
@@ -140,6 +140,10 @@ open ".build/artifacts/development/红米G Pro ToolBox.app"
   本机 macOS 27 将该页面显示为“设备控制和数据访问”。应用在返回前台时重新检测；更换 ad-hoc 签名后若旧授权记录失效，需重新绑定当前安装 App，必要时退出再打开应用。
 - **登录后自动启动**使用 `SMAppService.mainApp`，设置页展示系统读回状态；旧 LaunchAgent 经过归属校验、备份及新服务启用确认后才退役。注册成功不代表已完成下一次真实登录验收，详情见 [系统服务说明](R5-SYSTEM-SERVICES.md)。
 - **本地网络**入口打开“隐私与安全”首页，再选择“本地网络”检查应用开关。连接失败不等于权限被拒绝；本机回归和回滚记录见 [R6c 收尾说明](R6-CLOSEOUT.md)。
+
+更换开发构建后，先完成当前 App 所需的系统授权响应。若复用旧版启动的 ADB server 失败，先确认具体错误、server 归属及是否有其他使用者。本次源码 `839186f` 的候选 `0.1.0 (20261024.1)` 在确认项目 server 无其他使用者后，正常退出 App，使用内嵌 adb 明确针对 Mac 侧项目端口 `5038` 正常停止旧 server，再由候选自行启动，完成了 TCP 交接和既有真实 shell 探活。
+
+这仅适用于已确认旧 server 归属问题的构建交接，不是每次连接都重启 server，也不代表 macOS 历史归属问题已永久修复；本次交接没有新增源码修复、重新构建或重签。
 
 ## 目录结构
 
