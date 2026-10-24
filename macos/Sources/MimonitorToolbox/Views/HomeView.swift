@@ -183,7 +183,7 @@ struct HomeView: View {
     private var statusBar: some View {
         HStack(spacing: 18) {
             Label(connection.isConnected ? "ADB 已连接" : connection.statusText,
-                  systemImage: connection.isConnected ? "checkmark.circle.fill" : "wifi.slash")
+                  systemImage: connection.statusSymbol)
                 .foregroundColor(connection.statusColor)
             Spacer()
             Button { state.requestedPage = .tools } label: { Label(guardian, systemImage: "checkmark.shield") }
@@ -287,7 +287,7 @@ private struct ConnectionSettingsSheet: View {
                 }
             }
             VStack(alignment: .leading, spacing: 8) {
-                Label(connection.statusText, systemImage: connection.isConnected ? "checkmark.circle" : "network")
+                Label(connection.statusText, systemImage: connection.statusSymbol)
                     .foregroundColor(connection.statusColor).font(.system(size: 14))
                 Text(connection.transportText).font(.system(size: 13)).foregroundColor(Theme.secondaryText)
                 if !connection.identityNotice.isEmpty {

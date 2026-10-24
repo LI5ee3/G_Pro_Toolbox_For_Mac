@@ -9,7 +9,9 @@ struct ContentView: View {
     @Environment(NavigationModel.self) private var navigation
     @Environment(SettingsModel.self) private var settings
     @Environment(\.scenePhase) private var scenePhase
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.accessibilityReduceMotion) private var systemReduceMotion
+    @Environment(\.toolboxPreviewAccessibility) private var previewAccessibility
+    private var reduceMotion: Bool { systemReduceMotion || previewAccessibility.reduceMotion }
     @State private var selection: Page = .home
     @State private var appeared = false
     @Namespace private var navigationAnimation

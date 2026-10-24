@@ -1,10 +1,42 @@
 # 红米 G Pro ToolBox 设计规范
 
-更新：2026-10-24 · S3-01 · **待 review 的设计提案，未获用户视觉确认**。
+更新：2026-10-24 · **S3-01 方向已由用户采用并合并；S3-02 共享组件实现待 review**。
 
-本轮意图：整个产品的 UI 重塑与导航重组；阶段：可视方案交付。用户明确解除 Pro B、显示器实体、遥控底座、冷白钴蓝及顶部导航的强制约束。下文的新方向只供 review，不代表生产 UI 已迁移、G3 通过或授权开始 S3-02。生产代码与现用 App 继续沿用当前版本。历史取舍保留在文末。
+用户已采用 PR #5 的“控制优先的原生工作区”作为后续 UI 实现方向，并单独授权 S3-02。PR #5 复核 HEAD `c71f7995445a7f84c744ddf546d0be2b7588bb2f` 与已 review 版本一致，默认 CI [#33](https://github.com/LI5ee3/G_Pro_Toolbox_For_Mac/actions/runs/40093006793) 通过后，以 merge commit `b6648bccf47117b3619a465af98ffc435704f323` 合入 master；合并后的默认 CI [#34](https://github.com/LI5ee3/G_Pro_Toolbox_For_Mac/actions/runs/40097070825) 亦通过。设计分支引用已正常删除，原工作树与内容保留。本轮仅实施下面的共享规则，不迁移页面结构，不开始 S3-03；现用 App 不替换。M2/G2 NOT_PASSED、Auto DEFERRED、G3 未通过。下文 S3-01 提案与 Pro B 取舍作为形成过程保留，旧的“待确认/不开始 S3-02”停止点由本次授权取代。
 
 平台及业务边界见 [ARCHITECTURE](docs/ARCHITECTURE.md)，进度以 [ROADMAP](docs/ROADMAP.md) 为准。
+
+## S3-02：共享组件规则与本轮范围（实现待 review）
+
+沿用已采用的北极星：打开后直接调显示器，需要精调时仍能迅速找到每个参数。本轮在合并后的 master 上使用独立分支 `ui/s3-02-shared-components`，实际读取已安装 **oil-ui-pro 0.24.2** 的 SKILL、存量项目、组件、交互与状态及视觉精修规则；不升级技能、不重新探索方向或组织评分。以下是共享样式的落地，S3-01 原型不复制进生产代码。
+
+- **颜色与性能**：在现有 `Theme` 内将画布、内容、次级控件、边界和辅助文字改为中性灰角色。保留已有浅深自适应 RGB 求值路径与 accent/onAccent、成功/警告配对，避免把高频表面机械换成 CoreUI 语义色；强调色仍只辅助主动作和选中。本项先保留可用的强调色配对，不建立动态主题引擎。
+- **字级与间距**：页头 22pt semibold，分组 14pt semibold，按钮及滑块标签/读数 13pt；读数等宽。共享分组内距 16pt、内容间距 12pt；控件圆角 8pt、分组圆角 12pt。只提取当前实际复用的三个样式值。`ButtonGroupSection` 沿用现有结构并复用分组字级。
+- **动作与选择**：`toolboxAction` 普通动作为中性实底加边界，主动作使用原生 `borderedProminent`，减少高频按钮的玻璃装饰；`toolboxGlass` 继续只服务已有浮动功能层。`SelectableButton` 以勾选、字重和边界表达选中，保留原有 selected 辅助功能 trait；勾选预留位置，切换不挤动按钮。禁用时保持可读文字与轮廓，点击语义沿用 SwiftUI。
+- **参数与状态**：`SliderRow` 仅统一标签、数值、实底和边界，现有宽度、Binding、步长、范围、松手/辅助功能提交和外部读数同步不变；`FastSlider` 实现逐字保持。`ConnectionPresentation` 直接从已有 `connectionStatus` 派生图标和色彩：未连接/连接中/扫描中为中性；授权、离线、失败为警告；已连接为成功。首页、原连接 sheet 与菜单面板复用它，始终保留原模型的状态文字，没有新业务状态或发布机制。
+- **辅助功能**：复用系统减少透明度、减少动态效果。高对比度时共享表面改用清晰的主文字色边界，玻璃回退实底；减少动态效果时沿用原有无缩放/位移分支。当前 SDK 的这些环境值只读，因此仅增加一个 package 内的三布尔 Preview 注入点，默认全 false，与真实系统值合并；不改系统全局设置、不持久化，不新增配置层。原生系统控件继续由系统处理其辅助功能。
+
+实际检查生产共享组件的安全入口现在是 [`ToolboxPreviewGallery`](macos/Sources/ToolboxPreviewSupport/PreviewGallery.swift)，宿主默认打开它；顶部外观和辅助功能开关仅属于 Preview。既有内存 fake、会话和动作继续复用。S3-01 的 [`ToolboxS301Gallery`](macos/Sources/ToolboxPreviewSupport/S301DesignPreview.swift) 与 `#Preview("S3-01 原生设计提案")` 保留，仍可在 Xcode 打开提案；不拿独立提案样式代替生产组件验证。
+
+只构建现有安全 Preview（输出目录应为本轮独立临时目录）：
+
+```sh
+xcodebuild -project macos/Toolbox.xcodeproj -scheme ToolboxPreviews -configuration Debug \
+  -derivedDataPath /tmp/s3-02-review-preview -destination 'platform=macOS,arch=arm64' \
+  CODE_SIGN_IDENTITY=- build
+```
+
+打开 `/tmp/s3-02-review-preview/Build/Products/Debug/ToolboxPreviewHost.app`，使用顶部场景/页面选择及外观开关。所有设备、读数、权限与系统动作均为内存模拟；关闭后丢弃，不接触现用 App 或 5038 server。
+
+必要检查：安全 Preview 编译与既有依赖/源码副作用/二进制资源边界 PASS；源码核对 FastSlider 及 SliderRow 提交/外部同步保持。实际看图覆盖默认 1120×880 宿主内的浅色首页、深色画面页、参数底部，以及减少透明度/动态效果和增加对比度注入下的浅深代表画面；选中勾选、禁用项、授权/未连接文字及图标可读。截图为原生运行的模拟界面静态记录，不是生产 App 或真机验收：
+
+[浅色首页](docs/design/S3-02/home-light.jpg) · [深色参数](docs/design/S3-02/picture-dark.jpg) · [辅助功能模拟与参数底部](docs/design/S3-02/picture-accessibility-light.jpg) · [深色授权与禁用](docs/design/S3-02/home-authorization-dark.jpg) · [原连接面板](docs/design/S3-02/connection-accessibility-light.jpg)。
+
+纯样式未新增单元测试；本机不重复完整 Swift/Python 回归、三种构建、全页视觉矩阵、Instruments 或真机验收，完整默认检查由自然触发的 CI 承担。没有新一轮独立评分。临时 Preview 已退出、临时 App/构建输出已清理；七个原未提交文件、其他工作树、历史标签、现用 App 文件及 App/5038 server 的 PID/启动时间核对一致。S3-02 停在独立草稿 PR review；S3-03 保留连接/首页/菜单栏结构迁移，后续参数页重排、菜单系统集成、焦点与完整视觉矩阵按原后续项处理。本轮不宣称这些页面已按提案迁移。
+
+## S3-01 原提案与交付记录（方向已采用）
+
+以下正文和检查记录描述 S3-01 当时交付，提案中的页面结构留待相应后续项实施。
 
 ## 推荐方向：控制优先的原生工作区（Agent 提案）
 
@@ -92,7 +124,7 @@
 
 这些截图是原生运行画面的静态记录；交互能力由下述安全 Preview 提供。底栏的界面/状态/外观选择器属于预览宿主，不进入产品设计。菜单栏图展示面板内容，外层临时窗口不代表最终 status item 容器。
 
-原型源码：[`S301DesignPreview.swift`](macos/Sources/ToolboxPreviewSupport/S301DesignPreview.swift)，入口 [`ToolboxPreviewHost/App.swift`](macos/Sources/ToolboxPreviewHost/App.swift)。原 PreviewGallery/PreviewRuntime 未改，新入口下的“原界面”可切回旧安全画廊。删除该提案文件并恢复宿主入口即可移除原型，没有新 target/依赖/构建体系。
+原型源码：[`S301DesignPreview.swift`](macos/Sources/ToolboxPreviewSupport/S301DesignPreview.swift)，入口 [`ToolboxPreviewHost/App.swift`](macos/Sources/ToolboxPreviewHost/App.swift)。S3-01 当时未改原 PreviewGallery/PreviewRuntime，并以“原界面”切回安全画廊；S3-02 宿主现已默认打开生产组件画廊，提案文件及其 #Preview 独立保留。没有新 target/依赖/构建体系。
 
 在开发 Mac 的独立目录只构建已有安全 Preview（不需要 prepare 生产资源）：
 
