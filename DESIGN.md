@@ -1,14 +1,46 @@
 # 红米 G Pro ToolBox 设计规范
 
-更新：2026-10-24 · **方向已采用；S3-02 已 review 合并；S3-03 工作区迁移待 review**。
+更新：2026-10-25 · **方向已采用；S3-03 已 review 合并；S3-04 参数页一致化待 review**。
 
 用户已采用 PR #5 的“控制优先的原生工作区”。S3-01 复核 HEAD `c71f799` 经默认 CI #33 通过，以 merge commit `b6648bccf47117b3619a465af98ffc435704f323` 合入 master，合并 CI #34 通过。S3-02 的 PR #6 HEAD 与已复核的 `e9b8574fc218c17b422e1c0c95d6e1a523dc39de` 完全一致，沿用已通过的默认 CI [#35](https://github.com/LI5ee3/G_Pro_Toolbox_For_Mac/actions/runs/40098121445)，标记 ready 后以 merge commit `ea8f7b608cf044ec7b9cf9274a8ef55f9a55d2c0` 合入 master；自然触发的合并 CI [#36](https://github.com/LI5ee3/G_Pro_Toolbox_For_Mac/actions/runs/40099394801) 通过。确认包含关系后正常删除已合并分支引用，原工作树与内容保留。
 
-本轮由用户单独授权 S3-03，止于新草稿 PR review，不开始 S3-04。M2/G2 NOT_PASSED、Auto DEFERRED、G3 未通过；现用 App 不替换。下文 S3-01/02 与 Pro B 记录保留为各自当时范围，历史停止点由最新授权取代。平台及业务边界见 [ARCHITECTURE](docs/ARCHITECTURE.md)，进度以 [ROADMAP](docs/ROADMAP.md) 为准。
+PR #7 的复核 HEAD `ae3e8750ebdee695cc52800179cceaea556c712c` 与远端一致，直接沿用已通过的默认 CI [#37](https://github.com/LI5ee3/G_Pro_Toolbox_For_Mac/actions/runs/40104714754)，标记 ready 后以 merge commit `a2275fd73fbe674185cde9f9050ed409d8bc37d3` 合入 master；自然合并 CI [#38](https://github.com/LI5ee3/G_Pro_Toolbox_For_Mac/actions/runs/40130043388) 通过。包含关系已核验，S3-03 分支引用正常删除，原工作树 detached 于同一复核 HEAD，内容保留。
 
-## S3-03：主窗口、首页、连接与菜单栏（实现待 review）
+本轮由用户单独授权 S3-04，止于新草稿 PR review，不开始 S3-05。M2/G2 NOT_PASSED、Auto DEFERRED、G3 未通过；现用 App 不替换。下文 S3-01/02/03 与 Pro B 记录保留为各自当时范围，历史停止点由最新授权取代。平台及业务边界见 [ARCHITECTURE](docs/ARCHITECTURE.md)，进度以 [ROADMAP](docs/ROADMAP.md) 为准。
 
-独立分支 `ui/s3-03-control-workspace` 从上述合并后的 master 创建。继续实际使用本机 **oil-ui-pro 0.24.2**，读取真实 SKILL、存量项目、组件、布局表面、交互/状态、动效和轻量 UX 走查规则；沿用下文 Apple HIG 与公开 SwiftUI/AppKit API，不升级技能、不探索新方向、不重复评分。对照 `upstream/master` 的原生 `NavigationSplitView + List`、页面分发及菜单窗口生命周期做法，复用本项目已有业务适配；不复制 S3-01 整份原型。
+## S3-04：画面、游戏、信号源与灯光（实现待 review）
+
+独立分支 `ui/s3-04-parameter-pages` 基于合并后的 `a2275fd`。继续实际读取并使用已安装 **oil-ui-pro 0.24.2** 的存量项目、组件、交互/状态、布局及视觉精修规则，沿用下文 Apple HIG；不升级技能、不重新探索方向或评分。对照原作者参数页与当前生产 View/动作，保留已成熟的映射和实现。本机仍为 macOS 27.0.1、Xcode 27.1 / SDK 27.0，只使用公开 SwiftUI/AppKit API。
+
+- **连续参数列**：画面页移除双列大滑块卡片，以基础画面、色彩、光影与响应分组。标签 112pt，滑块伸缩，读数 42pt、范围 62pt；RGB 范围保持一行。仅提取实际跨三页复用的 `ParameterPickerRow`，局部复用提案验证过的固定宽度原生 `NSPopUpButton`，220×28pt，按现有 `OptionLists` 的真实 tag 提交，外部选中同步不触发 action。没有参数 schema、注册表或表单引擎。
+- **读数与提交**：`SliderRow` 去掉逐行容器，仍用原 FastSlider 的 Binding、范围、步长 1、松手/辅助功能提交与外部读数同步。未知/无效输入只给轨道一个内部位置，读数及辅助功能值显示“—/未知”，不显示默认 50 或 1024；外部同步只更新本地显示。选项未读时显示不可提交的“未知”占位，其余真实选项仍按原规则可选。
+- **画面**：保留真实三类模式、恢复默认、预设上下文/不完整应用门控、所有 JNI/settings 参数映射；自定义色温才展示 RGB，HDR 色调映射继续由已有模式判断显示。光感改为同列原生“关/开/未知”选项，仍调用既有 `setLightSensor(Bool)`，没有假定未知即关闭。
+- **游戏**：刷新与同步、瞄准辅助、屏幕工具采用同列选项。保留 320Hz、FreeSync、准星和跟随游戏模式的既有联动。提示和分组明确区分未知、当前有效与记忆值，非游戏模式仍可编辑记忆值，没有新增统一禁用。
+- **信号源**：大设备插画改为紧凑当前视频输入摘要及四个真实选项；摘要与选中均读取同一个 source key，未知不默认选择 DP/HDMI。原 `setSource` 和 23/24/29/30 映射保持；单独显示实际 ADB 控制端点，说明 USB-C 视频输入与控制通道可独立选择。
+- **灯光**：五种模式、亮度、照明色温和纯色颜色使用相同阅读轴。存储亮度 0…14 仍显示为 1…15，由原动作转换提交；关闭/未生效时的记忆值保留可编辑和清楚文字，不靠降低透明度表达业务禁用。选择色温/颜色继续分别切换到照明/纯色，相关说明紧邻控件。
+
+本轮首页无直接必要改动；S3-02 共享色彩、按钮及 S3-03 外壳、连接面板、菜单栏结构保持。Coordinator、模型、命令、会话、取消、节流、预设与任务机制未重写。
+
+安全 Preview 默认展示上述生产 View。沿用现有 fake，补全原本隐含为 0 的游戏模拟字段；“未知读数”改用空的初始参数快照，刷新仍交给既有 fake。“HDR 与 RGB”明确模拟模式 11（Dolby Vision 明亮）、自定义色温 3 和增益 1024，用于检查条件布局，不代表真实设备读数。
+
+```sh
+xcodebuild -project macos/Toolbox.xcodeproj -scheme ToolboxPreviews -configuration Debug \
+  -derivedDataPath /tmp/s3-04-review-preview -destination 'platform=macOS,arch=arm64' \
+  CODE_SIGN_IDENTITY=- build
+```
+
+打开 `/tmp/s3-04-review-preview/Build/Products/Debug/ToolboxPreviewHost.app`，窗口名“S3-04 参数页面 · 安全 Preview”；底部保留场景、外观及最小窗口开关。全部连接、设备与系统动作均为内存模拟，不连接 5038 或真实显示器。实际运行截图：
+
+[画面浅色](docs/design/S3-04/picture-light.jpg) · [最小深色 RGB/HDR 下部](docs/design/S3-04/picture-hdr-rgb-min-dark.jpg) · [未知参数](docs/design/S3-04/picture-unknown-min-dark.jpg) · [游戏记忆值](docs/design/S3-04/game-memory-min-dark.jpg) · [USB-C 视频与 TCP 控制](docs/design/S3-04/source-usbc-min-light.jpg) · [灯光关闭时的亮度记忆](docs/design/S3-04/light-memory-light.jpg)。
+
+必要检查：仅构建现有安全 Preview，依赖/源码副作用/二进制资源隔离 PASS。纯布局未新增单元测试；针对新原生选项接线，在既有 PreviewRenderingTests 增加一个直接 fake 检查，确认非连续枚举 tag、一次用户提交，以及外部更新/未知占位不写入；并沿用一个既有控制路由检查，两项通过。实际操作检查自定义/原色色温显隐 RGB、HDR 条件、游戏记忆值可编辑与游戏模式下的有效提示、USB-C 切换不改 TCP ADB、关闭时亮度 10→11、选色/色温的模式切换；四页未知值均明确展示。代表看图覆盖四页、浅深、1120×820 与 1020×740，RGB 范围换行已修正。没有本机全量回归、全部构建、完整状态矩阵、Instruments 或真机验收；完整默认检查由自然 CI 承担，不启用打包。S3-04 细节仍待 review，不代表 G3 通过。
+
+
+本轮做了一次不打分的独立看图复核（`/root/s304_visual_final`）和一条隔离 UX 操作走查（`/root/s304_ux_walk`）。看图保留连续参数轴、RGB 范围、记忆态说明及视频/ADB 区分；指出原生未知占位偏暗，已局部改善文字呈现，未改变不可提交占位及真实选项规则。游戏提示的“下方高亮”在 View 中改为“下方选项”，沿用模型原判断。走查实际完成“控制台背光 45 → 更多画面设置 → 调到 35 → 刷新仍为 35 → 回控制台确认”，没有阻塞或误入；[操作后画面](docs/design/S3-04/ux-backlight-35.jpg)。评审者仍对提交/刷新完成反馈有一次犹豫，与 S3-03 既有观察一致，本轮未改结果发布机制、不扩大排查。静态复核和内存走查不代表真机效果或性能验收。
+
+## S3-03：主窗口、首页、连接与菜单栏（已 review 合并）
+
+以下保留 S3-03 当时实现与验证记录。独立分支 `ui/s3-03-control-workspace` 当时从 S3-02 合并后的 master 创建。继续实际使用本机 **oil-ui-pro 0.24.2**，读取真实 SKILL、存量项目、组件、布局表面、交互/状态、动效和轻量 UX 走查规则；沿用下文 Apple HIG 与公开 SwiftUI/AppKit API，不升级技能、不探索新方向、不重复评分。对照 `upstream/master` 的原生 `NavigationSplitView + List`、页面分发及菜单窗口生命周期做法，复用本项目已有业务适配；不复制 S3-01 整份原型。
 
 - **外壳与首页**：`ContentView` 用常驻分组侧栏呈现现有十个 `Page`，保留 `requestedPage`、`onPageAppear`、连接门控、预设 busy/错误与窗口生命周期。原生窗口工具栏提供页名、简短真实状态、连接设置（⌘K）和日志；完整失败原因保留在连接面板及状态提示，避免挤占最小窗口。首页移除主设备插画，把音量/静音、背光和模式放在主体；视频输入、真实当前预设、自动任务、键盘设置、保活与归属入口保留。其余页面继续承载原 View，未重排密集参数、预设或工具页。
 - **控件与读数**：首页原音量控件局部提取为 `DashboardVolumeControl`，仅供首页和菜单面板实际复用；背光仍用原 FastSlider 范围、步长与提交动作。拖动只更新本地显示，松手/辅助功能提交调用既有动作，外部读数与错误发布只同步显示。未知/离线读数为“—”，模式不误示选中，视频输入与 ADB 控制端点分别表达。没有新的轮询或业务结果发布。
