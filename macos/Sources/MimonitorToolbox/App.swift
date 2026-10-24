@@ -4,97 +4,82 @@ import SwiftUI
 import AppKit
 import MimonitorPresetCore
 
-/// 菜单栏下方面板。比系统菜单自由得多 —— 能放滑块、分组、任意布局。
+/// Content of the existing MenuBarExtra; uses its shared session and user configuration.
 struct MenuBarPanel: View {
     @ToolboxActions var state
     @Environment(ConnectionModel.self) private var connection
     @Environment(PresetsModel.self) private var presets
     @Environment(HotkeysModel.self) private var keyboard
+    @Environment(NavigationModel.self) private var navigation
     @Environment(\.openWindow) private var openWindow
     @State private var contentHeight: CGFloat = 64
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            // 状态行
-            HStack(spacing: 8) {
-                Image(systemName: connection.statusSymbol)
-                    .foregroundStyle(connection.statusColor)
-                    .frame(width: 12)
-                    .accessibilityHidden(true)
-                Text(connection.statusText)
-                    .font(.system(size: 14, weight: .medium))
-                    .lineLimit(1)
-                    .truncationMode(.middle)
-                Spacer()
-            }
-            .padding(.horizontal, 14)
-            .padding(.vertical, 8)
-
+            VStack(alignment: .leading, spacing: 6) {
+                Label(connection.deviceDisplayName, systemImage: "display").font(.system(size: 15, weight: .semibold))
+                Label(connection.isConnected ? "已连接" : connection.statusText, systemImage: connection.statusSymbol)
+                    .font(.system(size: 12)).foregroundStyle(connection.statusColor).lineLimit(2)
+                Text(connection.activeControlText).font(.system(size: 12)).foregroundStyle(Theme.secondaryText)
+                    .lineLimit(2).textSelection(.enabled)
+            }.padding(.horizontal, 14).padding(.vertical, 12)
             Divider()
-
-            if keyboard.menuBarItems.isEmpty && presets.presetConfiguration.menuBarPresets.isEmpty {
-                Text("还没有添加快捷项。\n去「菜单栏」或「预设模式」页添加。")
-                    .font(.callout)
-                    .foregroundColor(.secondary)
-                    .multilineTextAlignment(.center)
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 16)
-            } else {
-                ScrollView {
-                    VStack(alignment: .leading, spacing: 10) {
-                        if !presets.presetConfiguration.menuBarPresets.isEmpty {
-                            MenuBarPresetPicker()
-                        }
-                        ForEach(keyboard.menuBarItems, id: \.self) { id in
-                            if let entry = MenuBarCatalog.entry(id) {
-                                MenuBarPanelRow(entry: entry)
-                            }
-                        }
+            ScrollView {
+                VStack(alignment: .leading, spacing: 14) {
+                    DashboardVolumeControl(compact: true)
+                    if !keyboard.menuBarItems.isEmpty { Divider() }
+                    ForEach(keyboard.menuBarItems, id: \.self) { id in
+                        if let entry = MenuBarCatalog.entry(id) { MenuBarPanelRow(entry: entry) }
                     }
-                    .padding(.horizontal, 14)
-                    .padding(.vertical, 8)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .background {
-                        GeometryReader { geometry in
-                            Color.clear.preference(key: MenuBarContentHeightKey.self, value: geometry.size.height)
-                        }
+                    if !presets.presetConfiguration.menuBarPresets.isEmpty {
+                        Divider()
+                        MenuBarPresetPicker()
+                    }
+                    if keyboard.menuBarItems.isEmpty && presets.presetConfiguration.menuBarPresets.isEmpty {
+                        Text("尚未添加参数快捷项，可在“更多”中配置。")
+                            .font(.system(size: 13)).foregroundStyle(Theme.secondaryText)
                     }
                 }
-                .frame(height: MenuBarPanelLayout.scrollHeight(contentHeight: contentHeight))
-                .onPreferenceChange(MenuBarContentHeightKey.self) { height in
-                    let measured = height.rounded(.up)
-                    if measured > 0 && measured != contentHeight { contentHeight = measured }
+                .padding(.horizontal, 14).padding(.vertical, 12)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background {
+                    GeometryReader { geometry in
+                        Color.clear.preference(key: MenuBarContentHeightKey.self, value: geometry.size.height)
+                    }
                 }
             }
-
+            .frame(height: MenuBarPanelLayout.scrollHeight(contentHeight: contentHeight))
+            .onPreferenceChange(MenuBarContentHeightKey.self) { height in
+                let measured = height.rounded(.up)
+                if measured > 0 && measured != contentHeight { contentHeight = measured }
+            }
             Divider()
-
-            HStack(spacing: 8) {
-                Button("显示主窗口") {
-                    // 先切回 .regular 再开窗：此时应用可能正处于 .accessory
-                    // （Dock 里没有图标），不先切的话窗口能开出来但 Dock 图标要等一拍
-                    state.showMainWindow()
-                    if !state.isSimulation { openWindow(id: "main") }
-                }
-                if connection.isConnected {
-                    Button("断开") { state.disconnectAdb() }
-                } else {
-                    Button("重连") { state.connect() }
-                }
+            HStack {
+                Button("打开主窗口") { showMainWindow() }.toolboxAction()
                 Spacer()
-                Button("退出") { state.quit() }
-            }
-            .buttonStyle(.bordered)
-            .controlSize(.small)
-            .padding(.horizontal, 14)
-            .padding(.vertical, 8)
+                Menu("更多") {
+                    Button("连接设置…") { navigation.showsConnectionSettings = true; showMainWindow() }
+                    Button("菜单栏配置…") { state.requestedPage = .menuBar; showMainWindow() }
+                    Button("预设管理…") { state.requestedPage = .presets; showMainWindow() }
+                    Button("工具与设置…") { state.requestedPage = .tools; showMainWindow() }
+                    Divider()
+                    if connection.isConnected || connection.connectionInProgress {
+                        Button(connection.connectionInProgress ? "取消连接 / 扫描" : "断开当前连接") { state.disconnectAdb() }
+                    } else {
+                        Button("连接显示器…") { navigation.showsConnectionSettings = true; showMainWindow() }
+                    }
+                    Button("退出") { state.quit() }
+                }.menuStyle(.borderlessButton).fixedSize().font(.system(size: 13))
+            }.padding(.horizontal, 14).padding(.vertical, 10)
         }
-        .padding(6)
-        .toolboxGlass(cornerRadius: 18)
-        .tint(Theme.accent)
-        .accentColor(Theme.accent)
-        .frame(width: 340)
-        .fixedSize(horizontal: false, vertical: true)
+        .padding(6).toolboxGlass(cornerRadius: 18).tint(Theme.accent).accentColor(Theme.accent)
+        .frame(width: 360).fixedSize(horizontal: false, vertical: true)
+    }
+
+    private func showMainWindow() {
+        // Keep the existing Dock/window lifecycle; simulation only records the system action.
+        state.showMainWindow()
+        if !state.isSimulation { openWindow(id: "main") }
     }
 }
 
@@ -202,25 +187,31 @@ private struct MenuBarPanelRow: View {
         VStack(alignment: .leading, spacing: 6) {
             switch entry.kind {
             case .options(let options):
+                let raw = state.menuBarValue(for: entry.id) ?? -1
+                let current = options.contains { $0.value == raw } ? raw : -1
                 Text(entry.label).font(.callout).foregroundColor(.secondary)
                 Picker("", selection: Binding(
-                    get: { state.menuBarValue(for: entry.id) ?? -1 },
+                    get: { current },
                     set: { state.applyMenuBarOption(entry.id, value: $0) }
                 )) {
+                    if current == -1 { Text("未知").tag(-1).disabled(true) }
                     ForEach(options) { opt in
                         Text(opt.label).tag(opt.value)
                     }
                 }
                 .pickerStyle(.menu)
                 .labelsHidden()
+                .accessibilityLabel(entry.label)
                 .frame(maxWidth: .infinity, alignment: .leading)
 
             case .stepper(let lo, let hi, _):
-                let current = state.menuBarValue(for: entry.id) ?? lo
+                let raw = state.menuBarValue(for: entry.id)
+                let reading = raw.flatMap { (lo...hi).contains($0) ? $0 : nil }
+                let current = reading ?? lo
                 HStack {
                     Text(entry.label).font(.callout).foregroundColor(.secondary)
                     Spacer()
-                    Text("\(dragging ?? current)")
+                    Text((dragging ?? reading).map(String.init) ?? "—")
                         .font(.callout.monospacedDigit())
                         .foregroundColor(.primary)
                 }
@@ -239,6 +230,8 @@ private struct MenuBarPanelRow: View {
                     state.setMenuBarItem(entry.id, to: Int(v))
                     dragging = nil
                 }
+                .accessibilityLabel(entry.label)
+                .accessibilityValue((dragging ?? reading).map(String.init) ?? "未知")
             }
         }
         .disabled(!connection.isConnected)

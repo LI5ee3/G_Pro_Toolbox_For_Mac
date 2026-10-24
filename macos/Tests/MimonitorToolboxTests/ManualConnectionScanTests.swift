@@ -71,6 +71,30 @@ final class ManualConnectionScanTests: XCTestCase {
         state.stop()
     }
 
+    func testExplicitSheetScanOnlyListsCandidatesAndCannotReplaceAnActiveSession() async {
+        for mode in [ManualConnectionMode.tcp, .usb] {
+            let runtime = PreviewRuntime(), state = runtime.makeState(.disconnected)
+            state.connection.mode = mode
+            state.ipInput = "unchanged.example"; state.connection.tcpPortInput = "5566"
+            state.scanNet(automaticallyConnect: false); await state.waitForPendingWork()
+            XCTAssertEqual(state.scannedDevices, [runtime.display.identity])
+            XCTAssertEqual(state.connection.mode, mode)
+            XCTAssertEqual(state.ipInput, "unchanged.example")
+            XCTAssertEqual(state.connection.tcpPortInput, "5566")
+            XCTAssertFalse(state.isConnected); XCTAssertNil(state.connection.activeEndpoint)
+            XCTAssertEqual(runtime.display.recordedCommands, scanTrace(runtime.display.identity))
+            state.stop()
+        }
+        let runtime = PreviewRuntime(), state = runtime.makeState()
+        let session = state.adb.session()
+        state.scanNet(automaticallyConnect: false); await state.waitForPendingWork()
+        XCTAssertEqual(state.adb.session().sessionID, session.sessionID)
+        XCTAssertFalse(session.cancellation.isCancelled)
+        XCTAssertEqual(state.connection.activeEndpoint, session.endpoint)
+        XCTAssertTrue(runtime.display.recordedCommands.isEmpty)
+        state.stop()
+    }
+
     func testSelectingScannedHostReconnectsSameHostFromCustomPortTo5555() async {
         let runtime = PreviewRuntime(), state = runtime.makeState(.connected)
         let custom = AdbEndpoint.tcp(host: runtime.display.identity, port: 5566)

@@ -1,14 +1,41 @@
 # 红米 G Pro ToolBox 设计规范
 
-更新：2026-10-24 · **S3-01 方向已由用户采用并合并；S3-02 共享组件实现待 review**。
+更新：2026-10-24 · **方向已采用；S3-02 已 review 合并；S3-03 工作区迁移待 review**。
 
-用户已采用 PR #5 的“控制优先的原生工作区”作为后续 UI 实现方向，并单独授权 S3-02。PR #5 复核 HEAD `c71f7995445a7f84c744ddf546d0be2b7588bb2f` 与已 review 版本一致，默认 CI [#33](https://github.com/LI5ee3/G_Pro_Toolbox_For_Mac/actions/runs/40093006793) 通过后，以 merge commit `b6648bccf47117b3619a465af98ffc435704f323` 合入 master；合并后的默认 CI [#34](https://github.com/LI5ee3/G_Pro_Toolbox_For_Mac/actions/runs/40097070825) 亦通过。设计分支引用已正常删除，原工作树与内容保留。本轮仅实施下面的共享规则，不迁移页面结构，不开始 S3-03；现用 App 不替换。M2/G2 NOT_PASSED、Auto DEFERRED、G3 未通过。下文 S3-01 提案与 Pro B 取舍作为形成过程保留，旧的“待确认/不开始 S3-02”停止点由本次授权取代。
+用户已采用 PR #5 的“控制优先的原生工作区”。S3-01 复核 HEAD `c71f799` 经默认 CI #33 通过，以 merge commit `b6648bccf47117b3619a465af98ffc435704f323` 合入 master，合并 CI #34 通过。S3-02 的 PR #6 HEAD 与已复核的 `e9b8574fc218c17b422e1c0c95d6e1a523dc39de` 完全一致，沿用已通过的默认 CI [#35](https://github.com/LI5ee3/G_Pro_Toolbox_For_Mac/actions/runs/40098121445)，标记 ready 后以 merge commit `ea8f7b608cf044ec7b9cf9274a8ef55f9a55d2c0` 合入 master；自然触发的合并 CI [#36](https://github.com/LI5ee3/G_Pro_Toolbox_For_Mac/actions/runs/40099394801) 通过。确认包含关系后正常删除已合并分支引用，原工作树与内容保留。
 
-平台及业务边界见 [ARCHITECTURE](docs/ARCHITECTURE.md)，进度以 [ROADMAP](docs/ROADMAP.md) 为准。
+本轮由用户单独授权 S3-03，止于新草稿 PR review，不开始 S3-04。M2/G2 NOT_PASSED、Auto DEFERRED、G3 未通过；现用 App 不替换。下文 S3-01/02 与 Pro B 记录保留为各自当时范围，历史停止点由最新授权取代。平台及业务边界见 [ARCHITECTURE](docs/ARCHITECTURE.md)，进度以 [ROADMAP](docs/ROADMAP.md) 为准。
 
-## S3-02：共享组件规则与本轮范围（实现待 review）
+## S3-03：主窗口、首页、连接与菜单栏（实现待 review）
 
-沿用已采用的北极星：打开后直接调显示器，需要精调时仍能迅速找到每个参数。本轮在合并后的 master 上使用独立分支 `ui/s3-02-shared-components`，实际读取已安装 **oil-ui-pro 0.24.2** 的 SKILL、存量项目、组件、交互与状态及视觉精修规则；不升级技能、不重新探索方向或组织评分。以下是共享样式的落地，S3-01 原型不复制进生产代码。
+独立分支 `ui/s3-03-control-workspace` 从上述合并后的 master 创建。继续实际使用本机 **oil-ui-pro 0.24.2**，读取真实 SKILL、存量项目、组件、布局表面、交互/状态、动效和轻量 UX 走查规则；沿用下文 Apple HIG 与公开 SwiftUI/AppKit API，不升级技能、不探索新方向、不重复评分。对照 `upstream/master` 的原生 `NavigationSplitView + List`、页面分发及菜单窗口生命周期做法，复用本项目已有业务适配；不复制 S3-01 整份原型。
+
+- **外壳与首页**：`ContentView` 用常驻分组侧栏呈现现有十个 `Page`，保留 `requestedPage`、`onPageAppear`、连接门控、预设 busy/错误与窗口生命周期。原生窗口工具栏提供页名、简短真实状态、连接设置（⌘K）和日志；完整失败原因保留在连接面板及状态提示，避免挤占最小窗口。首页移除主设备插画，把音量/静音、背光和模式放在主体；视频输入、真实当前预设、自动任务、键盘设置、保活与归属入口保留。其余页面继续承载原 View，未重排密集参数、预设或工具页。
+- **控件与读数**：首页原音量控件局部提取为 `DashboardVolumeControl`，仅供首页和菜单面板实际复用；背光仍用原 FastSlider 范围、步长与提交动作。拖动只更新本地显示，松手/辅助功能提交调用既有动作，外部读数与错误发布只同步显示。未知/离线读数为“—”，模式不误示选中，视频输入与 ADB 控制端点分别表达。没有新的轮询或业务结果发布。
+- **连接对象**：`ConnectionSettingsSheet` 从首页私有实现局部提取为同一 session 的共享 sheet，供工具栏、侧栏、首页和菜单入口使用。620×620pt，固定标题与底部动作，正文滚动。上方活动端点独立于下方 USB/TCP、地址/端口及候选草稿；仅明确“连接所选目标/断开并连接所选目标”调用原断开、模式和连接入口。USB 刷新沿用枚举；TCP 扫描仅在原能力允许且没有活动连接时开放。
+- **最小入口适配**：`scanNet(automaticallyConnect: false)` 仅列候选并保留填写地址，旧调用默认行为不变；新候选按钮只编辑局部草稿，不绑定会直接连接的 `selectScannedDevice`。手动 TCP 失败发布到已有 `.failed` 状态，界面可见原因；启动自动连接的旧回退不变。不重写会话、取消、恢复或身份机制。
+- **诊断、保存与确认**：局部 `ConnectionDraft` 将点击时 host/port 快照交给已有诊断入口，随后恢复模型输入，诊断不切换会话。保存按钮明确为“保存当前连接偏好”，旁边重复真实保存端点；只把当前活动端点交给既有保存入口，草稿不成为目标，忙碌和结果直接观察模型。归属弹窗直接沿用生产 `ConnectionIdentityControls`，打开时固定 session、profile token、完整旧数据归属文案及选项，确认提交已展示依据，由原校验拒绝陈旧确认。
+- **菜单栏**：在现有 `MenuBarPanel` 与 `MenuBarExtra` 内容上调整为设备/活动端点 → 音量/静音 → 用户已启用参数（原顺序）→ 用户可见预设 → 打开主窗口/更多。音量不是原可选目录项，因此加入一次；背光仍由真实配置决定，不另放重复控件。“更多”集中连接、菜单配置、预设、工具、断开与退出，沿用原 `showMainWindow/openWindow`。没有第二个 Coordinator、客户端或菜单轮询，未操作真实菜单栏/登录项。
+
+安全 Preview 默认显示这些**生产 UI**，底部场景/页面/浅深色、最小窗口与辅助功能开关只属于宿主；“菜单栏面板”弹出同一 fake session 的实际菜单内容，可检查到主窗口的跳转。新增连接中/连接失败仅为明确标注的内存展示状态。S3-01 提案及其 `#Preview` 继续作为历史资源。
+
+```sh
+xcodebuild -project macos/Toolbox.xcodeproj -scheme ToolboxPreviews -configuration Debug \
+  -derivedDataPath /tmp/s3-03-review-preview -destination 'platform=macOS,arch=arm64' \
+  CODE_SIGN_IDENTITY=- build
+```
+
+打开 `/tmp/s3-03-review-preview/Build/Products/Debug/ToolboxPreviewHost.app`。全部设备、权限、文件与系统动作使用现有内存 fake，不连接显示器或 5038 server。截图是原生运行 Preview 的静态记录：
+
+[默认浅色首页](docs/design/S3-03/home-light.jpg) · [最小深色窗口](docs/design/S3-03/home-min-dark.jpg) · [TCP 活动连接与不同草稿](docs/design/S3-03/connection-tcp-draft-light.jpg) · [保存活动端点反馈](docs/design/S3-03/connection-save-feedback-light.jpg) · [完整归属确认](docs/design/S3-03/ownership-confirmation.jpg) · [真实配置与可见预设](docs/design/S3-03/menu-configured-light.jpg) · [最小窗口失败状态](docs/design/S3-03/home-failure-min-light.jpg) · [深色待授权与辅助功能回退](docs/design/S3-03/connection-authorization-accessibility-dark.jpg)。
+
+必要检查：安全 Preview 编译和既有依赖/源码副作用/二进制资源隔离 PASS；12 项定向 fake 检查通过，覆盖 TCP/USB 会话 A 与草稿 B 的诊断隔离、显式连接只派发一次、仅浏览扫描保留输入/旧默认行为、保存实际活动端点及异步 busy/成功/陈旧失败、原有旧 session/token 归属校验，以及音量命令只提交一次。实际操作检查 ⌘K、Return、Escape、连接面板、真实菜单配置/可见预设与菜单跳转；确认十个侧栏入口保留。看图覆盖默认 1120×820、最小 1020×740、浅深色、未知/未连接门控、待授权、连接中与失败；手动断开后恢复暂停，扫描/选择不连接。局部注入减少透明度、减少动态效果及增加对比度后，代表深色面板的状态、边界和焦点可读。最终补齐原 USB 枚举中不可提交连接的规则，并单独重查对应 fake。FastSlider 本身及共享组件样式未改；本机没有重复完整 Swift/Python 回归或三种构建，默认 CI 按仓库原规则自然执行，不启用打包。
+
+一次隔离的 oil-ui-pro 轻量 UX 走查（`/root/s303_ux_walk`，独立上下文）实际完成“控制台切电影 → 更多画面设置 → 背光调至 35 → 刷新读回保持”，未遇阻塞。证据为 [原生界面操作后读数](docs/design/S3-03/ux-movie-backlight-35.jpg)。评审者另观察到原画面页刷新缺少可辨认的瞬时回执，尚不能排除工具快照遗漏，未判为产品缺陷；该页结构与刷新反馈不在本轮扩大修改。连接、失败和窗口检查由本轮定向验证另行覆盖，走查不替代真机结论。
+
+## S3-02：共享组件规则与交付记录（已 review 合并）
+
+以下保留 S3-02 当时范围。沿用已采用的北极星：打开后直接调显示器，需要精调时仍能迅速找到每个参数。当时在 S3-01 合并后的 master 上使用独立分支 `ui/s3-02-shared-components`，实际读取已安装 **oil-ui-pro 0.24.2** 的 SKILL、存量项目、组件、交互与状态及视觉精修规则；不升级技能、不重新探索方向或组织评分。以下是共享样式的落地，S3-01 原型不复制进生产代码。
 
 - **颜色与性能**：在现有 `Theme` 内将画布、内容、次级控件、边界和辅助文字改为中性灰角色。保留已有浅深自适应 RGB 求值路径与 accent/onAccent、成功/警告配对，避免把高频表面机械换成 CoreUI 语义色；强调色仍只辅助主动作和选中。本项先保留可用的强调色配对，不建立动态主题引擎。
 - **字级与间距**：页头 22pt semibold，分组 14pt semibold，按钮及滑块标签/读数 13pt；读数等宽。共享分组内距 16pt、内容间距 12pt；控件圆角 8pt、分组圆角 12pt。只提取当前实际复用的三个样式值。`ButtonGroupSection` 沿用现有结构并复用分组字级。
@@ -32,7 +59,7 @@ xcodebuild -project macos/Toolbox.xcodeproj -scheme ToolboxPreviews -configurati
 
 [浅色首页](docs/design/S3-02/home-light.jpg) · [深色参数](docs/design/S3-02/picture-dark.jpg) · [辅助功能模拟与参数底部](docs/design/S3-02/picture-accessibility-light.jpg) · [深色授权与禁用](docs/design/S3-02/home-authorization-dark.jpg) · [原连接面板](docs/design/S3-02/connection-accessibility-light.jpg)。
 
-纯样式未新增单元测试；本机不重复完整 Swift/Python 回归、三种构建、全页视觉矩阵、Instruments 或真机验收，完整默认检查由自然触发的 CI 承担。没有新一轮独立评分。临时 Preview 已退出、临时 App/构建输出已清理；七个原未提交文件、其他工作树、历史标签、现用 App 文件及 App/5038 server 的 PID/启动时间核对一致。S3-02 停在独立草稿 PR review；S3-03 保留连接/首页/菜单栏结构迁移，后续参数页重排、菜单系统集成、焦点与完整视觉矩阵按原后续项处理。本轮不宣称这些页面已按提案迁移。
+纯样式未新增单元测试；本机不重复完整 Swift/Python 回归、三种构建、全页视觉矩阵、Instruments 或真机验收，完整默认检查由自然触发的 CI 承担。没有新一轮独立评分。临时 Preview 已退出、临时 App/构建输出已清理；七个原未提交文件、其他工作树、历史标签、现用 App 文件及 App/5038 server 的 PID/启动时间核对一致。S3-02 当时停在独立草稿 PR review，现已由用户复核并合并（见页首）；当时未进行连接/首页/菜单栏结构迁移。其后 S3-03 实际范围见上节，参数页重排、完整焦点与视觉矩阵仍留待相应后续项。
 
 ## S3-01 原提案与交付记录（方向已采用）
 

@@ -9,15 +9,9 @@ struct ContentView: View {
     @Environment(NavigationModel.self) private var navigation
     @Environment(SettingsModel.self) private var settings
     @Environment(\.scenePhase) private var scenePhase
-    @Environment(\.accessibilityReduceMotion) private var systemReduceMotion
-    @Environment(\.toolboxPreviewAccessibility) private var previewAccessibility
-    private var reduceMotion: Bool { systemReduceMotion || previewAccessibility.reduceMotion }
     @State private var selection: Page = .home
-    @State private var appeared = false
-    @Namespace private var navigationAnimation
+    @State private var showLogs = false
     init(initialPage: Page = .home) { _selection = State(initialValue: initialPage) }
-
-    private let pages: [Page] = [.home, .picture, .game, .source, .light, .presets, .autoTasks, .remote]
 
     private func name(_ page: Page) -> String {
         switch page {
@@ -28,86 +22,67 @@ struct ContentView: View {
         case .light: return "灯光"
         case .presets: return "预设"
         case .autoTasks: return "自动任务"
+        case .menuBar: return "菜单栏配置"
         default: return page.title
         }
     }
 
-    private func select(_ page: Page) {
-        withAnimation(reduceMotion ? nil : .easeInOut(duration: 0.2)) { selection = page }
-    }
-
-    private func navigationButton(_ page: Page) -> some View {
-        Button { select(page) } label: {
-            Label(name(page), systemImage: page.icon)
-                .font(.system(size: 13, weight: selection == page ? .semibold : .regular))
-                .foregroundColor(selection == page ? Theme.accent : Theme.secondaryText)
-                .padding(.horizontal, 14).frame(height: 34)
-                .background {
-                    if selection == page {
-                        RoundedRectangle(cornerRadius: 10).fill(Theme.card)
-                            .matchedGeometryEffect(id: "selection", in: navigationAnimation)
-                    }
-                }
+    private func navigationSection(_ title: String, pages: [Page]) -> some View {
+        Section(title) {
+            ForEach(pages) { page in
+                Label(name(page), systemImage: page.icon).tag(page)
+            }
         }
-        .buttonStyle(ControlPressStyle())
-        .accessibilityAddTraits(selection == page ? .isSelected : [])
     }
 
     var body: some View {
-        VStack(spacing: 0) {
-            HStack(spacing: 12) {
-                ToolboxGlassGroup {
-                    HStack(spacing: 3) {
-                        ForEach([Page.home, .picture, .game]) { page in
-                            navigationButton(page)
-                        }
-                        Menu {
-                            ForEach([Page.source, .light, .presets, .autoTasks, .remote]) { page in
-                                Button { select(page) } label: { Label(name(page), systemImage: page.icon) }
-                            }
-                        } label: {
-                            Label([Page.source, .light, .presets, .autoTasks, .remote].contains(selection)
-                                  ? name(selection) : "全部工具", systemImage: "square.grid.2x2")
-                                .font(.system(size: 13, weight: .medium))
-                                .foregroundColor([Page.source, .light, .presets, .autoTasks, .remote].contains(selection)
-                                                 ? Theme.accent : Theme.secondaryText)
-                                .padding(.horizontal, 12).frame(height: 34)
-                        }
-                        .menuStyle(.borderlessButton).fixedSize()
-                    }
-                    .padding(4).toolboxGlass(cornerRadius: 14)
+        NavigationSplitView(columnVisibility: .constant(.all)) {
+            VStack(spacing: 0) {
+                Text("G Pro ToolBox").font(.system(size: 15, weight: .semibold))
+                    .frame(maxWidth: .infinity, alignment: .leading).padding(16)
+                List(selection: Binding<Page?>(get: { selection }, set: { if let page = $0 { selection = page } })) {
+                    navigationSection("显示器", pages: [.home, .picture, .game, .source, .light])
+                    navigationSection("工作流", pages: [.presets, .autoTasks, .remote])
+                    navigationSection("应用", pages: [.tools, .menuBar])
                 }
-                Spacer()
-                Menu {
-                    Button { select(.tools) } label: { Label("工具与设置", systemImage: "slider.horizontal.3") }
-                    Button { select(.menuBar) } label: { Label("菜单栏配置", systemImage: "menubar.rectangle") }
-                } label: {
-                    Label(selection == .menuBar ? "菜单栏" : "设置", systemImage: "slider.horizontal.3")
-                        .font(.system(size: 13, weight: .medium))
-                        .foregroundColor([Page.tools, .menuBar].contains(selection) ? Theme.accent : Theme.secondaryText)
-                        .padding(.horizontal, 12).frame(height: 34)
-                }
-                .menuStyle(.borderlessButton).fixedSize()
+                .listStyle(.sidebar).accessibilityLabel("功能导航")
+                sidebarDevice
             }
-            .padding(.horizontal, 28).frame(height: 64)
-            detailView
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-                .opacity(reduceMotion || appeared ? 1 : 0)
-                .offset(y: reduceMotion || appeared ? 0 : 6)
+            .navigationSplitViewColumnWidth(min: 184, ideal: 208, max: 240)
+            .toolbar(removing: .sidebarToggle)
+        } detail: {
+            detailView.frame(maxWidth: .infinity, maxHeight: .infinity).background(Theme.canvas)
+                .toolbar {
+                    ToolbarItem(placement: .principal) {
+                        Text(name(selection)).font(.system(size: 14, weight: .semibold))
+                    }
+                    ToolbarItemGroup(placement: .primaryAction) {
+                        Label(connection.statusTitle, systemImage: connection.statusSymbol)
+                            .font(.system(size: 12)).foregroundStyle(connection.statusColor)
+                            .lineLimit(1).help(connection.statusText).labelStyle(.titleAndIcon)
+                        Button { navigation.showsConnectionSettings = true } label: {
+                            Label("连接设置", systemImage: "cable.connector")
+                        }.toolboxAction().labelStyle(.titleAndIcon).keyboardShortcut("k", modifiers: .command)
+                        Button { showLogs = true } label: { Label("日志", systemImage: "text.alignleft") }
+                            .toolboxAction().labelStyle(.titleAndIcon)
+                    }
+                }
         }
+        .navigationSplitViewStyle(.balanced)
         .preferredColorScheme(state.isSimulation
             ? (settings.theme == "light" ? .light : settings.theme == "dark" ? .dark : nil) : nil)
         .font(.system(size: 14))
         .tint(Theme.accent)
         .accentColor(Theme.accent)
         .background(Theme.canvas)
-        .onAppear {
-            withAnimation(reduceMotion ? nil : .easeOut(duration: 0.3)) { appeared = true }
+        .sheet(isPresented: Binding(get: { navigation.showsConnectionSettings }, set: { navigation.showsConnectionSettings = $0 })) {
+            ConnectionSettingsSheet(connection: connection)
         }
+        .sheet(isPresented: $showLogs) { OperationLogSheet() }
         .onChange(of: scenePhase) { _, phase in
             if phase == .active { state.refreshSystemStatus() }
         }
-        .onChange(of: navigation.requestedPage) { _, page in
+        .onChange(of: navigation.requestedPage, initial: true) { _, page in
             guard let page else { return }
             selection = page
             state.requestedPage = nil
@@ -139,6 +114,19 @@ struct ContentView: View {
         )) {
             Button("好", role: .cancel) { state.presetError = nil }
         } message: { Text(presets.presetError ?? "") }
+    }
+
+    private var sidebarDevice: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Divider()
+            Label(connection.deviceDisplayName, systemImage: "display")
+                .font(.system(size: 13, weight: .semibold))
+            Text(connection.statusTitle).font(.system(size: 12)).foregroundStyle(connection.statusColor)
+                .lineLimit(2).help(connection.statusText)
+            Text(connection.activeControlText).font(.system(size: 12)).foregroundStyle(Theme.secondaryText)
+                .lineLimit(2).textSelection(.enabled)
+            Button("连接设置…") { navigation.showsConnectionSettings = true }.toolboxAction()
+        }.padding(16)
     }
 
     @ViewBuilder private var detailView: some View {

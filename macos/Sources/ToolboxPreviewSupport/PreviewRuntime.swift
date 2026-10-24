@@ -188,6 +188,7 @@ package final class PreviewRuntime {
         case permissionDenied = "权限拒绝", loginApproval = "登录待批准"
         case usbConnected = "USB 已连接", usbUnauthorized = "USB 待授权", usbOffline = "USB 离线"
         case multipleDevices = "多台候选", dualTransport = "USB 与 TCP 同时在线"
+        case connecting = "连接中", connectionFailure = "连接失败"
     }
     package let preferences = MemoryPreferences()
     package let scheduler = ManualScheduler()
@@ -309,7 +310,7 @@ package final class PreviewRuntime {
                     state.connectionStatus = .connected("MiTV Preview · \(usbSerial)")
                 }
             }
-        } else if scenario != .disconnected {
+        } else if ![Scenario.disconnected, .connecting, .connectionFailure].contains(scenario) {
             state.connection.identityRestricted = false
             state.connection.presetIdentityKey = display.identity
             state.connection.allowsIdentityAutomaticActions = true
@@ -345,6 +346,8 @@ package final class PreviewRuntime {
             state.loadedPages = AppCoordinator.refreshablePages
             state.seedSimulationReadings(volume: scenario == .unknown ? nil : 10, muted: scenario == .unknown ? nil : false)
         }
+        if scenario == .connecting { state.connectionStatus = .connecting }
+        if scenario == .connectionFailure { state.connectionStatus = .failed("模拟连接超时，请检查目标地址或显示器授权") }
         return state
     }
 }

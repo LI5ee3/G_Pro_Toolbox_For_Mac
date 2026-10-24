@@ -63,7 +63,7 @@ extension AppCoordinator {
                     self.log("等待在显示器上确认 ADB 授权")
                     return
                 }
-                self.connectionStatus = .disconnected
+                self.connectionStatus = isAuto ? .disconnected : .failed(state)
                 if isAuto {
                     self.log("启动自动连接失败: \(state)，开始扫描内网")
                     self.scanNet()
@@ -126,15 +126,17 @@ extension AppCoordinator {
         updateAutomaticTaskStatus()
     }
 
-    package func scanNet() {
-        guard connection.mode == .tcp else { log("USB 模式请使用枚举设备"); return }
+    package func scanNet(automaticallyConnect: Bool = true) {
+        // The explicit connection sheet can browse TCP targets while disconnected in either mode.
+        // Legacy callers retain the original mode guard and automatic selection behavior.
+        guard !automaticallyConnect || connection.mode == .tcp else { log("USB 模式请使用枚举设备"); return }
         switch connectionStatus {
         case .disconnected, .awaitingAuthorization, .offline, .failed: break
         case .connecting: log("正在连接显示器，请等待连接完成或先断开"); return
         case .connected: log("已连接显示器，请先断开后扫描"); return
         case .scanning: log("正在扫描内网，请等待扫描完成"); return
         }
-        let allowAutomaticSelection = connectionIntent.allowsAutomaticRecovery
+        let allowAutomaticSelection = automaticallyConnect && connectionIntent.allowsAutomaticRecovery
         let request = connectionIntent.beginScan()
         adb.beginSession(endpoint: nil)
         connectionStatus = .scanning
@@ -171,6 +173,8 @@ extension AppCoordinator {
                     self.connection.tcpPortInput = "5555"
                     self.log("扫描识别到唯一显示器，自动连接 \(target.label)")
                     self.connect()
+                } else if !automaticallyConnect {
+                    self.log("扫描结果仅供选择；填写或选择目标后点击连接，未自动连接")
                 } else if monitors.count > 1 {
                     self.selectedDevice = ""
                     self.ipInput = ""
