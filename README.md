@@ -8,17 +8,19 @@ Redmi G Pro 27U / 32U 显示器的原生 macOS 控制应用，使用 SwiftUI、A
 
 ## 功能
 
-- **ADB 键盘音量控制**：音量加减与静音通过网络 ADB 操作显示器，保留步长、原生 OSD 及默认音频输出限制。
+- **ADB 键盘音量控制**：音量加减与静音通过当前 USB/TCP ADB 会话操作显示器，保留步长、原生 OSD 及默认音频输出限制。
 - **画面与游戏设置**：画面模式、背光、色温、色域、精密控光、FreeSync、准星等；具体选项取决于显示器型号与固件。
 - **信号源、屏幕灯与遥控器**：切换输入源、调节灯效，并使用虚拟遥控器。
 - **Mac 集成**：菜单栏快捷控制、全局快捷键、自定义悬浮提示、亮度键控制背光、登录后自动启动、深浅色主题。
 - **预设与自动任务**：保存画面设置、管理常用预设与定时操作。
-- **网络 ADB 恢复**：Mac 唤醒后检查实际连接并自动重连，刷新音量与保活状态。
+- **所选传输恢复**：Mac 唤醒后检查实际连接并在所选 USB/TCP 传输内恢复，遵守显式断开抑制，不自动跨传输切换。
 - **AdbGuardian 部署与回读验证**：安装显示器端保活组件后确认实际运行、端口和权限状态。
 
 <img src="macos/assets/screenshots/ui-c-home.png" width="700" alt="Mac 应用控制台">
 
 更多截图、配置和实测范围见 [Mac 使用与开发说明](macos/README.md)。
+
+手动 USB/TCP 操作、授权与排障、连接偏好、旧配置归属及备份/恢复限制集中在 [手动连接与配置](macos/README.md#手动连接与配置)。连接成功不会自动保存偏好，全局记忆归属也不是必做步骤。
 
 当前架构与运行边界见 [ARCHITECTURE](docs/ARCHITECTURE.md)，执行范围及验收状态以 [ROADMAP](docs/ROADMAP.md) 为准。S2-01 至 S2-06 已合入，包含手动 USB/TCP 选择和经确认的身份兼容，详见 [ADB 契约第 0 节](docs/ADB-CONTRACTS.md)。
 
@@ -27,6 +29,7 @@ PR #4 已合并；源码 `839186f` 的候选 `0.1.0 (20261024.1)` 已有真实 T
 ## 使用条件
 
 - Apple Silicon Mac（M1 或更新的 M 系列芯片），运行 macOS 27 或更高版本。
+- USB ADB 需要数据线连接与显示器端授权，已测 Type-C 接线见下文。
 - 网络 ADB 功能需要显示器开启 ADB，且 Mac 与显示器可通过网络互通（TCP 5555）。视频线本身不提供网络连接。
 - 全局键盘控制需要 macOS 辅助功能授权。
 
@@ -66,7 +69,7 @@ App 默认输出到 `macos/.build/artifacts/development/`；打包产物位于 `
 
 ```text
 Mac 原生应用
-└─ 网络 ADB（TCP 5555）→ 显示器 Android 系统
+└─ 内嵌 adb（Mac 侧 server 5038）→ USB 或网络 TCP（设备默认端口 5555）→ 显示器 Android 系统
    ├─ settings / AudioService → 设置与媒体音量
    ├─ MtkDirectTool.jar → MTK 画面控制
    ├─ ColorfulLedTool.jar → 屏幕灯控制
