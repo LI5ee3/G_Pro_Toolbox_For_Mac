@@ -29,10 +29,6 @@ extension AppCoordinator {
         get { presets.presetError }
         set { presets.presetError = newValue }
     }
-    package var automaticTaskStatus: String {
-        get { presets.automaticTaskStatus }
-        set { presets.automaticTaskStatus = newValue }
-    }
     package var requestedPage: Page? {
         get { navigation.requestedPage }
         set { navigation.requestedPage = newValue }

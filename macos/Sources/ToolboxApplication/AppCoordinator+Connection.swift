@@ -91,7 +91,7 @@ extension AppCoordinator {
         switch page {
         case .picture, .game, .source, .light, .remote: return true
         // 菜单栏配置页只改本地配置，没连显示器也能用
-        case .home, .tools, .menuBar, .presets, .autoTasks: return false
+        case .home, .tools, .menuBar, .presets: return false
         }
     }
 
@@ -123,7 +123,6 @@ extension AppCoordinator {
             runConnectionTask { _ = self.adb.disconnect(endpoint: endpoint) }
         }
         log("已断开连接")
-        updateAutomaticTaskStatus()
     }
 
     package func scanNet(automaticallyConnect: Bool = true) {

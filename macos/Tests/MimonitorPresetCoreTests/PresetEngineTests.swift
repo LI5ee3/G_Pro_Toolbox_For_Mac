@@ -1,4 +1,5 @@
 import Foundation
+import Testing
 import XCTest
 @testable import MimonitorPresetCore
 
@@ -13,6 +14,47 @@ private final class Monitor: PresetDevice {
         self.values = values
         return PresetApplyReport(applied: ["画面模式", "背光"], failed: [], skipped: [])
     }
+}
+
+@Test(arguments: [false, true])
+private func legacyTaskFieldsDoNotBlockOrReplacePresets(applicationIncomplete: Bool) throws {
+    let data = Data("""
+        {
+          "presets": [{"id":"reading","name":"阅读","values":{"picture_backlight":"25"}}],
+          "baseline": {"deviceIdentity":"192.168.1.20","values":{"picture_backlight":"40"}},
+          "activePresetID": "reading", "activeDeviceIdentity": "192.168.1.20",
+          "applicationIncomplete": \(applicationIncomplete), "menuBarPresetIDs": ["reading"],
+          "tasks": [{"id":"old","presetID":"reading","start":"00:00","end":"23:59","enabled":true}],
+          "session": {"taskID":"old","deviceIdentity":"old-task-owner","previousPresetID":"reading"}
+        }
+        """.utf8)
+    let preferences = MemoryPreferences(["picture_presets_v1": data])
+    let store = PresetStore(defaults: preferences)
+    let engine = PresetEngine(store: store)
+    let original = engine.configuration
+    #expect(store.loadError == nil)
+    #expect(original.presets.map(\.id) == ["reading"])
+    #expect(original.baseline?.values["picture_backlight"] == "40")
+    #expect(original.activePresetID == "reading")
+    #expect(original.activeDeviceIdentity == "192.168.1.20")
+    #expect(original.applicationIncomplete == applicationIncomplete)
+    #expect(original.menuBarPresetIDs == ["reading"])
+    #expect(preferences.data(forKey: "picture_presets_v1") == data)
+
+    try engine.rename(id: "reading", name: "办公")
+    let saved = try #require(preferences.data(forKey: "picture_presets_v1"))
+    let json = try #require(JSONSerialization.jsonObject(with: saved) as? [String: Any])
+    #expect(json["tasks"] == nil)
+    #expect(json["session"] == nil)
+    var expected = original
+    expected.presets[0].name = "办公"
+    #expect(PresetStore(defaults: preferences).configuration == expected)
+
+    let monitor = Monitor()
+    try engine.apply(id: "reading", device: monitor)
+    #expect(monitor.values["picture_backlight"] == "25")
+    try engine.restore(device: monitor)
+    #expect(monitor.values["picture_backlight"] == "40")
 }
 
 final class PresetEngineTests: XCTestCase {
@@ -41,16 +83,15 @@ final class PresetEngineTests: XCTestCase {
         XCTAssertNil(engine.configuration.activePresetID)
     }
 
-    func testCreateAndRenameAvoidDuplicateNamesWithoutBreakingTaskReference() throws {
+    func testCreateAndRenameAvoidDuplicateNamesAndPreservePresetIdentity() throws {
         let engine = PresetEngine(store: store())
         let monitor = Monitor()
         let first = try engine.create(name: "阅读", device: monitor)
         let second = try engine.create(name: " 阅读 ", device: monitor)
         XCTAssertEqual(second.name, "阅读 (2)")
-        let task = ScheduledPresetTask(presetID: first.id, start: "09:00", end: "10:00")
-        try engine.saveTask(task)
         try engine.rename(id: first.id, name: "办公")
-        XCTAssertEqual(engine.configuration.tasks.first?.presetID, first.id)
+        XCTAssertEqual(engine.configuration.presets.first?.id, first.id)
+        XCTAssertEqual(engine.configuration.presets.first?.name, "办公")
     }
 
     func testAutosaveOnlyUpdatesThePresetCapturedByTheEdit() throws {
@@ -76,88 +117,6 @@ final class PresetEngineTests: XCTestCase {
         XCTAssertEqual(engine.configuration.baseline?.values["picture_backlight"], "40")
     }
 
-    func testOverlappingTasksReturnToOriginalPresetIdentity() throws {
-        let engine = PresetEngine(store: store())
-        let monitor = Monitor()
-        let manual = try engine.create(name: "手动", device: monitor)
-        monitor.values["picture_backlight"] = "70"
-        let day = try engine.create(name: "日间", device: monitor)
-        monitor.values["picture_backlight"] = "20"
-        let night = try engine.create(name: "夜间", device: monitor)
-        try engine.apply(id: manual.id, device: monitor)
-        try engine.saveTask(ScheduledPresetTask(presetID: day.id, start: "09:00", end: "11:00"))
-        try engine.saveTask(ScheduledPresetTask(presetID: night.id, start: "10:00", end: "12:00"))
-        try engine.reconcile(minute: 9 * 60, device: monitor)
-        XCTAssertEqual(monitor.values["picture_backlight"], "70")
-        try engine.reconcile(minute: 10 * 60, device: monitor)
-        XCTAssertEqual(monitor.values["picture_backlight"], "20")
-        try engine.reconcile(minute: 12 * 60, device: monitor)
-        XCTAssertEqual(monitor.values["picture_backlight"], "40")
-        XCTAssertEqual(engine.configuration.activePresetID, manual.id)
-        XCTAssertNil(engine.configuration.session)
-    }
-
-    func testDisconnectedTaskIsNotExecutedOutsideItsTimeWindow() throws {
-        let engine = PresetEngine(store: store())
-        let monitor = Monitor()
-        let preset = try engine.create(name: "一", device: monitor)
-        try engine.restore(device: monitor)
-        try engine.saveTask(ScheduledPresetTask(presetID: preset.id, start: "09:00", end: "10:00"))
-        try engine.reconcile(minute: 9 * 60, device: nil)
-        XCTAssertNil(engine.configuration.session)
-        monitor.values["picture_backlight"] = "55"
-        try engine.reconcile(minute: 10 * 60, device: monitor)
-        XCTAssertEqual(monitor.values["picture_backlight"], "55")
-    }
-
-    func testEndedTaskReturnsToBaselineAfterReconnectAndStoreReload() throws {
-        let storage = store()
-        let engine = PresetEngine(store: storage)
-        let monitor = Monitor()
-        let preset = try engine.create(name: "一", device: monitor)
-        try engine.restore(device: monitor)
-        monitor.values["picture_backlight"] = "55"
-        try engine.saveTask(ScheduledPresetTask(presetID: preset.id, start: "09:00", end: "10:00"))
-        try engine.reconcile(minute: 9 * 60, device: monitor)
-        try engine.reconcile(minute: 10 * 60, device: nil)
-        let reloaded = PresetEngine(store: PresetStore(defaults: storage.defaults))
-        try reloaded.reconcile(minute: 10 * 60, device: monitor)
-        XCTAssertEqual(monitor.values["picture_backlight"], "55")
-        XCTAssertNil(reloaded.configuration.session)
-    }
-
-    func testTaskFailureRetriesWithoutReplacingBaseline() throws {
-        let engine = PresetEngine(store: store())
-        let monitor = Monitor()
-        let preset = try engine.create(name: "一", device: monitor)
-        try engine.restore(device: monitor)
-        monitor.values["picture_backlight"] = "55"
-        try engine.saveTask(ScheduledPresetTask(presetID: preset.id, start: "09:00", end: "10:00"))
-        monitor.failure = true
-        XCTAssertThrowsError(try engine.reconcile(minute: 9 * 60, device: monitor))
-        monitor.failure = false
-        monitor.values["picture_backlight"] = "99"
-        try engine.reconcile(minute: 9 * 60 + 1, device: monitor)
-        try engine.reconcile(minute: 10 * 60, device: monitor)
-        XCTAssertEqual(monitor.values["picture_backlight"], "55")
-    }
-
-    func testBaselineTaskAndDeletionReturnToPreviousPreset() throws {
-        let engine = PresetEngine(store: store())
-        let monitor = Monitor()
-        let preset = try engine.create(name: "一", device: monitor)
-        monitor.values["picture_backlight"] = "20"
-        try engine.synchronize(id: preset.id, device: monitor)
-        let task = ScheduledPresetTask(presetID: PicturePreset.baselineID, start: "09:00", end: "10:00")
-        try engine.saveTask(task)
-        try engine.reconcile(minute: 9 * 60, device: monitor)
-        XCTAssertEqual(monitor.values["picture_backlight"], "40")
-        try engine.deleteTask(id: task.id)
-        try engine.reconcile(minute: 9 * 60, device: monitor)
-        XCTAssertEqual(monitor.values["picture_backlight"], "20")
-        XCTAssertEqual(engine.configuration.activePresetID, preset.id)
-    }
-
     func testCannotRestoreSnapshotToDifferentMonitor() throws {
         let engine = PresetEngine(store: store())
         let monitor = Monitor()
@@ -165,56 +124,6 @@ final class PresetEngineTests: XCTestCase {
         monitor.identity = "192.168.1.30"
         monitor.values["picture_backlight"] = "99"
         XCTAssertThrowsError(try engine.restore(device: monitor))
-        XCTAssertEqual(monitor.values["picture_backlight"], "99")
-    }
-
-    func testTaskReturnsToLatestSavedPresetValuesNotOldDeviceValues() throws {
-        let engine = PresetEngine(store: store())
-        let monitor = Monitor()
-        let previous = try engine.create(name: "电影", device: monitor)
-        monitor.values["picture_backlight"] = "70"
-        let game = try engine.create(name: "游戏", device: monitor)
-        try engine.apply(id: previous.id, device: monitor)
-        let task = ScheduledPresetTask(presetID: game.id, start: "09:00", end: "10:00")
-        try engine.saveTask(task)
-        try engine.reconcile(minute: 540, device: monitor)
-        // User temporarily switches to and edits the original preset during the task.
-        try engine.apply(id: previous.id, device: monitor)
-        monitor.values["picture_backlight"] = "33"
-        try engine.synchronize(id: previous.id, device: monitor)
-        try engine.apply(id: game.id, device: monitor)
-        try engine.reconcile(minute: 600, device: monitor)
-        XCTAssertEqual(monitor.values["picture_backlight"], "33")
-        XCTAssertEqual(engine.configuration.activePresetID, previous.id)
-    }
-
-    func testDeletedReturnPresetFallsBackToBaseline() throws {
-        let engine = PresetEngine(store: store())
-        let monitor = Monitor()
-        let previous = try engine.create(name: "电影", device: monitor)
-        monitor.values["picture_backlight"] = "70"
-        let game = try engine.create(name: "游戏", device: monitor)
-        try engine.apply(id: previous.id, device: monitor)
-        try engine.saveTask(ScheduledPresetTask(presetID: game.id, start: "09:00", end: "10:00"))
-        try engine.reconcile(minute: 540, device: monitor)
-        try engine.delete(id: previous.id, device: monitor)
-        try engine.reconcile(minute: 600, device: monitor)
-        XCTAssertNil(engine.configuration.activePresetID)
-        XCTAssertEqual(monitor.values["picture_backlight"], "40")
-    }
-
-    func testDifferentMonitorCannotReplaceBaselineOfUnfinishedTask() throws {
-        let engine = PresetEngine(store: store())
-        let monitor = Monitor()
-        let preset = try engine.create(name: "游戏", device: monitor)
-        try engine.restore(device: monitor)
-        try engine.saveTask(ScheduledPresetTask(presetID: preset.id, start: "09:00", end: "10:00"))
-        try engine.reconcile(minute: 540, device: monitor)
-        monitor.identity = "192.168.1.30"
-        monitor.values["picture_backlight"] = "99"
-        XCTAssertThrowsError(try engine.apply(id: preset.id, device: monitor))
-        XCTAssertThrowsError(try engine.create(name: "另一台", device: monitor))
-        XCTAssertEqual(engine.configuration.baseline?.deviceIdentity, "192.168.1.20")
         XCTAssertEqual(monitor.values["picture_backlight"], "99")
     }
 
@@ -248,18 +157,4 @@ final class PresetEngineTests: XCTestCase {
         XCTAssertEqual(engine.configuration.presets.first?.values["picture_backlight"], "40")
     }
 
-    func testNextDailyOccurrenceReappliesAfterMissedInactiveGap() throws {
-        let engine = PresetEngine(store: store())
-        let monitor = Monitor()
-        let preset = try engine.create(name: "游戏", device: monitor)
-        try engine.restore(device: monitor)
-        try engine.saveTask(ScheduledPresetTask(presetID: preset.id, start: "09:00", end: "10:00"))
-        let day = Date(timeIntervalSince1970: 1_700_000_000)
-        try engine.reconcile(minute: 540, device: monitor, now: day)
-        monitor.values["picture_backlight"] = "99"
-        try engine.reconcile(minute: 540, device: monitor, now: day.addingTimeInterval(86400))
-        XCTAssertEqual(monitor.values["picture_backlight"], "40")
-        try engine.reconcile(minute: 600, device: monitor, now: day.addingTimeInterval(86400))
-        XCTAssertNil(engine.configuration.activePresetID)
-    }
 }

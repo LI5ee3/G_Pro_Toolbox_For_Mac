@@ -205,8 +205,7 @@ final class ConnectionProfileStore {
         let configuration: PresetConfiguration
         do { configuration = try JSONDecoder().decode(PresetConfiguration.self, from: data) }
         catch { throw PresetError("预设配置无法读取，已保留原数据：\(error.localizedDescription)") }
-        let keys = [configuration.baseline?.deviceIdentity, configuration.activeDeviceIdentity,
-                    configuration.session?.deviceIdentity].compactMap { $0 }
+        let keys = [configuration.baseline?.deviceIdentity, configuration.activeDeviceIdentity].compactMap { $0 }
         guard !keys.contains(where: { $0.isEmpty }) else { throw PresetError("旧预设所有权字段为空，不能自动绑定") }
         return Array(Set(keys)).sorted()
     }

@@ -10,6 +10,5 @@ package final class PresetsModel {
     package var isPresetOperationInFlight = false
     package var presetOperationText = ""
     package var presetError: String?
-    package var automaticTaskStatus = ""
     package init() {}
 }

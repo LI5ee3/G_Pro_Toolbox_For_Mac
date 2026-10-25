@@ -21,7 +21,6 @@ struct ContentView: View {
         case .source: return "信号源"
         case .light: return "灯光"
         case .presets: return "预设"
-        case .autoTasks: return "自动任务"
         case .menuBar: return "菜单栏配置"
         case .tools: return "显示器工具"
         default: return page.title
@@ -43,7 +42,7 @@ struct ContentView: View {
                     .frame(maxWidth: .infinity, alignment: .leading).padding(16)
                 List(selection: Binding<Page?>(get: { selection }, set: { if let page = $0 { selection = page } })) {
                     navigationSection("显示器", pages: [.home, .picture, .game, .source, .light])
-                    navigationSection("工作流", pages: [.presets, .autoTasks, .remote])
+                    navigationSection("工作流", pages: [.presets, .remote])
                     navigationSection("工具", pages: [.tools])
                     Section("应用") {
                         SettingsLink { Label("设置…", systemImage: "gearshape") }
@@ -118,7 +117,7 @@ struct ContentView: View {
                 }
             }
         }
-        .alert("预设与自动任务", isPresented: Binding(
+        .alert("预设", isPresented: Binding(
             get: { presets.presetError != nil },
             set: { if !$0 { state.presetError = nil } }
         )) {
@@ -144,7 +143,6 @@ struct ContentView: View {
         case .home: HomeView()
         case .picture: PictureView()
         case .presets: PresetsView()
-        case .autoTasks: AutomaticTasksView()
         case .game: GameView()
         case .source: SourceView()
         case .light: LightView()

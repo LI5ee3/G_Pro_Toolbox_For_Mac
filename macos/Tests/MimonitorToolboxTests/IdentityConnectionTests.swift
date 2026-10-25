@@ -26,7 +26,7 @@ import MimonitorPresetCore
         }
         return (AppCoordinator(environment: AppEnvironment(mode: .simulation, preferences: base.preferences,
             adb: adb, hotkeys: base.hotkeys, feedback: base.feedback, scheduler: base.scheduler,
-            system: base.system, now: base.now, calendar: base.calendar, presetDevice: base.presetDevice)), runtime)
+            system: base.system, now: base.now, presetDevice: base.presetDevice)), runtime)
     }
     private func connect(_ state: AppCoordinator, usb: Bool = true) async {
         if usb { state.connectUSB(serial: serial) }
@@ -223,11 +223,10 @@ import MimonitorPresetCore
             let session = state.adb.session(), evidence = state.connection.identityEvidence
             let bound = try XCTUnwrap(state.connectionProfile?.profile?.devices.first)
             state.renamePreset(id: "edited", name: "After"); await state.waitForPendingWork()
-            let task = ScheduledPresetTask(id: "edited-task", presetID: "edited", start: "10:00", end: "11:00", enabled: false)
-            state.saveAutomaticTask(task); await state.waitForPendingWork()
+            state.setPresetMenuBarVisibility(id: "edited", visible: true); await state.waitForPendingWork()
             XCTAssertNil(state.presetError)
             XCTAssertEqual(state.presetConfiguration.presets.first?.name, "After")
-            XCTAssertEqual(state.presetConfiguration.tasks, [task])
+            XCTAssertEqual(state.presetConfiguration.menuBarPresetIDs, ["edited"])
             let editedBytes = runtime.preferences.data(forKey: "picture_presets_v1")
             let before = runtime.display.recordedCommands
 
@@ -249,7 +248,7 @@ import MimonitorPresetCore
             XCTAssertEqual(runtime.preferences.data(forKey: "picture_presets_v1"), editedBytes)
             XCTAssertEqual(state.presetConfiguration.baseline, original.baseline)
             XCTAssertEqual(state.presetConfiguration.presets.first?.values, original.presets.first?.values)
-            XCTAssertEqual(state.presetConfiguration.tasks, [task])
+            XCTAssertEqual(state.presetConfiguration.menuBarPresetIDs, ["edited"])
             state.stop()
         }
     }
@@ -356,8 +355,7 @@ import MimonitorPresetCore
         let (state, runtime) = fixture(); await connect(state)
         runtime.preferences.set(legacy, forKey: "picture_presets_v1")
         // A failed local edit must not silently accept an external owner's snapshot.
-        state.saveAutomaticTask(.init(id: "rejected", presetID: PicturePreset.baselineID,
-            start: "10:00", end: "11:00", enabled: false))
+        state.setPresetMenuBarVisibility(id: PicturePreset.baselineID, visible: true)
         await state.waitForPendingWork(); XCTAssertNotNil(state.presetError)
         try await confirm(state)
         XCTAssertFalse(state.isConnected); XCTAssertNil(state.adb.endpoint); XCTAssertTrue(state.connection.identityConflict)
@@ -374,7 +372,7 @@ import MimonitorPresetCore
             XCTAssertFalse(state.isConnected); XCTAssertNil(state.adb.endpoint)
             XCTAssertTrue(state.connection.identityConflict); XCTAssertTrue(state.connection.identityRestricted)
             let before = runtime.display.recordedCommands
-            state.createPreset(name: "blocked"); state.setLocalDimming(2); state.checkAutomaticTasks()
+            state.createPreset(name: "blocked"); state.setLocalDimming(2)
             await state.waitForPendingWork(); XCTAssertEqual(runtime.display.recordedCommands, before)
             state.stop()
         }
@@ -414,11 +412,11 @@ import MimonitorPresetCore
         XCTAssertNil(runtime.preferences.object(forKey: "connection_profile_v1")); state.stop()
     }
 
-    func testPureLocalTaskEditsRemainAvailableWithoutIdentityOrDeviceCommands() async {
+    func testLocalPresetMenuBarEditsRemainAvailableWithoutIdentityOrDeviceCommands() async {
         let (state, runtime) = fixture()
-        state.saveAutomaticTask(ScheduledPresetTask(id: "local", presetID: PicturePreset.baselineID, start: "10:00", end: "11:00", enabled: false))
+        state.setPresetMenuBarVisibility(id: PicturePreset.baselineID, visible: true)
         await state.waitForPendingWork()
-        XCTAssertEqual(state.presetConfiguration.tasks.map(\.id), ["local"])
+        XCTAssertEqual(state.presetConfiguration.menuBarPresetIDs, [PicturePreset.baselineID])
         XCTAssertTrue(runtime.display.recordedCommands.isEmpty)
         XCTAssertTrue(state.connection.identityRestricted); state.stop()
     }

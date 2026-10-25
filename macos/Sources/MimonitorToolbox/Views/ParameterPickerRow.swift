@@ -8,13 +8,14 @@ struct ParameterPickerRow: View {
     let options: [Option]
     let selectedValue: Int
     let onSelect: (Int) -> Void
+    var labelWidth: CGFloat = Theme.parameterLabelWidth
 
     private var selection: Int { options.contains { $0.value == selectedValue } ? selectedValue : -1 }
 
     var body: some View {
         HStack(spacing: 12) {
             Text(title).font(.system(size: 13, weight: .medium))
-                .frame(width: Theme.parameterLabelWidth, alignment: .leading)
+                .frame(width: labelWidth, alignment: .leading)
                 .fixedSize(horizontal: false, vertical: true)
             ParameterPopUp(title: title, options: options, selection: selection, onSelect: onSelect)
                 .frame(width: 220, height: 28)

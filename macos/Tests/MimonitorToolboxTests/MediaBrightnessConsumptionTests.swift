@@ -18,7 +18,7 @@ final class MediaBrightnessConsumptionTests: XCTestCase {
         let state = AppCoordinator(environment: AppEnvironment(mode: .live,
             preferences: base.preferences, adb: base.adb, hotkeys: base.hotkeys,
             feedback: base.feedback, scheduler: base.scheduler, system: system,
-            now: base.now, calendar: base.calendar, presetDevice: base.presetDevice))
+            now: base.now, presetDevice: base.presetDevice))
         state.start()
         state.adb.ip = runtime.display.identity
         state.connectionStatus = .connected("Fake monitor")

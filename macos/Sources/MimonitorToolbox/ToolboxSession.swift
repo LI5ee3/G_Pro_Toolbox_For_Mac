@@ -19,7 +19,7 @@ public final class ToolboxSession {
 }
 
 public enum ToolboxScreen: String, CaseIterable, Identifiable {
-    case home, picture, game, source, light, presets, autoTasks, remote, tools, menuBar
+    case home, picture, game, source, light, presets, remote, tools, menuBar
     public var id: String { rawValue }
     public var title: String { self == .tools ? "显示器工具" : page.title }
     private var page: Page { Page(rawValue: rawValue)! }

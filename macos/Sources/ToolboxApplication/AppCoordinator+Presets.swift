@@ -31,60 +31,18 @@ extension AppCoordinator {
     package func startPresetFeatures() {
         submitOperation(on: deviceQueue, work: { self.presetWorker.withEngine { $0.configuration } }) {
             self.presetConfiguration = $0
-            self.updateAutomaticTaskStatus()
         }
         if let error = presetWorker.loadError { presetError = error; log(error) }
-        presetTimer = environment.scheduler.repeating(every: 15, commonModes: true) { [weak self] in
-            self?.checkAutomaticTasks()
-        }
-        updateAutomaticTaskStatus()
     }
 
-    nonisolated internal func currentMinute() -> Int {
-        let parts = environment.calendar.dateComponents([.hour, .minute], from: environment.now())
-        return (parts.hour ?? 0) * 60 + (parts.minute ?? 0)
-    }
-
-    package func updateAutomaticTaskStatus() {
-        let wanted = PresetSchedule.activeTask(presetConfiguration.tasks, minute: currentMinute())
-        if connection.identityRestricted || !connection.allowsIdentityAutomaticActions {
-            automaticTaskStatus = connection.identityNotice
-        } else if let session = presetConfiguration.session, session.deviceIdentity != (connection.presetIdentityKey ?? ""), isConnected {
-            automaticTaskStatus = "等待原显示器 \(session.deviceIdentity)，不会向当前设备还原"
-        } else if let wanted {
-            let name = presetConfiguration.presets.first { $0.id == wanted.presetID }?.name ?? "无预设"
-            let waiting = isConnected ? "" : "，等待连接显示器"
-            automaticTaskStatus = "当前时段：\(wanted.start)–\(wanted.end) · \(name)\(waiting)"
-        } else if presetConfiguration.session != nil {
-            automaticTaskStatus = isConnected ? "时段已结束，等待返回原预设" : "时段已结束，连接后返回原预设"
-        } else { automaticTaskStatus = "当前没有任务生效" }
-    }
-
-    package func checkAutomaticTasks() {
-        updateAutomaticTaskStatus()
+    /// Resume a dirty preset after reconnecting to its confirmed display.
+    internal func resumePendingPresetSave() {
         guard connection.allowsIdentityAutomaticActions, !connection.identityRestricted, isConnected,
-              !isPresetOperationInFlight, !presetConfiguration.applicationIncomplete, presetWorker.loadError == nil else { return }
-        if pendingPresetSave == nil, let id = pendingPresetSaveID, activePresetID == id,
-           pendingPresetSaveDevice == (connection.presetIdentityKey ?? ""),
-           !presetConfiguration.applicationIncomplete {
-            schedulePresetSave(id: id, request: connectionIntent.generation, revision: pictureEditRevision, delay: 1.2)
-        }
-        if let session = presetConfiguration.session, session.deviceIdentity != (connection.presetIdentityKey ?? "") { return }
-        let minute = currentMinute()
-        let wanted = PresetSchedule.activeTask(presetConfiguration.tasks, minute: minute)
-        if let wanted {
-            if presetConfiguration.session?.taskID == wanted.id,
-               presetConfiguration.session?.appliedTargetID == wanted.presetID,
-               presetConfiguration.session?.occurrenceStart == PresetSchedule.occurrenceStart(wanted, minute: minute),
-               !presetConfiguration.applicationIncomplete { return }
-        } else if presetConfiguration.session == nil { return }
-        let targetID = wanted?.presetID ?? presetConfiguration.session?.previousPresetID
-        let targetName = presetConfiguration.presets.first { $0.id == targetID }?.name ?? "无预设"
-        runPresetOperation("自动任务切换", automatic: true, refresh: true,
-                           switchHUDTitle: "预设：\(targetName)") { engine, device in
-            // The device queue may have been busy. Do not execute a window that already ended.
-            try engine.reconcile(minute: self.currentMinute(), device: device, now: self.environment.now(), calendar: self.environment.calendar)
-        }
+              !isPresetOperationInFlight, !presetConfiguration.applicationIncomplete,
+              presetWorker.loadError == nil, pendingPresetSave == nil,
+              let id = pendingPresetSaveID, activePresetID == id,
+              pendingPresetSaveDevice == connection.presetIdentityKey else { return }
+        schedulePresetSave(id: id, request: connectionIntent.generation, revision: pictureEditRevision, delay: 1.2)
     }
 
     package func createPreset(name: String) {
@@ -131,16 +89,6 @@ extension AppCoordinator {
             try engine.delete(id: id, device: device)
         }
     }
-    package func saveAutomaticTask(_ task: ScheduledPresetTask) {
-        runPresetOperation("保存自动任务", requiresIdentity: false, flushAutosave: false) { engine, _ in try engine.saveTask(task) }
-    }
-    package func deleteAutomaticTask(id: String) {
-        runPresetOperation("删除自动任务", requiresIdentity: false, flushAutosave: false) { engine, _ in try engine.deleteTask(id: id) }
-    }
-    package func moveAutomaticTask(id: String, offset: Int) {
-        runPresetOperation("调整任务顺序", requiresIdentity: false, flushAutosave: false) { engine, _ in try engine.moveTask(id: id, offset: offset) }
-    }
-
     /// Every picture write (including hotkeys and menu-bar controls) goes through this path.
     /// Capture the preset identity NOW, not when the delayed readback eventually runs.
     package func runPictureChange(delay: TimeInterval = 1.2, completion: (() -> Void)? = nil, _ work: @escaping @Sendable () -> Void) {
@@ -180,7 +128,7 @@ extension AppCoordinator {
                 self.schedulePresetSave(id: id, request: request, revision: revision, delay: 0.5)
                 return
             }
-            self.runPresetOperation("自动保存当前预设", automatic: true, flushAutosave: false) { engine, device in
+            self.runPresetOperation("自动保存当前预设", autosave: true, flushAutosave: false) { engine, device in
                 guard let device else { throw PresetError("显示器暂不可用，待连接恢复后保存") }
                 try engine.synchronize(id: id, device: device)
             }
@@ -189,7 +137,7 @@ extension AppCoordinator {
         environment.scheduler.after(delay, work: save)
     }
 
-    internal func runPresetOperation(_ label: String, automatic: Bool = false, refresh: Bool = false, requiresIdentity: Bool = true,
+    internal func runPresetOperation(_ label: String, autosave: Bool = false, refresh: Bool = false, requiresIdentity: Bool = true,
                                     navigateToPicture: Bool = false, flushAutosave: Bool = true,
                                     switchHUDTitle: String? = nil,
                                     operation: @escaping @Sendable (PresetEngine, (any PresetDevice)?) throws -> Void) {
@@ -205,7 +153,7 @@ extension AppCoordinator {
         isPresetOperationInFlight = true
         isPresetBusy = refresh || navigateToPicture
         presetOperationText = label
-        // 预设/自动任务直接写 JNI+settings，不走 setPictureSlider，
+        // 预设直接写 JNI+settings，不走 setPictureSlider，
         // 所以这里丢掉背光预览，下次亮度键以新的设备值为准。
         mediaBrightnessPreview = nil
         mediaBrightnessHardware = nil
@@ -220,7 +168,7 @@ extension AppCoordinator {
             guard self.presetOperationID == operationID else { return }
             self.presetOperationID = nil
             self.isPresetOperationInFlight = false; self.isPresetBusy = false; self.presetOperationText = ""
-            self.updateHdrMemoryStatus(); self.updateFreesyncMemoryStatus(); self.updateAutomaticTaskStatus()
+            self.updateHdrMemoryStatus(); self.updateFreesyncMemoryStatus()
             if let hudToken { self.environment.feedback.finishOperation(token: hudToken, result: .cancelled, title: nil) }
         }) {
             let current = !self.adb.operationCancelled
@@ -267,7 +215,6 @@ extension AppCoordinator {
                 self.presetOperationText = ""
                 self.updateHdrMemoryStatus()
                 self.updateFreesyncMemoryStatus()
-                self.updateAutomaticTaskStatus()
                 if !savedEdits, let saveID,
                    configuration.activePresetID == saveID, configuration.activeDeviceIdentity == identity,
                    self.pendingPresetSaveID == nil || (self.pendingPresetSaveID == saveID && self.pendingPresetSaveDevice == identity) {
@@ -279,13 +226,13 @@ extension AppCoordinator {
                     }
                 }
                 if let errorText {
-                    if !automatic || errorText != self.lastAutomaticTaskError {
+                    if !autosave || errorText != self.lastPresetAutosaveError {
                         self.log("\(label)失败：\(errorText)")
                     }
-                    if automatic { self.lastAutomaticTaskError = errorText }
+                    if autosave { self.lastPresetAutosaveError = errorText }
                     else { self.presetError = errorText }
                 } else {
-                    self.lastAutomaticTaskError = ""
+                    self.lastPresetAutosaveError = ""
                     self.log("\(label)完成")
                     for report in reports {
                         self.log(report.summary)
@@ -306,7 +253,7 @@ extension AppCoordinator {
                     self.environment.feedback.finishOperation(token: hudToken, result: result,
                                                     title: result == .success ? "预设：\(self.activePresetName)" : nil)
                 }
-                if !automatic { self.checkAutomaticTasks() }
+                self.resumePendingPresetSave()
             }
         }
     }

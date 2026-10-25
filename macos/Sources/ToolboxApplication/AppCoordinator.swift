@@ -75,7 +75,6 @@ public final class AppCoordinator {
     internal let connectionQueue = DispatchQueue(label: "com.mimonitor.toolbox.connection")
     package nonisolated let deviceQueue = DispatchQueue(label: "com.mimonitor.toolbox.device", qos: .userInitiated)
     package nonisolated let presetWorker: PresetWorker
-    package var presetTimer: RuntimeCancellation?
     package var pendingPresetSave: DispatchWorkItem?
     internal var presetOperationID: UUID?
     package var pendingPresetSaveID: String?
@@ -83,7 +82,7 @@ public final class AppCoordinator {
     package var pictureEditRevision = 0
     /// Only accessed on deviceQueue; native mode/reset commands may settle after ADB returns.
     internal nonisolated let deviceWorkState = DeviceWorkState()
-    package var lastAutomaticTaskError = ""
+    package var lastPresetAutosaveError = ""
 
     package let logs = LogModel()
     package var logLines: [String] { get { logs.lines } set { logs.lines = newValue } }
@@ -276,7 +275,6 @@ public final class AppCoordinator {
         connectionIntent.invalidate()
         runtimeTasks.forEach { $0.invalidate() }; runtimeTasks.removeAll()
         startupWork.forEach { $0.cancel() }; startupWork.removeAll()
-        presetTimer?.invalidate(); presetTimer = nil
         sourcePollTimer?.invalidate(); sourcePollTimer = nil; sourcePollArmed = false
         pendingPresetSave?.cancel(); pendingPresetSave = nil
         pendingRefreshWork?.cancel(); pendingRefreshWork = nil
@@ -302,7 +300,7 @@ public final class AppCoordinator {
         systemCancellation.cancel()
         runtimeTasks.forEach { $0.invalidate() }
         startupWork.forEach { $0.cancel() }
-        presetTimer?.invalidate(); sourcePollTimer?.invalidate()
+        sourcePollTimer?.invalidate()
         pendingPresetSave?.cancel(); pendingRefreshWork?.cancel()
         wakeRecoveryWork?.cancel()
         hotkeyManager.stop()

@@ -119,7 +119,7 @@ struct PresetsView: View {
             Button("取消", role: .cancel) {}
             Button("删除", role: .destructive) { state.deletePreset(id: preset.id) }
         } message: { preset in
-            Text("删除「\(preset.name)」及引用它的自动任务。正在使用时会先切回无预设；若它是任务结束后的返回目标，届时改回无预设。")
+            Text("删除「\(preset.name)」。正在使用时会先切回无预设。")
         }
     }
 

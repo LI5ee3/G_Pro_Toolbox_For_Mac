@@ -174,7 +174,7 @@ final class ServerRecoveryTests: XCTestCase {
         let runtime = PreviewRuntime(), base = runtime.environment(), f = Fixture()
         let state = AppCoordinator(environment: AppEnvironment(mode: .simulation, preferences: base.preferences,
             adb: f.adb, hotkeys: base.hotkeys, feedback: base.feedback, scheduler: base.scheduler,
-            system: base.system, now: base.now, calendar: base.calendar, presetDevice: base.presetDevice))
+            system: base.system, now: base.now, presetDevice: base.presetDevice))
         state.monitorAdbServer(); await state.waitForPendingWork()
         state.monitorAdbServer(); await state.waitForPendingWork()
         XCTAssertEqual(f.queries, 1); f.assertNoRestart()

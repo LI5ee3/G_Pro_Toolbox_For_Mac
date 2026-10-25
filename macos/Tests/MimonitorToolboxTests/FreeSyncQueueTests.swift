@@ -10,7 +10,7 @@ import ToolboxApplication
         let adb = AdbClient(resources: base.adb.resources, execute: execute)
         return AppCoordinator(environment: AppEnvironment(mode: .simulation, preferences: base.preferences,
             adb: adb, hotkeys: base.hotkeys, feedback: base.feedback, scheduler: base.scheduler,
-            system: base.system, now: base.now, calendar: base.calendar, presetDevice: base.presetDevice))
+            system: base.system, now: base.now, presetDevice: base.presetDevice))
     }
     func testRapidFreeSyncEnableDisableRestoresNewlyRememberedMode() async {
         let runtime = PreviewRuntime()

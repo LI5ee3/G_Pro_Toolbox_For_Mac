@@ -111,7 +111,7 @@ final class PresetEndpointSubmissionTests: XCTestCase {
         let received = expectation(description: "preset factory")
         let state = AppCoordinator(environment: AppEnvironment(mode: .simulation, preferences: base.preferences,
             adb: base.adb, hotkeys: base.hotkeys, feedback: base.feedback, scheduler: base.scheduler,
-            system: base.system, now: base.now, calendar: base.calendar, presetDevice: { adb, endpoint, identity in
+            system: base.system, now: base.now, presetDevice: { adb, endpoint, identity in
                 XCTAssertEqual(endpoint?.serial, "192.0.2.1:5555")
                 XCTAssertEqual(identity, "192.0.2.1")
                 XCTAssertEqual(endpoint, adb.operationSession?.endpoint)

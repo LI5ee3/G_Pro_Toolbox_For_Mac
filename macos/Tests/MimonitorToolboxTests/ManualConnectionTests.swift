@@ -45,7 +45,7 @@ private final class ManualConnectionTrace {
         }
         let state = AppCoordinator(environment: AppEnvironment(mode: .simulation,
             preferences: base.preferences, adb: adb, hotkeys: base.hotkeys, feedback: base.feedback,
-            scheduler: base.scheduler, system: base.system, now: base.now, calendar: base.calendar,
+            scheduler: base.scheduler, system: base.system, now: base.now,
             presetDevice: { client, endpoint, identity in
                 trace.recordPresetDevice()
                 return base.presetDevice(client, endpoint, identity)
@@ -160,7 +160,7 @@ private final class ManualConnectionTrace {
         state.stop()
     }
 
-    func testRestrictedUSBBlocksDueTasksPresetsAndMemoryMutations() async throws {
+    func testRestrictedUSBBlocksPresetsAndMemoryMutations() async throws {
         let runtime = PreviewRuntime()
         let memory = Data("{ \"sdr\": 3, \"hdr\": 2 }".utf8)
         runtime.preferences.set(memory, forKey: "local_dimming_memory")
@@ -168,26 +168,18 @@ private final class ManualConnectionTrace {
         runtime.preferences.set(true, forKey: "freesync_mode_memory_enabled")
         runtime.preferences.set(true, forKey: "crosshair_game_mode_only")
         var configuration = PresetConfiguration()
-        configuration.presets = [PicturePreset(id: "scheduled", name: "Scheduled", values: ["picture_backlight": "77"])]
-        let clock = runtime.environment()
-        let parts = clock.calendar.dateComponents([.hour, .minute], from: clock.now())
-        let minute = (parts.hour ?? 0) * 60 + (parts.minute ?? 0), end = (minute + 1) % 1440
-        configuration.tasks = [ScheduledPresetTask(id: "due", presetID: "scheduled",
-            start: String(format: "%02d:%02d", minute / 60, minute % 60),
-            end: String(format: "%02d:%02d", end / 60, end % 60))]
+        configuration.presets = [PicturePreset(id: "manual", name: "Manual", values: ["picture_backlight": "77"])]
         let encoded = try JSONEncoder().encode(configuration)
         runtime.preferences.set(encoded, forKey: "picture_presets_v1")
         let (state, _, trace) = fixture(runtime)
         configureUSB(runtime)
         state.presetConfiguration = configuration
-        XCTAssertNotNil(PresetSchedule.activeTask(configuration.tasks, minute: state.currentMinute()))
 
         state.connectUSB(serial: usbSerial)
         await state.waitForPendingWork()
         state.currentValues = ["picture_mode": "14", "front_sight_index": "5"]
-        state.checkAutomaticTasks()
         state.createPreset(name: "Must not capture")
-        state.applyPreset(id: "scheduled")
+        state.applyPreset(id: "manual")
         state.applyHdrMemory(state: false)
         state.reconcileCrosshairModeState()
         state.toggleHdrMemory(false)

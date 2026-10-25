@@ -107,16 +107,15 @@ package struct AppEnvironment {
     package let scheduler: any RuntimeScheduling
     package let system: SystemActions
     package let now: () -> Date
-    package let calendar: Calendar
     package let presetDevice: (AdbClient, AdbEndpoint?, String) -> any PresetDevice
     package init(mode: Mode, preferences: any PreferencesStore, adb: AdbClient,
                  hotkeys: HotkeyManager, feedback: any FeedbackPresenting,
                  scheduler: any RuntimeScheduling, system: SystemActions,
-                 now: @escaping () -> Date, calendar: Calendar,
+                 now: @escaping () -> Date,
                  presetDevice: @escaping (AdbClient, AdbEndpoint?, String) -> any PresetDevice) {
         self.mode = mode; self.preferences = preferences; self.adb = adb; self.hotkeys = hotkeys
         self.feedback = feedback; self.scheduler = scheduler; self.system = system
-        self.now = now; self.calendar = calendar; self.presetDevice = presetDevice
+        self.now = now; self.presetDevice = presetDevice
     }
 }
 

@@ -41,7 +41,7 @@ extension AppCoordinator {
         let owners = snapshot.ownershipKeys
         connection.ownershipConfirmationText = owners.isEmpty
             ? "没有已归属的旧基线。确认后为当前设备建立独立预设身份。"
-            : "旧配置所有权：\(owners.joined(separator: "、"))。确认表示这些基线与未完成任务属于当前设备；当前 IP 不是历史归属证明。"
+            : "旧配置所有权：\(owners.joined(separator: "、"))。确认表示这些基线与预设属于当前设备；当前 IP 不是历史归属证明。"
     }
 
     /// The channel is ready, but device initialization waits for fresh identity resolution.
@@ -79,7 +79,7 @@ extension AppCoordinator {
         connection.identityConflict = false
         if let error = snapshot.error { blockIdentity(error); return }
         if snapshot.ownershipKeys.count > 1 {
-            blockIdentity("旧基线、活动预设或任务存在多个所有权，不能自动合并")
+            blockIdentity("旧基线或活动预设存在多个所有权，不能自动合并")
             return
         }
         connection.identitySessionID = adb.session().sessionID
@@ -122,7 +122,6 @@ extension AppCoordinator {
             connection.memoryOwnershipConfirmed = snapshot.profile?.memoryOwnerDeviceID == record.deviceID
             connection.identityText = "已验证 \(evidence.stableIdentifier)；预设归属 \(record.presetIdentityKey)"
         }
-        updateAutomaticTaskStatus()
         updateHdrMemoryStatus(); updateFreesyncMemoryStatus(); updateCrosshairModeStatus()
     }
 
@@ -222,7 +221,6 @@ extension AppCoordinator {
                     self.connection.identityText = "人工确认（仅当前会话）；重连必须再次确认"
                 }
                 self.connection.profileMessage = snapshot.warning ?? "归属已确认；本次确认未部署组件或执行设备设置"
-                self.updateAutomaticTaskStatus()
             }
         }
     }
@@ -240,7 +238,7 @@ extension AppCoordinator {
                   self.adb.session().sessionID == session.sessionID, self.connection.allowsIdentityAutomaticActions else { return }
             self.loadedPages = []; self.loadingPages = []; self.activeSource = "未知"; self.hdrLastState = nil
             self.refreshPage("picture"); self.refreshPage("game")
-            self.pollHdrState(force: true); self.checkAutomaticTasks(); self.check4KState()
+            self.pollHdrState(force: true); self.resumePendingPresetSave(); self.check4KState()
             self.checkGuardian(); self.refreshMediaVolumeState()
         }
     }

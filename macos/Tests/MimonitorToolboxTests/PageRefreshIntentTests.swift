@@ -42,7 +42,7 @@ final class FailedPageRefreshTests: XCTestCase {
             }
             let state = AppCoordinator(environment: AppEnvironment(mode: .simulation,
                 preferences: base.preferences, adb: adb, hotkeys: base.hotkeys, feedback: base.feedback,
-                scheduler: base.scheduler, system: base.system, now: base.now, calendar: base.calendar,
+                scheduler: base.scheduler, system: base.system, now: base.now,
                 presetDevice: base.presetDevice))
             runtime.display.configureDiscovery(rows: "000RefreshUSB device usb:fixture")
             state.connectUSB(serial: "000RefreshUSB"); await state.waitForPendingWork()

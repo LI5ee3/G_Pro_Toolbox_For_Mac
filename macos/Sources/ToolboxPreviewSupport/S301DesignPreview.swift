@@ -249,7 +249,6 @@ private struct S301Surface: View {
                 } header: { sidebarHeading("显示器") }
                 Section {
                     nav("预设", "square.stack")
-                    nav("自动任务", "calendar.badge.clock")
                     nav("遥控器", "dpad")
                 } header: { sidebarHeading("工作流") }
                 Section {
@@ -348,7 +347,6 @@ private struct S301Home: View {
                 Text("当前设置").font(.system(size: 15, weight: .semibold)).padding(.bottom, 10)
                 S301InfoRow(label: "视频输入", value: f.connected ? "DisplayPort" : "未知", action: "信号源") { f.page = "信号源" }
                 S301InfoRow(label: "预设", value: "无预设", action: "管理预设") { f.page = "预设" }
-                S301InfoRow(label: "自动任务", value: "未启用", action: "设置时段") { f.page = "自动任务" }
             }
             HStack(spacing: 18) {
                 Button { f.page = "遥控器" } label: { Label("打开遥控器", systemImage: "dpad") }
@@ -723,7 +721,6 @@ private struct S301OtherPage: View {
         case "信号源": return [("当前信号源", "DisplayPort"), ("切换信号源", "DP · HDMI 1 · HDMI 2 · USB-C；切换可能使画面短暂中断")]
         case "灯光": return [("炫彩灯模式", "关闭 · 照明 · 纯色 · 屏幕同色 · 七彩梦境"), ("亮度挡位", "关闭时保留记忆值；按模式说明生效条件"), ("灯光颜色", "色温与纯色选择会切换对应模式")]
         case "预设": return [("无预设", "返回原始基线"), ("预设列表", "新建 · 编辑画面 · 应用 · 重命名 · 删除 · 在菜单栏显示"), ("应用状态", "不完整应用时暂停自动保存，提供重新应用与返回无预设")]
-        case "自动任务": return [("自动任务", "按时段切换预设；与连接方式无关"), ("任务列表", "开始 · 结束 · 预设 · 启用 · 顺序 · 编辑 · 删除"), ("运行状态", "当前任务 · 本轮返回目标 · 跨午夜与重叠规则")]
         case "遥控器": return [("方向与确认", "方向键 · OK"), ("常用按键", "主页 · 菜单 · 返回 · 音量 · 静音"), ("电源", "切换显示器电源状态；与方向控制分隔")]
         case "菜单栏配置": return [("快捷项", "现有 MenuBarCatalog 全部条目与预设可见性"), ("排列顺序", "拖动排序 · 上移/下移的键盘等价入口 · 恢复默认")]
         default: return [("键盘控制与权限", "组合键 · 音量/亮度键 · 输出门控 · 辅助功能 · 自动化 · 本地网络"), ("应用", "外观 · 关窗行为 · 登录项 · 日志记录/复制/导出"), ("显示器工具", "保活状态/部署 · 4K UI · APK 安装 · ADB 命令行/Shell"), ("连接配置", "保存连接偏好 · 数据归属；自动备份与恢复限制见说明"), ("关于", "项目源代码 · 原项目")]

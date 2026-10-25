@@ -1,4 +1,5 @@
 import Foundation
+import Testing
 import XCTest
 import Synchronization
 import ToolboxConcurrency
@@ -21,7 +22,7 @@ final class SessionLifecycleTests: XCTestCase {
         }
         return AppCoordinator(environment: AppEnvironment(mode: live ? .live : .simulation,
             preferences: base.preferences, adb: adb, hotkeys: base.hotkeys, feedback: base.feedback,
-            scheduler: base.scheduler, system: system ?? base.system, now: base.now, calendar: base.calendar,
+            scheduler: base.scheduler, system: system ?? base.system, now: base.now,
             presetDevice: { AdbPresetDevice(adb: $0, endpoint: $1, identity: $2) }))
     }
 
@@ -192,7 +193,7 @@ final class SessionLifecycleTests: XCTestCase {
         state.stop()
     }
 
-    func testPartiallyDispatchedAutomaticPresetIsNotReplayedAfterReconnect() async throws {
+    func testPartiallyDispatchedPresetIsNotReplayedAfterReconnect() async throws {
         for restart in [false, true] {
             let runtime = PreviewRuntime(), armed = Mutex(false)
             let began = expectation(description: "preset first write dispatched"), release = DispatchSemaphore(value: 0)
@@ -210,14 +211,8 @@ final class SessionLifecycleTests: XCTestCase {
             state.ipInput = "192.0.2.27"; state.connect(); await state.waitForPendingWork(); try await confirm(state)
             state.createPreset(name: "original"); await state.waitForPendingWork()
             let baseline = state.presetConfiguration.baseline
-            state.connection.allowsIdentityAutomaticActions = false
-            let minute = state.currentMinute()
-            func time(_ value: Int) -> String { String(format: "%02d:%02d", value / 60, value % 60) }
-            state.saveAutomaticTask(ScheduledPresetTask(id: "lifecycle", presetID: PicturePreset.baselineID,
-                start: time(minute), end: time((minute + 10) % 1440)))
-            await state.waitForPendingWork()
-            state.connection.allowsIdentityAutomaticActions = true; armed.withLock { $0 = true }
-            state.checkAutomaticTasks(); await fulfillment(of: [began], timeout: 3)
+            armed.withLock { $0 = true }
+            state.restoreBaseline(); await fulfillment(of: [began], timeout: 3)
             let before = runtime.display.recordedCommands.count
             if restart {
                 // Restart and reconnect before the old completion returns. The startup snapshot is
@@ -230,14 +225,39 @@ final class SessionLifecycleTests: XCTestCase {
                 state.connect()
             }
             await state.waitForPendingWork()
-            state.checkAutomaticTasks(); await state.waitForPendingWork()
             XCTAssertFalse(runtime.display.recordedCommands.dropFirst(before).contains { $0.contains("settings put") })
             XCTAssertTrue(state.presetConfiguration.applicationIncomplete)
-            XCTAssertEqual(state.presetConfiguration.session?.taskID, "lifecycle")
-            XCTAssertNil(state.presetConfiguration.session?.appliedTargetID)
             XCTAssertEqual(state.presetConfiguration.baseline, baseline)
             XCTAssertFalse(state.isPresetOperationInFlight); XCTAssertFalse(state.isPresetBusy)
             state.stop()
         }
     }
+}
+
+@MainActor @Test
+private func dirtyPresetSaveResumesAfterVerifiedReconnect() async throws {
+    let runtime = PreviewRuntime()
+    let state = AppCoordinator(environment: runtime.environment())
+    defer { state.stop() }
+    state.ipInput = runtime.display.identity
+    state.connect(); await state.waitForPendingWork()
+    state.confirmConnectionOwnership(includeMemories: false,
+        expectedSessionID: try #require(state.connection.identitySessionID),
+        expectedProfileToken: state.connection.ownershipConfirmationToken)
+    await state.waitForPendingWork()
+    state.createPreset(name: "阅读"); await state.waitForPendingWork()
+    let id = try #require(state.activePresetID)
+
+    runtime.display.values["picture_backlight"] = "72"
+    state.pendingPresetSaveID = id
+    state.pendingPresetSaveDevice = state.connection.presetIdentityKey
+    state.disconnectAdb(); await state.waitForPendingWork()
+    state.connect(); await state.waitForPendingWork()
+    #expect(state.connection.allowsIdentityAutomaticActions)
+    #expect(state.pendingPresetSave != nil)
+    runtime.scheduler.advance(by: 2)
+    await state.waitForPendingWork()
+    #expect(state.presetConfiguration.presets.first?.values["picture_backlight"] == "72")
+    #expect(state.pendingPresetSaveID == nil)
+    #expect(state.presetError == nil)
 }

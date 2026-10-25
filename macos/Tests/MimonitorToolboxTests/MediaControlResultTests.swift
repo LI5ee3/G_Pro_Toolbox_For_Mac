@@ -132,7 +132,7 @@ final class MediaControlCoordinatorTests: XCTestCase {
         let adb = AdbClient(resources: base.adb.resources, execute: execute)
         let state = AppCoordinator(environment: AppEnvironment(mode: .simulation, preferences: base.preferences,
             adb: adb, hotkeys: base.hotkeys, feedback: base.feedback, scheduler: base.scheduler,
-            system: base.system, now: base.now, calendar: base.calendar, presetDevice: base.presetDevice))
+            system: base.system, now: base.now, presetDevice: base.presetDevice))
         state.mediaVolumeKeysEnabled = true
         adb.ip = "192.0.2.1"
         state.connectionStatus = .connected("fake")

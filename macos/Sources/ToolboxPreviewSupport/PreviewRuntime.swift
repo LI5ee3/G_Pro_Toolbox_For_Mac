@@ -261,7 +261,7 @@ package final class PreviewRuntime {
             adb: AdbClient(resources: resources, execute: display.execute),
             hotkeys: HotkeyManager(driver: hotkeyDriver), feedback: feedback, scheduler: scheduler,
             system: system, now: { Date(timeIntervalSince1970: 1_800_000_000 + self.scheduler.time) },
-            calendar: Calendar(identifier: .gregorian), presetDevice: { _, _, identity in PreviewPresetDevice(display: self.display, identity: identity) })
+            presetDevice: { _, _, identity in PreviewPresetDevice(display: self.display, identity: identity) })
     }
     @MainActor package func makeState(_ scenario: Scenario = .connected) -> AppCoordinator {
         loginLock.lock()
@@ -271,15 +271,13 @@ package final class PreviewRuntime {
         if [.workflow, .localSaveFailure, .longContent].contains(scenario) {
             // Use the existing engine and in-memory device/store, never production defaults.
             let engine = PresetEngine(store: PresetStore(defaults: preferences))
-            if let reading = try? engine.create(name: "日常阅读", device: display) {
+            if (try? engine.create(name: "日常阅读", device: display)) != nil {
                 display.values["picture_mode"] = "9"
                 display.values["picture_backlight"] = "25"
                 display.values["xiaomi_picture_backlight"] = "25"
                 if let movie = try? engine.create(name: "夜间电影 · 暖色低背光", device: display) {
                     try? engine.setMenuBarVisibility(id: PicturePreset.baselineID, visible: true)
                     try? engine.setMenuBarVisibility(id: movie.id, visible: true)
-                    try? engine.saveTask(ScheduledPresetTask(presetID: reading.id, start: "18:00", end: "20:00"))
-                    try? engine.saveTask(ScheduledPresetTask(presetID: movie.id, start: "23:00", end: "02:00"))
                     if scenario == .longContent {
                         try? engine.rename(id: movie.id, name: "夜间电影 · 暖色低背光 · 客厅 USB-C 输入与长时间阅读")
                         // The existing engine records an incomplete application in the memory store.

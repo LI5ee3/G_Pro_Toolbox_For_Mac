@@ -92,7 +92,7 @@ import ToolboxDomain
         system.exportLog = { _, _, completion in completion(.failure("denied")) }
         let state = AppCoordinator(environment: AppEnvironment(mode: .simulation, preferences: base.preferences,
             adb: base.adb, hotkeys: base.hotkeys, feedback: base.feedback, scheduler: base.scheduler,
-            system: system, now: base.now, calendar: base.calendar, presetDevice: base.presetDevice))
+            system: system, now: base.now, presetDevice: base.presetDevice))
         state.exportLog(to: URL(fileURLWithPath: "/mock/export.txt")); await state.waitForPendingWork()
         XCTAssertTrue(state.logLines.contains { $0.contains("导出失败") })
         XCTAssertFalse(state.logLines.contains { $0.contains("已导出") })

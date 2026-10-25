@@ -182,7 +182,7 @@ extension AppEnvironment {
         system.openLogDirectory = logFile.open
         return AppEnvironment(mode: .live, preferences: UserDefaults.standard, adb: adb,
             hotkeys: HotkeyManager(driver: LiveHotkeyDriver()), feedback: LiveFeedback(),
-            scheduler: LiveScheduler(), system: system, now: Date.init, calendar: .current,
+            scheduler: LiveScheduler(), system: system, now: Date.init,
             presetDevice: { AdbPresetDevice(adb: $0, endpoint: $1, identity: $2) })
     }
 }

@@ -11,7 +11,7 @@ import ToolboxConcurrency
         let base = runtime.environment(mode: mode)
         return AppCoordinator(environment: AppEnvironment(mode: mode, preferences: base.preferences, adb: base.adb,
             hotkeys: hotkeys ?? base.hotkeys, feedback: base.feedback, scheduler: base.scheduler,
-            system: system, now: base.now, calendar: base.calendar, presetDevice: base.presetDevice))
+            system: system, now: base.now, presetDevice: base.presetDevice))
     }
     func testDeniedGrantRevokeAndRegrantOwnListenerWithoutAutomaticPrompt() async {
         let runtime = PreviewRuntime()

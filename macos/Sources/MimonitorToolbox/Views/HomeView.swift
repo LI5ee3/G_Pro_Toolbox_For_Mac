@@ -8,7 +8,6 @@ struct HomeView: View {
     @ToolboxActions var state
     @Environment(ConnectionModel.self) private var connection
     @Environment(PictureModel.self) private var picture
-    @Environment(PresetsModel.self) private var presets
     @Environment(ToolsModel.self) private var tools
     @Environment(HotkeysModel.self) private var keyboard
     @Environment(NavigationModel.self) private var navigation
@@ -86,9 +85,6 @@ struct HomeView: View {
                     Divider()
                     destination("预设", value: state.activePresetName, icon: "square.stack.3d.up", page: .presets)
                         .disabled(!connection.isConnected)
-                    Divider()
-                    destination("自动任务", value: presets.automaticTaskStatus.isEmpty ? "任务状态待更新" : presets.automaticTaskStatus,
-                                icon: "calendar.badge.clock", page: .autoTasks)
                 }
                 VStack(alignment: .leading, spacing: 8) {
                     HStack(spacing: 12) {

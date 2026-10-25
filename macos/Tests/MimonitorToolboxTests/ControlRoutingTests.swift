@@ -50,7 +50,7 @@ private final class RoutingFixture {
         }
         state = AppCoordinator(environment: AppEnvironment(mode: .simulation, preferences: base.preferences,
             adb: adb, hotkeys: base.hotkeys, feedback: base.feedback, scheduler: base.scheduler,
-            system: system, now: base.now, calendar: base.calendar,
+            system: system, now: base.now,
             presetDevice: { AdbPresetDevice(adb: $0, endpoint: $1, identity: $2) }))
         adb.beginSession(endpoint: endpoint)
         state.connection.activeEndpoint = endpoint
@@ -394,7 +394,7 @@ final class ControlRoutingTests: XCTestCase {
         }
     }
 
-    func testUnknownIdentityAllowsManualControlsButNotPresetsTasksOrMemory() async {
+    func testUnknownIdentityAllowsManualControlsButNotPresetsOrMemory() async {
         for endpoint in RoutingFixture.endpoints {
             let f = RoutingFixture(nil) { request in
                 ["getprop ro.serialno", "getprop ro.boot.serialno"].contains(request.arguments.last ?? "")
@@ -411,14 +411,14 @@ final class ControlRoutingTests: XCTestCase {
             assertShells(f, endpoint, [volumeWrite(27), volumeRead, "input keyevent KEYCODE_DPAD_CENTER"])
             XCTAssertEqual(f.scripts.count, 1)
             f.clear()
-            s.createPreset(name: "blocked"); s.checkAutomaticTasks(); s.initializeVerifiedConnection()
+            s.createPreset(name: "blocked"); s.initializeVerifiedConnection()
             await s.waitForPendingWork()
             XCTAssertTrue(f.requests.isEmpty); XCTAssertTrue(s.presetConfiguration.presets.isEmpty)
             XCTAssertTrue(s.memoriesSuspendedByPreset)
             // Local configuration remains editable without device ownership.
-            let task = ScheduledPresetTask(id: "local", presetID: PicturePreset.baselineID, start: "00:00", end: "23:59")
-            s.saveAutomaticTask(task); await s.waitForPendingWork()
-            XCTAssertEqual(s.presetConfiguration.tasks, [task]); XCTAssertTrue(f.requests.isEmpty)
+            s.setPresetMenuBarVisibility(id: PicturePreset.baselineID, visible: true); await s.waitForPendingWork()
+            XCTAssertEqual(s.presetConfiguration.menuBarPresetIDs, [PicturePreset.baselineID])
+            XCTAssertTrue(f.requests.isEmpty)
             s.stop()
         }
     }
@@ -488,7 +488,7 @@ final class ControlRoutingTests: XCTestCase {
          "settings put global tv_picture_video_color_space 6", refresh]
     }
 
-    func testPresetAndScheduledTaskUseProductionAdapterAndOpaqueOwnershipKey() async throws {
+    func testPresetAndBaselineUseProductionAdapterAndOpaqueOwnershipKey() async throws {
         for endpoint in RoutingFixture.endpoints {
             let f = RoutingFixture(endpoint), s = f.state
             f.confirmFixtureIdentity()
@@ -503,21 +503,12 @@ final class ControlRoutingTests: XCTestCase {
             assertPresetApplication(f, endpoint)
             XCTAssertFalse(s.presetConfiguration.applicationIncomplete)
             XCTAssertEqual(s.activePresetID, id)
-            // Store the schedule locally first, then invoke the actual existing scheduler entry.
-            s.connection.allowsIdentityAutomaticActions = false
-            let minute = s.currentMinute()
-            func time(_ value: Int) -> String { String(format: "%02d:%02d", value / 60, value % 60) }
-            let task = ScheduledPresetTask(id: "routing-task", presetID: PicturePreset.baselineID,
-                start: time(minute), end: time((minute + 10) % 1440))
-            s.saveAutomaticTask(task); await s.waitForPendingWork()
             f.clear()
-            s.connection.allowsIdentityAutomaticActions = true
-            s.checkAutomaticTasks(); await s.waitForPendingWork()
+            s.restoreBaseline(); await s.waitForPendingWork()
             assertPresetApplication(f, endpoint)
-            XCTAssertEqual(s.presetConfiguration.session?.taskID, task.id)
-            XCTAssertEqual(s.presetConfiguration.session?.deviceIdentity, RoutingFixture.owner)
+            XCTAssertNil(s.activePresetID)
             XCTAssertFalse(s.presetConfiguration.applicationIncomplete)
-            XCTAssertTrue(s.lastAutomaticTaskError.isEmpty)
+            XCTAssertNil(s.presetError)
             s.stop()
         }
     }

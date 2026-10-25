@@ -1,6 +1,6 @@
 # 现行架构与运行边界
 
-更新：2026-10-25。本文描述当前源码，范围与任务状态以 [ROADMAP](ROADMAP.md) 为准，变更与验证历史见 [CHANGELOG](CHANGELOG.md)。S2-01 至 S2-06 已合入，包含手动 USB/TCP、控制路由及所选传输内恢复；跨 USB/TCP 的 Auto 继续暂缓。[ADB-CONTRACTS](ADB-CONTRACTS.md) 第 0 节保留各阶段的实现边界，历史真机结果不作为当前源码已复验的证据。
+更新：2026-10-26。本文描述当前源码，范围与任务状态以 [ROADMAP](ROADMAP.md) 为准，变更与验证历史见 [CHANGELOG](CHANGELOG.md)。S2-01 至 S2-06 已合入，包含手动 USB/TCP、控制路由及所选传输内恢复；跨 USB/TCP 的 Auto 继续暂缓。[ADB-CONTRACTS](ADB-CONTRACTS.md) 第 0 节保留各阶段的实现边界，历史真机结果不作为当前源码已复验的证据。
 
 ## 平台、模块与语言模式
 
@@ -34,7 +34,7 @@ Application 不导入 SwiftUI 或生产适配器，也不启动真实进程；�
 | [ConnectionModel](../macos/Sources/ToolboxApplication/StateModels/ConnectionModel.swift) | 手动方式/端点、发现与连接状态、输入/候选、会话身份与能力 |
 | [PictureModel](../macos/Sources/ToolboxApplication/StateModels/PictureModel.swift) | 显示器读数、页面加载状态、画面派生说明 |
 | [VolumeModel](../macos/Sources/ToolboxApplication/StateModels/VolumeModel.swift) | 首页音量、静音和错误 |
-| [PresetsModel](../macos/Sources/ToolboxApplication/StateModels/PresetsModel.swift) | 配置快照、忙状态、操作/错误和任务状态 |
+| [PresetsModel](../macos/Sources/ToolboxApplication/StateModels/PresetsModel.swift) | 预设配置快照、忙状态及操作/错误 |
 | [NavigationModel](../macos/Sources/ToolboxApplication/StateModels/NavigationModel.swift) | 动作请求的页面跳转 |
 | [ToolsModel](../macos/Sources/ToolboxApplication/StateModels/ToolsModel.swift) | Guardian、4K UI、控光/FreeSync 记忆和准星说明 |
 | [HotkeysModel](../macos/Sources/ToolboxApplication/StateModels/HotkeysModel.swift) | 快捷键、媒体键、步长、OSD 和菜单项偏好 |
@@ -59,15 +59,15 @@ Application 不导入 SwiftUI 或生产适配器，也不启动真实进程；�
 - [AdbSession](../macos/Sources/ToolboxApplication/Backend/AdbSession.swift) 固定提交时的 endpoint、clientID、sessionID 和取消令牌；nil 表示没有设备目标。设备命令显式使用该会话 serial，不退回 adb 默认设备。clientID 区分客户端实例，sessionID 区分每次接入；两者都不是物理设备身份。
 - [AdbClient](../macos/Sources/ToolboxApplication/Backend/AdbClient.swift) 的 ip / beginSession(ip:) / disconnect(ip:) 保留为 TCP 兼容包装，现由 Preview 和兼容测试使用；生产连接与音量回调使用完整 endpoint。serverPort 默认 5038，独立于设备端口，也不表示应用独占该 server。
 - [预设提交](../macos/Sources/ToolboxApplication/AppCoordinator+Presets.swift) 把 endpoint 与已确认的兼容身份键分别交给 [AdbPresetDevice](../macos/Sources/ToolboxMacAdapters/AdbPresetDevice.swift)。预设目标固定在提交时，identity 只做原所有权判断。picture_presets_v1 原始 JSON 不批量迁移，connection_profile_v1 保存明确确认的稳定属性证据、旧别名和全局记忆唯一归属；旧 IP 相等不能证明历史所有权。
-- 发现状态独立于连接状态，待授权/离线/失败明确显示。严格 get-state 与只读 shell 探针通过后读取本次会话的两项稳定属性；未确认暂停预设/任务/记忆，未知可人工确认当前会话，冲突取消会话并清空端点。固件属性的可靠性尚待真机验证。
+- 发现状态独立于连接状态，待授权/离线/失败明确显示。严格 get-state 与只读 shell 探针通过后读取本次会话的两项稳定属性；未确认暂停预设/记忆，未知可人工确认当前会话，冲突取消会话并清空端点。固件属性的可靠性尚待真机验证。
 - `ensureConnected` 集中现有 TCP 恢复决策：优先原 get-state/shell 探活与目标级 connect/等待/探活；unauthorized 立即返回，不进入 shell/server 恢复。目标恢复失败后，私有边界最多执行一次 3 秒 `host-features` 查询，成功且 stdout 非空才允许最终目标重试；用单调时间施加 25 秒冷却，失败也记账，切换目标不重置冷却。
 - 应用不再显式循环 kill-server。`host-features` 是主动 server 查询，官方 adb 仍可能启动缺失 server 或协调不兼容版本；它不是被动健康探测，也不证明设备 ready。多客户端冲突与真实 USB/TCP 恢复未在阶段一获得硬件验收。
 
-生产连接不再隐式保存 IP，明确保存 TCP:5555 才镜像 saved_ip；新 envelope 优先。已经验证且确认的接入仍可能部署 JAR、触发已获准的记忆/预设任务，因此不能当作只读设备探针。USB 数据链路、视频信号源与默认音频输出是独立事实；历史 CLI 验证不替代 App 真机验收。S2-06 已实现所选传输内的断线/唤醒恢复、睡眠取消及显式断开抑制；未完成应用的预设不会自动重放，跨传输 Auto 继续暂缓。
+生产连接不再隐式保存 IP，明确保存 TCP:5555 才镜像 saved_ip；新 envelope 优先。已经验证且确认的接入仍可能部署 JAR、触发已获准的记忆恢复或预设待保存恢复，因此不能当作只读设备探针。USB 数据链路、视频信号源与默认音频输出是独立事实；历史 CLI 验证不替代 App 真机验收。S2-06 已实现所选传输内的断线/唤醒恢复、睡眠取消及显式断开抑制；未完成应用的预设不会自动重放，跨传输 Auto 继续暂缓。
 
 ## 偏好与未知读数
 
-[PreferencesStore](../macos/Sources/MimonitorPresetCore/Preferences.swift) 隔离存储，生产注入用户偏好，Preview 注入带锁的 MemoryPreferences。现行预设引擎和旧配置结构保持；读取异常值不授权自动清理用户原始数据。连接登记使用同一 PresetWorker 的原值比较、私密备份、写后回读和失败保护；只证明当前存储视图，不提供断电持久事务或跨进程 CAS，具体恢复限制见 ADB-CONTRACTS §0.3。
+[PreferencesStore](../macos/Sources/MimonitorPresetCore/Preferences.swift) 隔离存储，生产注入用户偏好，Preview 注入带锁的 MemoryPreferences。手动预设、基线与未完成应用标记继续使用 `picture_presets_v1`；自动任务页面、时段模型、调度和任务会话已移除。解码忽略旧 `tasks` / `session` 字段，读取时不改写原始数据，正常保存只编码现有预设字段。预设编辑的延迟自动保存与同设备重连后的待保存恢复独立保留；读取异常值不授权自动清理用户原始数据。连接登记使用同一 PresetWorker 的原值比较、私密备份、写后回读和失败保护；只证明当前存储视图，不提供断电持久事务或跨进程 CAS，具体恢复限制见 ADB-CONTRACTS §0.3。
 
 S1-06 的 [控光记忆](../macos/Sources/ToolboxApplication/AppCoordinator+DisplayMemory.swift) 使用现有合法映射 0…3：非法 Int/错误 JSON 的显示和应用路径安全退出，不向设备下发非法值，也不在读取时改写偏好原字节；[设置入口](../macos/Sources/ToolboxApplication/AppCoordinator+DisplayCommands.swift) 同样拒绝范围外值。
 
