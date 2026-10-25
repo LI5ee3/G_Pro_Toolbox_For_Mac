@@ -169,7 +169,10 @@ struct MimonitorToolboxApp: App {
         .defaultLaunchBehavior(.suppressed)
         .defaultSize(width: 1120, height: 820)
         .windowResizability(.contentMinSize)
-        .commands { CommandGroup(replacing: .sidebar) {} }
+        .commands {
+            CommandGroup(replacing: .sidebar) {}
+            ToolboxSettingsCommands { session.showSettings(); launch.requestWindow() }
+        }
         MenuBarExtra {
             ToolboxMenuBarContent(session: session)
                 .onAppear { appDelegate.session = session; session.start() }

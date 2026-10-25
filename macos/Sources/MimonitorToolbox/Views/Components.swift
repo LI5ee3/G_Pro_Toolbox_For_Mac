@@ -265,6 +265,7 @@ struct FastSlider: View {
     private let trackHeight: CGFloat = 4
     private let knobSize: CGFloat = 17
     @Environment(\.isEnabled) private var isEnabled
+    @FocusState private var focused: Bool
 
     var body: some View {
         GeometryReader { geo in
@@ -294,6 +295,7 @@ struct FastSlider: View {
             .gesture(
                 DragGesture(minimumDistance: 0)
                     .onChanged { g in
+                        focused = true
                         let x = min(max(g.location.x, 0), width)
                         var v = range.lowerBound + (x / width) * span
                         if step > 0 { v = (v / step).rounded() * step }
@@ -306,6 +308,19 @@ struct FastSlider: View {
         .frame(height: 28)
         .opacity(isEnabled ? 1 : 0.4)
         .allowsHitTesting(isEnabled)
+        .focusable(isEnabled, interactions: .edit)
+        .focused($focused)
+        .onKeyPress(keys: [.leftArrow, .rightArrow, .upArrow, .downArrow]) { press in
+            guard isEnabled, press.modifiers.intersection([.command, .control, .option, .shift]).isEmpty else { return .ignored }
+            let delta = step > 0 ? step : 1
+            let direction: Double = press.key == .rightArrow || press.key == .upArrow ? 1 : -1
+            let next = min(max(value + direction * delta, range.lowerBound), range.upperBound)
+            if next != value {
+                value = next
+                onCommit(next)
+            }
+            return .handled
+        }
         .accessibilityElement(children: .ignore)
         .accessibilityLabel("调节数值")
         .accessibilityValue(String(format: "%g", value))

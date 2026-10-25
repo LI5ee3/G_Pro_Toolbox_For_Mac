@@ -76,7 +76,8 @@ struct PresetsView: View {
                                 Button("重命名") { editor = PresetNameRequest(preset: preset) }
                                 Button("删除…", role: .destructive) { deleting = preset; showDelete = true }
                             } label: {
-                                Image(systemName: "ellipsis").frame(width: 24, height: 24)
+                                Label("管理预设 \(preset.name)", systemImage: "ellipsis")
+                                    .labelStyle(.iconOnly).frame(width: 24, height: 24)
                             }
                             .menuStyle(.borderlessButton)
                             .menuIndicator(.hidden)
@@ -84,7 +85,6 @@ struct PresetsView: View {
                             .frame(width: 28, height: 28)
                             .background(Theme.control, in: RoundedRectangle(cornerRadius: 6))
                             .help("管理预设")
-                            .accessibilityLabel("管理预设 \(preset.name)")
                             Button { state.applyPreset(id: preset.id, edit: true); refreshImmediatePictureNavigation() } label: {
                                 Text("编辑画面").frame(width: 64)
                             }
@@ -211,6 +211,7 @@ private struct PresetNameSheet: View {
     @State private var name: String
     @State private var saving = false
     @State private var failure: String?
+    @FocusState private var nameFocused: Bool
     init(preset: PicturePreset?, save: @escaping (String) -> Void) {
         self.preset = preset; self.save = save
         _name = State(initialValue: preset?.name ?? "")
@@ -223,7 +224,8 @@ private struct PresetNameSheet: View {
             VStack(alignment: .leading, spacing: 6) {
                 Text("预设名称").font(.system(size: 13, weight: .medium))
                 TextField("预设名称", text: $name).textFieldStyle(.roundedBorder)
-                    .labelsHidden().disabled(saving)
+                    .labelsHidden().disabled(saving).focused($nameFocused)
+                    .accessibilityLabel("预设名称")
             }
             Text(preset == nil ? "读取当前设备设置后创建，并进入画面页继续调整。" : "重名时会自动添加序号；已有任务引用不受影响。")
                 .font(.system(size: 13)).foregroundColor(Theme.secondaryText)
@@ -262,6 +264,7 @@ private struct PresetNameSheet: View {
             if let message = presets.presetError {
                 failure = message
                 state.presetError = nil
+                nameFocused = true
             } else {
                 dismiss()
             }
