@@ -8,7 +8,7 @@ struct RemoteView: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 24) {
-                Text("遥控器").font(.system(size: 22, weight: .semibold))
+                Text("遥控器").font(Theme.pageTitle)
 
                 HStack(alignment: .top, spacing: 40) {
                     VStack(alignment: .leading, spacing: 12) {
@@ -21,6 +21,8 @@ struct RemoteView: View {
                                     Text("OK").font(.system(size: 16, weight: .semibold))
                                 }
                                 .buttonStyle(.borderedProminent)
+                                .focusEffectDisabled()
+                                .tint(Theme.actionAccent)
                                 .buttonBorderShape(.circle)
                                 .controlSize(.large)
                                 .frame(width: 52, height: 52)
@@ -31,7 +33,7 @@ struct RemoteView: View {
                             dpadButton("向下", symbol: "chevron.down", key: "KEYCODE_DPAD_DOWN")
                         }
                         .frame(width: 226, height: 218)
-                        .background(Circle().fill(Theme.control))
+                        .background(Circle().fill(Theme.card))
                         .overlay(Circle().stroke(Theme.stroke))
                     }
                     VStack(alignment: .leading, spacing: 24) {
@@ -73,7 +75,7 @@ struct RemoteView: View {
         } label: {
             VStack(spacing: 7) {
                 Image(systemName: symbol).font(.system(size: 15, weight: .medium))
-                Text(title).font(.system(size: 13))
+                Text(title).font(Theme.detailFont)
             }
             .frame(maxWidth: .infinity, minHeight: 36)
         }
@@ -88,7 +90,7 @@ struct RemoteView: View {
         } label: {
             Image(systemName: symbol)
                 .font(.system(size: 18, weight: .semibold))
-                .foregroundColor(Theme.secondaryText)
+                .foregroundStyle(.primary)
                 .frame(width: 28, height: 30)
                 .contentShape(RoundedRectangle(cornerRadius: 12))
         }

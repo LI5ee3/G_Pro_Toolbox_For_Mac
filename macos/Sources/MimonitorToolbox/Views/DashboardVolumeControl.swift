@@ -16,13 +16,20 @@ struct DashboardVolumeControl: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: compact ? 10 : 12) {
-            HStack(alignment: .firstTextBaseline) {
+            if !compact {
                 Label("音量", systemImage: volumeState.dashboardMuted == true ? "speaker.slash" : "speaker.wave.2")
-                    .font(.system(size: 14, weight: .semibold))
-                Spacer()
+                    .font(Theme.sectionFont)
+            }
+            HStack(alignment: .firstTextBaseline, spacing: 4) {
+                if compact {
+                    Label("音量", systemImage: volumeState.dashboardMuted == true ? "speaker.slash" : "speaker.wave.2")
+                        .font(Theme.sectionFont)
+                    Spacer()
+                }
                 Text(reading.map(String.init) ?? "—")
-                    .font(.system(size: compact ? 20 : 28, weight: .medium)).monospacedDigit()
-                Text("/ 100").font(.system(size: 12)).foregroundStyle(Theme.secondaryText)
+                    .font(compact ? .system(size: 20, weight: .medium) : Theme.readingFont).monospacedDigit()
+                Text("/ 100").font(Theme.detailFont).foregroundStyle(Theme.secondaryText)
+                if !compact { Spacer(); muteButton }
             }
             FastSlider(value: $volume, range: ControlRanges.percentage.sliderBounds, step: 1) {
                 state.setDashboardVolume(Int($0))
@@ -30,17 +37,21 @@ struct DashboardVolumeControl: View {
             .accessibilityLabel("显示器音量")
             .accessibilityValue(reading.map(String.init) ?? "未知")
             .disabled(volumeState.dashboardVolume == nil || !state.dashboardVolumeAvailable)
-            Button { state.toggleDashboardMute() } label: {
-                Label(volumeState.dashboardMuted == true ? "解除静音" : "静音", systemImage: "speaker.slash")
-            }.toolboxAction().disabled(!state.dashboardVolumeAvailable)
+            if compact { muteButton }
             if let error = volumeState.dashboardVolumeError {
-                Label(error, systemImage: "exclamationmark.circle").font(.system(size: 13)).foregroundStyle(Theme.warning)
+                Label(error, systemImage: "exclamationmark.circle").font(Theme.detailFont).foregroundStyle(Theme.warning)
             }
         }
         .onAppear { syncValue(); state.refreshMediaVolumeState() }
         .onChange(of: volumeState.dashboardVolume) { syncValue() }
         .onChange(of: volumeState.dashboardVolumeError) { syncValue() }
         .onChange(of: connection.isConnected) { _, connected in if connected { state.refreshMediaVolumeState() } }
+    }
+
+    private var muteButton: some View {
+        Button { state.toggleDashboardMute() } label: {
+            Label(volumeState.dashboardMuted == true ? "解除静音" : "静音", systemImage: "speaker.slash")
+        }.toolboxAction().disabled(!state.dashboardVolumeAvailable)
     }
 
     private func syncValue() { volume = Double(volumeState.dashboardVolume ?? 0) }

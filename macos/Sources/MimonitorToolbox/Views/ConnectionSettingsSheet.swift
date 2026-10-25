@@ -30,9 +30,9 @@ struct ConnectionSettingsSheet: View {
                     Text("选择连接目标").font(Theme.sectionFont)
                     Picker("控制传输", selection: $draft.mode) {
                         ForEach(ManualConnectionMode.allCases, id: \.self) { mode in Text(mode.rawValue).tag(mode) }
-                    }.pickerStyle(.segmented)
+                    }.pickerStyle(.segmented).focusEffectDisabled()
                     Text("浏览和选择只编辑草稿；点击下方连接按钮后才结束旧会话并连接所选目标。USB ADB 与 USB-C 视频输入分别设置。")
-                        .font(.system(size: 13)).foregroundStyle(Theme.secondaryText)
+                        .font(Theme.detailFont).foregroundStyle(Theme.secondaryText)
                     if draft.mode == .tcp { tcpTarget } else { usbTargets }
                     Divider()
                     DisclosureGroup("设备身份与数据归属") { ConnectionIdentityControls().padding(.top, 10) }
@@ -42,7 +42,7 @@ struct ConnectionSettingsSheet: View {
                             .font(.system(size: 12, design: .monospaced)).textSelection(.enabled)
                             .frame(maxWidth: .infinity, alignment: .leading).padding(12)
                             .background(Theme.control, in: RoundedRectangle(cornerRadius: Theme.controlRadius))
-                    }.font(.system(size: 13))
+                    }.font(Theme.detailFont)
                 }.padding(20)
             }
             Divider()
@@ -69,11 +69,11 @@ struct ConnectionSettingsSheet: View {
                     .font(.system(size: 14, weight: .medium)).foregroundStyle(connection.statusColor)
             }
             LabeledContent("ADB 控制") { Text(connection.activeControlText).textSelection(.enabled) }
-                .font(.system(size: 13))
-            Text(connection.recoveryText).font(.system(size: 13)).foregroundStyle(Theme.secondaryText)
+                .font(Theme.detailFont)
+            Text(connection.recoveryText).font(Theme.detailFont).foregroundStyle(Theme.secondaryText)
             if !connection.identityNotice.isEmpty {
                 Label(connection.identityNotice, systemImage: "person.crop.circle.badge.questionmark")
-                    .font(.system(size: 13)).foregroundStyle(Theme.warning)
+                    .font(Theme.detailFont).foregroundStyle(Theme.warning)
             }
         }
     }
@@ -82,11 +82,11 @@ struct ConnectionSettingsSheet: View {
         VStack(alignment: .leading, spacing: 12) {
             HStack(alignment: .top, spacing: 12) {
                 VStack(alignment: .leading, spacing: 5) {
-                    Text("主机名或 IP 地址").font(.system(size: 13, weight: .medium))
+                    Text("主机名或 IP 地址").font(Theme.controlFont)
                     TextField("显示器地址", text: $draft.host).textFieldStyle(.roundedBorder).focused($hostFocused)
                 }
                 VStack(alignment: .leading, spacing: 5) {
-                    Text("ADB 端口").font(.system(size: 13, weight: .medium))
+                    Text("ADB 端口").font(Theme.controlFont)
                     TextField("端口", text: $draft.port).textFieldStyle(.roundedBorder)
                         .accessibilityLabel("显示器 ADB 端口")
                 }.frame(width: 90)
@@ -98,10 +98,10 @@ struct ConnectionSettingsSheet: View {
             }
             if connection.isConnected || connection.activeEndpoint != nil {
                 Text("当前连接保持使用；断开后可扫描内网，也可直接填写下一个目标。")
-                    .font(.system(size: 12)).foregroundStyle(Theme.secondaryText)
+                    .font(Theme.captionFont).foregroundStyle(Theme.secondaryText)
             }
             if connection.connectionStatus == .scanning {
-                HStack { ProgressView().controlSize(.small); Text("正在扫描，结果不会自动连接…") }.font(.system(size: 13))
+                HStack { ProgressView().controlSize(.small); Text("正在扫描，结果不会自动连接…") }.font(Theme.detailFont)
             }
             if !connection.scannedDevices.isEmpty {
                 List(selection: Binding<String?>(
@@ -116,7 +116,7 @@ struct ConnectionSettingsSheet: View {
                             Text(connection.scannedDeviceModels[host] ?? host)
                             Spacer()
                             Text("\(host):5555").foregroundStyle(Theme.secondaryText)
-                        }.font(.system(size: 13)).tag(host)
+                        }.font(Theme.detailFont).tag(host)
                     }
                 }
                 .listStyle(.inset).environment(\.defaultMinListRowHeight, 44)
@@ -131,16 +131,16 @@ struct ConnectionSettingsSheet: View {
             HStack {
                 if case .failed = connection.discoveryStatus {
                     Label(connection.discoveryText, systemImage: "exclamationmark.triangle")
-                        .font(.system(size: 13)).foregroundStyle(Theme.warning)
+                        .font(Theme.detailFont).foregroundStyle(Theme.warning)
                 } else {
-                    Text(connection.discoveryText).font(.system(size: 13)).foregroundStyle(Theme.secondaryText)
+                    Text(connection.discoveryText).font(Theme.detailFont).foregroundStyle(Theme.secondaryText)
                 }
                 Spacer()
                 Button("刷新设备") { state.refreshDevices() }.toolboxAction()
                     .disabled(connection.discoveryStatus == .discovering || connection.connectionInProgress)
             }
             Text("连接 USB 数据线，并在显示器上允许 ADB 授权。枚举只读取列表，不切换当前控制通道。")
-                .font(.system(size: 13)).foregroundStyle(Theme.secondaryText)
+                .font(Theme.detailFont).foregroundStyle(Theme.secondaryText)
             if !connection.discoveredDevices.isEmpty {
                 List(selection: Binding<String?>(
                     get: { connection.discoveredDevices.contains { $0.serial == draft.usbSerial && $0.canValidateAsUSB } ? draft.usbSerial : nil },
@@ -153,12 +153,12 @@ struct ConnectionSettingsSheet: View {
                     ForEach(Array(connection.discoveredDevices.enumerated()), id: \.offset) { _, device in
                         HStack(spacing: 10) {
                             VStack(alignment: .leading, spacing: 4) {
-                                Text(device.serial).font(.system(size: 13, weight: .medium))
+                                Text(device.serial).font(Theme.controlFont)
                                 Text("\(device.discoveryTransportText) · \(device.discoveryStateText)")
-                                    .font(.system(size: 12)).foregroundStyle(Theme.secondaryText)
+                                    .font(Theme.captionFont).foregroundStyle(Theme.secondaryText)
                             }
                             Spacer()
-                            if device.transport == .unknown { Text("需验证 USB").font(.system(size: 12)) }
+                            if device.transport == .unknown { Text("需验证 USB").font(Theme.captionFont) }
                         }
                         .tag(device.serial)
                         .disabled(!device.canValidateAsUSB || connection.connectionInProgress)

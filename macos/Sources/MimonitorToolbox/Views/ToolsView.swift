@@ -17,7 +17,7 @@ struct ToolsView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 24) {
                 VStack(alignment: .leading, spacing: 6) {
-                    Text("显示器工具").font(.system(size: 22, weight: .semibold))
+                    Text("显示器工具").font(Theme.pageTitle)
                 }
                 memorySettings
                 Divider()
@@ -38,23 +38,25 @@ struct ToolsView: View {
                     }
                     .tint(Theme.accent)
                     Text("4K UI 会重启显示器；安装与部署会修改显示器系统。")
-                        .font(.system(size: 13))
+                        .font(Theme.detailFont)
                         .foregroundStyle(Theme.secondaryText)
                 }
                 HStack(spacing: 6) {
                     Image(systemName: "chevron.left.forwardslash.chevron.right")
                     Button("项目源代码") { state.openProjectSource() }
+                        .focusEffectDisabled()
                     Spacer()
                     Button("原项目") { state.openProjectSource(upstream: true) }
+                        .focusEffectDisabled()
                 }
-                .font(.system(size: 13))
+                .font(Theme.detailFont)
                 .foregroundStyle(Theme.secondaryText)
             }
             .frame(maxWidth: 970, alignment: .leading)
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(24)
         }
-        .font(.system(size: 14))
+        .font(Theme.bodyFont)
         .tint(Theme.accent)
         .onAppear { state.check4KState() }
         .alert("切换 4K UI 会重启显示器，继续？", isPresented: $show4KConfirm) {
@@ -83,7 +85,7 @@ struct ToolsView: View {
                 VStack(alignment: .leading, spacing: 8) {
                     Text(tools.guardianStatus).textSelection(.enabled)
                     Text("显示器端 AdbGuardian 尝试在重启、待机或唤醒后恢复 ADB。深度待机时服务可能停止，恢复时间由显示器系统决定。")
-                        .font(.system(size: 13)).foregroundStyle(Theme.secondaryText)
+                        .font(Theme.detailFont).foregroundStyle(Theme.secondaryText)
                 }
             }
             HStack(spacing: 10) {
@@ -96,7 +98,7 @@ struct ToolsView: View {
                     .toolboxAction()
             }
             Text("部署会安装自带 APK，授予修改调试设置和无障碍权限，并开启网络 ADB 5555。恢复效果需以实际待机和重启测试为准。")
-                .font(.system(size: 13)).foregroundStyle(Theme.secondaryText)
+                .font(Theme.detailFont).foregroundStyle(Theme.secondaryText)
         }
     }
 
@@ -108,7 +110,7 @@ struct ToolsView: View {
             ), disabled: state.memoriesSuspendedByPreset)
             Text(tools.hdrMemoryStatusText.isEmpty ? "状态待确认" : tools.hdrMemoryStatusText).foregroundStyle(Theme.secondaryText)
             Text("根据 macOS EDR 判断 HDR 信号。")
-                .font(.system(size: 13)).foregroundStyle(Theme.secondaryText)
+                .font(Theme.detailFont).foregroundStyle(Theme.secondaryText)
             Divider().padding(.vertical, 2)
             settingToggle("关闭 FreeSync 后恢复原画面模式", isOn: Binding(
                 get: { state.effectiveFreesyncMemoryEnabled },
@@ -117,7 +119,7 @@ struct ToolsView: View {
             Text(tools.freesyncMemoryStatusText.isEmpty ? "状态待确认" : tools.freesyncMemoryStatusText).foregroundStyle(Theme.secondaryText)
             if state.memoriesSuspendedByPreset {
                 Label(!connection.identityNotice.isEmpty ? connection.identityNotice : "使用预设时记忆设置已锁定；返回无预设后恢复。", systemImage: "lock")
-                    .font(.system(size: 13)).foregroundStyle(Theme.secondaryText)
+                    .font(Theme.detailFont).foregroundStyle(Theme.secondaryText)
             }
             Divider().padding(.vertical, 2)
             settingToggle("准星仅在游戏模式下生效", isOn: Binding(
@@ -145,7 +147,7 @@ struct ToolsView: View {
                 set: { pending4K = $0; show4KConfirm = true }
             ), disabled: tools.fourKReadFailure != nil)
             Text("仅改变显示器内置系统界面的分辨率。切换前会再次确认，确认后显示器将重启。")
-                .font(.system(size: 13)).foregroundStyle(Theme.secondaryText)
+                .font(Theme.detailFont).foregroundStyle(Theme.secondaryText)
         }
     }
 
@@ -153,7 +155,7 @@ struct ToolsView: View {
         VStack(alignment: .leading, spacing: 10) {
             Text("安装显示器应用").font(Theme.sectionFont)
             Text("选择本地 APK，使用 adb install -r -d 安装到显示器。")
-                .font(.system(size: 13)).foregroundStyle(Theme.secondaryText)
+                .font(Theme.detailFont).foregroundStyle(Theme.secondaryText)
             HStack(spacing: 12) {
                 Button("选择 APK 并安装…") { state.chooseAPK() }
                     .toolboxAction()
@@ -175,7 +177,7 @@ struct ToolsView: View {
         VStack(alignment: .leading, spacing: 10) {
             Text("ADB 命令行").font(Theme.sectionFont)
             Text("使用当前 ADB 端点打开终端。命令可直接修改显示器，请确认操作对象。")
-                .font(.system(size: 13)).foregroundStyle(Theme.secondaryText)
+                .font(Theme.detailFont).foregroundStyle(Theme.secondaryText)
             HStack(spacing: 10) {
                 Button("打开 ADB 命令行") { state.openAdbCmd() }
                     .toolboxAction()
@@ -184,7 +186,7 @@ struct ToolsView: View {
             }
             if let result = settings.terminalResult, result.outcome != .opened {
                 Text(result.outcome == .denied ? "上次 Terminal 请求被拒绝，请在系统设置中允许后重试。" : "Terminal 未确认完成，请检查日志后重试。")
-                    .font(.system(size: 13)).foregroundStyle(Theme.warning)
+                    .font(Theme.detailFont).foregroundStyle(Theme.warning)
             }
             Button("自动化权限设置") { state.openAutomationSettings() }.toolboxAction()
         }
@@ -204,9 +206,9 @@ struct HotkeyConfigSheet: View {
         VStack(alignment: .leading, spacing: 0) {
             HStack {
                 VStack(alignment: .leading, spacing: 6) {
-                    Text("键盘控制").font(.system(size: 22, weight: .semibold))
+                    Text("键盘控制").font(Theme.pageTitle)
                     Text("录入组合键，或直接接管系统音量与亮度键。")
-                        .font(.system(size: 13)).foregroundStyle(Theme.secondaryText)
+                        .font(Theme.detailFont).foregroundStyle(Theme.secondaryText)
                 }
                 Spacer()
             }
@@ -252,7 +254,7 @@ struct HotkeyConfigSheet: View {
                             Spacer()
                         }
                         Text("调暗、调亮键控制此显示器背光，不再调节内置屏幕。需要辅助功能权限及 ADB 连接。")
-                            .font(.system(size: 13))
+                            .font(Theme.detailFont)
                             .foregroundStyle(Theme.secondaryText)
 
                         Toggle("使用 macOS 原生亮度提示（OSD）", isOn: Binding(get: { keyboard.mediaBrightnessNativeOSD }, set: { state.mediaBrightnessNativeOSD = $0 }))
@@ -261,7 +263,7 @@ struct HotkeyConfigSheet: View {
                         Text(keyboard.mediaBrightnessNativeOSD
                              ? "原生提示固定为 16 格，每按一次调节一格，步长不可调。"
                              : "当前使用应用悬浮提示，可自行设定调节步长。")
-                            .font(.system(size: 13))
+                            .font(Theme.detailFont)
                             .foregroundStyle(Theme.secondaryText)
 
                         Toggle("多屏时仅在鼠标位于「\(keyboard.mediaBrightnessDisplayName)」时拦截", isOn: Binding(get: { keyboard.mediaBrightnessFocusOnly }, set: { state.mediaBrightnessFocusOnly = $0 }))
@@ -269,7 +271,7 @@ struct HotkeyConfigSheet: View {
                             .disabled(!keyboard.mediaBrightnessKeysEnabled)
                         HStack(spacing: 8) {
                             Text("显示器名称")
-                                .font(.system(size: 13))
+                                .font(Theme.detailFont)
                                 .foregroundStyle(Theme.secondaryText)
                             TextField("Mi Monitor", text: Binding(get: { keyboard.mediaBrightnessDisplayName }, set: { state.mediaBrightnessDisplayName = $0 }))
                                 .textFieldStyle(.roundedBorder)
@@ -278,7 +280,7 @@ struct HotkeyConfigSheet: View {
                         }
                         .disabled(!keyboard.mediaBrightnessKeysEnabled)
                         Text("鼠标不在目标显示器上时，亮度键交回系统处理（去调内置屏亮度）。")
-                            .font(.system(size: 13))
+                            .font(Theme.detailFont)
                             .foregroundStyle(Theme.secondaryText)
 
                     }
@@ -298,7 +300,7 @@ struct HotkeyConfigSheet: View {
                             Spacer()
                         }
                         Text("音量加减、静音键通过当前已连接的 USB/TCP ADB 会话控制此显示器。需要辅助功能权限。")
-                            .font(.system(size: 13))
+                            .font(Theme.detailFont)
                             .foregroundStyle(Theme.secondaryText)
 
                         Toggle("使用 macOS 原生音量提示（OSD）", isOn: Binding(get: { keyboard.mediaVolumeNativeOSD }, set: { state.mediaVolumeNativeOSD = $0 }))
@@ -307,7 +309,7 @@ struct HotkeyConfigSheet: View {
                         Text(keyboard.mediaVolumeNativeOSD
                              ? "原生音量提示固定为 16 格；提示失败时自动使用应用悬浮提示。"
                              : "当前使用应用悬浮提示，可自行设定调节步长。")
-                            .font(.system(size: 13))
+                            .font(Theme.detailFont)
                             .foregroundStyle(Theme.secondaryText)
 
                         Toggle("仅当默认音频输出为指定设备时接管", isOn: Binding(get: { keyboard.mediaVolumeOutputGateEnabled }, set: { state.mediaVolumeOutputGateEnabled = $0 }))
@@ -315,7 +317,7 @@ struct HotkeyConfigSheet: View {
                             .disabled(!keyboard.mediaVolumeKeysEnabled)
                         HStack(spacing: 8) {
                             Text("音频输出设备名")
-                                .font(.system(size: 13))
+                                .font(Theme.detailFont)
                                 .foregroundStyle(Theme.secondaryText)
                             TextField("Mi Monitor", text: Binding(get: { keyboard.mediaVolumeOutputName }, set: { state.mediaVolumeOutputName = $0 }))
                                 .textFieldStyle(.roundedBorder)
@@ -332,7 +334,7 @@ struct HotkeyConfigSheet: View {
 
             VStack(alignment: .leading, spacing: 12) {
                 Text("点「未设置」后直接按组合键即可录入")
-                    .font(.system(size: 13))
+                    .font(Theme.detailFont)
                     .foregroundStyle(Theme.secondaryText)
 
                 HStack(spacing: 12) {
@@ -342,7 +344,7 @@ struct HotkeyConfigSheet: View {
                         set: { state.hotkeyDebugEnabled = $0 }
                     ))
                     .toggleStyle(.checkbox)
-                    .font(.system(size: 13))
+                    .font(Theme.detailFont)
                     .help("记录「按键码命中但修饰键不符」这类信息，用于排查快捷键不生效")
 
                     Spacer()
@@ -357,7 +359,7 @@ struct HotkeyConfigSheet: View {
             .padding(24)
         }
         .frame(minWidth: 760, idealWidth: 800, maxWidth: 940, minHeight: 620, idealHeight: 760, maxHeight: 900)
-        .font(.system(size: 14))
+        .font(Theme.bodyFont)
         .tint(Theme.accent)
         .background(Theme.canvas)
     }
@@ -410,7 +412,7 @@ struct KeyRecorderButton: View {
             .accessibilityValue(recording ? "录制中，按 Escape 取消" : displayText)
 
             if let hint {
-                Text(hint).font(.system(size: 13)).foregroundStyle(Theme.warning)
+                Text(hint).font(Theme.detailFont).foregroundStyle(Theme.warning)
             }
         }
         .onDisappear { stopRecording() }
@@ -477,11 +479,13 @@ struct AdjustHotkeyRow: View {
                 ForEach(adjustableParams, id: \.id) { Text($0.label).tag($0.id) }
             }
             .labelsHidden().frame(width: 100)
+            .focusEffectDisabled()
             Picker("调整方向", selection: $config.direction) {
                 Text("增大").tag("increase")
                 Text("减小").tag("decrease")
             }
             .labelsHidden().frame(width: 70)
+            .focusEffectDisabled()
             Stepper("步长 \(config.step)", value: $config.step, in: 1...100)
                 .frame(width: 140)
             KeyRecorderButton(modifier: $config.modifier, key: $config.key, width: 130, title: "可调快捷键")

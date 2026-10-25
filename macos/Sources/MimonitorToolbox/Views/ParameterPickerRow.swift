@@ -14,7 +14,7 @@ struct ParameterPickerRow: View {
 
     var body: some View {
         HStack(spacing: 12) {
-            Text(title).font(.system(size: 13, weight: .medium))
+            Text(title).font(Theme.controlFont)
                 .frame(width: labelWidth, alignment: .leading)
                 .fixedSize(horizontal: false, vertical: true)
             ParameterPopUp(title: title, options: options, selection: selection, onSelect: onSelect)
@@ -39,6 +39,7 @@ private struct ParameterPopUp: NSViewRepresentable {
     func makeNSView(context: Context) -> NSPopUpButton {
         let view = NSPopUpButton(frame: .zero, pullsDown: false)
         view.controlSize = .regular
+        view.focusRingType = .none
         view.font = .systemFont(ofSize: 13)
         view.autoenablesItems = false
         view.target = context.coordinator

@@ -17,7 +17,7 @@ struct PictureView: View {
                     VStack(alignment: .leading, spacing: 12) {
                         if presets.presetConfiguration.applicationIncomplete {
                             Label("上次预设未完整应用。请到预设重新应用或返回无预设。", systemImage: "exclamationmark.triangle")
-                                .font(.system(size: 13))
+                                .font(Theme.detailFont)
                                 .foregroundColor(Theme.warning)
                                 .fixedSize(horizontal: false, vertical: true)
                                 .padding(12)
@@ -27,9 +27,9 @@ struct PictureView: View {
                         HStack(alignment: .firstTextBaseline, spacing: 16) {
                             VStack(alignment: .leading, spacing: 4) {
                                 Text("当前预设：\(state.activePresetName)")
-                                    .font(.system(size: 14, weight: .semibold))
+                                    .font(Theme.sectionFont)
                                 Text(presetSaveHint)
-                                    .font(.system(size: 13)).foregroundColor(Theme.secondaryText)
+                                    .font(Theme.detailFont).foregroundColor(Theme.secondaryText)
                             }
                             .fixedSize(horizontal: false, vertical: true)
                             Spacer(minLength: 12)
@@ -43,8 +43,11 @@ struct PictureView: View {
                 // Protect device writes while leaving the preset recovery route available.
                 VStack(alignment: .leading, spacing: 24) {
                     modeSection
+                    Divider()
                     basicSection
+                    Divider()
                     colorSection
+                    Divider()
                     responseSection
                 }
                 .disabled(presets.presetConfiguration.applicationIncomplete)
@@ -52,7 +55,7 @@ struct PictureView: View {
             .frame(maxWidth: 970, alignment: .leading)
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(24)
-            .font(.system(size: 14))
+            .font(Theme.bodyFont)
         }
         .onAppear { state.refreshPage("picture") }
         .loadingOverlay(picture.loadingPages.contains("picture"))
@@ -82,7 +85,7 @@ struct PictureView: View {
                         .fixedSize()
                 }
                 Text(picture.pictureModeHint.replacingOccurrences(of: "（[0-9]+）", with: "", options: .regularExpression))
-                    .font(.system(size: 13))
+                    .font(Theme.detailFont)
                     .foregroundColor(Theme.secondaryText)
                     .fixedSize(horizontal: false, vertical: true)
                     .padding(.leading, Theme.parameterLabelWidth + 12)

@@ -30,7 +30,8 @@ struct ContentView: View {
     private func navigationSection(_ title: String, pages: [Page]) -> some View {
         Section(title) {
             ForEach(pages) { page in
-                Label(name(page), systemImage: page.icon).tag(page).listItemTint(Theme.accent)
+                Label(name(page), systemImage: page.icon).tag(page)
+                    .listItemTint(selection == page ? Theme.actionAccent : Theme.accent)
             }
         }
     }
@@ -38,49 +39,62 @@ struct ContentView: View {
     var body: some View {
         NavigationSplitView(columnVisibility: .constant(.all)) {
             VStack(spacing: 0) {
-                Text("G Pro ToolBox").font(.system(size: 15, weight: .semibold))
-                    .frame(maxWidth: .infinity, alignment: .leading).padding(16)
+                HStack(spacing: 8) {
+                    Image("AppMark", bundle: .module).resizable().frame(width: 24, height: 24)
+                        .accessibilityHidden(true)
+                    Text("G Pro ToolBox").font(Theme.controlFont).foregroundStyle(.secondary).lineLimit(1).minimumScaleFactor(0.9)
+                }
+                .frame(maxWidth: .infinity, alignment: .leading).padding(.horizontal, 16).padding(.vertical, 12)
                 List(selection: Binding<Page?>(get: { selection }, set: { if let page = $0 { selection = page } })) {
-                    navigationSection("显示器", pages: [.home, .picture, .game, .source, .light])
-                    navigationSection("工作流", pages: [.presets, .remote])
+                    navigationSection("日常", pages: [.home, .presets, .remote])
+                    navigationSection("调整显示器", pages: [.picture, .game, .source, .light])
+                }
+                .listStyle(.sidebar).accessibilityLabel("功能导航")
+                Divider().padding(.horizontal, 16)
+                List(selection: Binding<Page?>(get: { selection }, set: { if let page = $0 { selection = page } })) {
                     navigationSection("工具", pages: [.tools])
                     Section("应用") {
                         SettingsLink { Label("设置…", systemImage: "gearshape") }
                             .buttonStyle(.plain)
+                            .focusEffectDisabled()
                             .listItemTint(Theme.accent)
                     }
                 }
-                .listStyle(.sidebar).accessibilityLabel("功能导航")
-                sidebarDevice
+                .listStyle(.sidebar).frame(height: 158).accessibilityLabel("工具与应用")
+
             }
-            .navigationSplitViewColumnWidth(min: 184, ideal: 208, max: 240)
+            .navigationSplitViewColumnWidth(min: 184, ideal: 196, max: 220)
             .toolbar(removing: .sidebarToggle)
         } detail: {
             detailView.frame(maxWidth: .infinity, maxHeight: .infinity).background(Theme.canvas)
                 .toolbar {
                     ToolbarItem(placement: .principal) {
-                        Text(name(selection)).font(.system(size: 14, weight: .semibold))
+                        Text(name(selection)).font(Theme.sectionFont)
                     }
                     .sharedBackgroundVisibility(.hidden)
                     ToolbarItem(placement: .primaryAction) {
-                        Label(connection.statusTitle, systemImage: connection.statusSymbol)
-                            .font(.system(size: 12)).foregroundStyle(connection.statusColor)
-                            .lineLimit(1).help(connection.statusText).labelStyle(.titleAndIcon)
+                        if selection != .home {
+                            Label(connection.statusTitle, systemImage: connection.statusSymbol)
+                                .font(Theme.captionFont).foregroundStyle(connection.statusColor)
+                                .lineLimit(1).help(connection.statusText).labelStyle(.titleAndIcon)
+                        }
                     }
                     .sharedBackgroundVisibility(.hidden)
                     ToolbarItemGroup(placement: .primaryAction) {
                         Button { navigation.showsConnectionSettings = true } label: {
                             Label("连接设置", systemImage: "cable.connector")
                         }.labelStyle(.titleAndIcon).keyboardShortcut("k", modifiers: .command)
+                            .focusEffectDisabled()
                         Button { showLogs = true } label: { Label("日志", systemImage: "text.alignleft") }
                             .labelStyle(.titleAndIcon)
+                            .focusEffectDisabled()
                     }
                 }
         }
         .navigationSplitViewStyle(.balanced)
         .preferredColorScheme(state.isSimulation
             ? (settings.theme == "light" ? .light : settings.theme == "dark" ? .dark : nil) : nil)
-        .font(.system(size: 14))
+        .font(Theme.bodyFont)
         .tint(Theme.accent)
         .accentColor(Theme.accent)
         .background(Theme.canvas)
@@ -110,7 +124,7 @@ struct ContentView: View {
                     Color.black.opacity(0.12)
                     VStack(spacing: 14) {
                         ProgressView()
-                        Text(presets.presetOperationText).font(.system(size: 14))
+                        Text(presets.presetOperationText).font(Theme.bodyFont)
                     }
                     .padding(28).background(Theme.card, in: RoundedRectangle(cornerRadius: 18))
                     .overlay(RoundedRectangle(cornerRadius: 18).stroke(Theme.stroke))
@@ -123,19 +137,6 @@ struct ContentView: View {
         )) {
             Button("好", role: .cancel) { state.presetError = nil }
         } message: { Text(presets.presetError ?? "") }
-    }
-
-    private var sidebarDevice: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Divider()
-            Label(connection.deviceDisplayName, systemImage: "display")
-                .font(.system(size: 13, weight: .semibold))
-            Text(connection.statusTitle).font(.system(size: 12)).foregroundStyle(connection.statusColor)
-                .lineLimit(2).help(connection.statusText)
-            Text(connection.activeControlText).font(.system(size: 12)).foregroundStyle(Theme.secondaryText)
-                .lineLimit(2).textSelection(.enabled)
-            Button("连接设置…") { navigation.showsConnectionSettings = true }.toolboxAction()
-        }.padding(16)
     }
 
     @ViewBuilder private var detailView: some View {

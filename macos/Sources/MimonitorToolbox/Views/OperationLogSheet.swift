@@ -7,7 +7,12 @@ struct OperationLogSheet: View {
     @Environment(\.dismiss) private var dismiss
     var body: some View {
         VStack(alignment: .leading, spacing: 18) {
-            HStack { Text("操作日志").font(.system(size: 24, weight: .semibold)); Spacer(); Button("完成") { dismiss() }.toolboxAction() }
+            HStack {
+                Text("操作日志").font(.system(size: 24, weight: .semibold))
+                Spacer()
+                Button("完成") { dismiss() }
+                    .toolboxAction()
+            }
             ScrollViewReader { proxy in
                 ScrollView {
                     LazyVStack(alignment: .leading, spacing: 6) {
@@ -28,10 +33,10 @@ struct OperationLogSheet: View {
                 Spacer()
                 Button("复制全部") {
                     state.copyLog()
-                }
-                Button("导出日志") { state.chooseLogExport() }
-                Button("打开目录") { state.openLogDir() }
-            }.font(.system(size: 13))
+                }.focusEffectDisabled()
+                Button("导出日志") { state.chooseLogExport() }.focusEffectDisabled()
+                Button("打开目录") { state.openLogDir() }.focusEffectDisabled()
+            }.font(Theme.detailFont)
         }.padding(28).frame(width: 850).background(Theme.canvas).tint(Theme.accent)
     }
 }

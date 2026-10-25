@@ -8,6 +8,7 @@ import AppKit
 
 enum Theme {
     static let accent = Color("AccentColor", bundle: .module)
+    static let actionAccent = Color("AccentSelection", bundle: .module)
     // Native segment labels stay white, so their selected fill uses the darker anchor.
     static let selectedAccent = NSColor(named: "AccentSelection", bundle: .module) ?? .controlAccentColor
     // Status text keeps the established contrast on light and dark content surfaces.
@@ -25,7 +26,15 @@ enum Theme {
     static let control = Color(nsColor: .controlColor)
     static let stroke = Color(nsColor: .separatorColor)
     static let secondaryText = Color.secondary
+    // A small system-font scale shared by the window, panels and settings.
+    static let pageTitle = Font.system(size: 22, weight: .semibold)
+    static let deviceTitle = Font.system(size: 21, weight: .semibold)
     static let sectionFont = Font.system(size: 14, weight: .semibold)
+    static let bodyFont = Font.system(size: 14)
+    static let controlFont = Font.system(size: 13, weight: .medium)
+    static let detailFont = Font.system(size: 13)
+    static let captionFont = Font.system(size: 12)
+    static let readingFont = Font.system(size: 32, weight: .medium)
     static let parameterLabelWidth: CGFloat = 112
     static let controlRadius: CGFloat = 8
     static let sectionRadius: CGFloat = 12
@@ -71,11 +80,40 @@ private struct ToolboxGlassSurface: ViewModifier {
 }
 
 private struct ToolboxActionModifier: ViewModifier {
+    @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
+    @Environment(\.colorSchemeContrast) private var contrast
+    @Environment(\.toolboxPreviewAccessibility) private var preview
     let prominent: Bool
     @ViewBuilder func body(content: Content) -> some View {
-        if prominent {
-            content.controlSize(.large).buttonStyle(.borderedProminent).tint(Theme.accent)
-        } else { content.buttonStyle(.bordered) }
+        let button = content.font(Theme.controlFont).controlSize(.large)
+            .buttonBorderShape(.roundedRectangle(radius: Theme.controlRadius))
+            .focusEffectDisabled()
+        if reduceTransparency || preview.reduceTransparency || contrast == .increased || preview.increasedContrast {
+            if prominent { button.buttonStyle(.borderedProminent).tint(Theme.actionAccent) }
+            else { button.buttonStyle(.bordered) }
+        } else {
+            if prominent { button.buttonStyle(.glassProminent).tint(Theme.actionAccent) }
+            else { button.buttonStyle(.glass).tint(nil as Color?) }
+        }
+    }
+}
+
+/// Selection updates only tint and content, preserving the native button's keyboard focus.
+struct ToolboxSelectionButtonSurface: ViewModifier {
+    @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
+    @Environment(\.colorSchemeContrast) private var contrast
+    @Environment(\.toolboxPreviewAccessibility) private var preview
+    let selected: Bool
+
+    @ViewBuilder func body(content: Content) -> some View {
+        if reduceTransparency || preview.reduceTransparency || contrast == .increased || preview.increasedContrast {
+            content.buttonStyle(.borderedProminent)
+                .focusEffectDisabled()
+                .tint(selected ? Theme.actionAccent : Theme.control)
+                .foregroundStyle(selected ? Color.white : Color.primary)
+        } else {
+            content.buttonStyle(.glass).focusEffectDisabled().tint(selected ? Theme.actionAccent : nil)
+        }
     }
 }
 
@@ -85,6 +123,43 @@ extension View {
     }
     func toolboxAction(prominent: Bool = false) -> some View {
         modifier(ToolboxActionModifier(prominent: prominent))
+    }
+}
+
+/// System alerts create AppKit buttons separately from their SwiftUI action declarations.
+/// Scope their focus-ring appearance to sheets owned by this host window.
+struct ToolboxSheetButtonFocus: NSViewRepresentable {
+    func makeNSView(context: Context) -> SheetObserverView { SheetObserverView() }
+    func updateNSView(_ nsView: SheetObserverView, context: Context) {}
+
+    final class SheetObserverView: NSView {
+        override func viewDidMoveToWindow() {
+            super.viewDidMoveToWindow()
+            NotificationCenter.default.removeObserver(self)
+            guard window != nil else { return }
+            NotificationCenter.default.addObserver(self, selector: #selector(sheetWillBegin(_:)),
+                name: NSWindow.willBeginSheetNotification, object: nil)
+        }
+
+        @objc private func sheetWillBegin(_ notification: Notification) {
+            guard let hostWindow = window, let presentingWindow = notification.object as? NSWindow else { return }
+            var ancestor = presentingWindow
+            while ancestor !== hostWindow {
+                guard let parent = ancestor.sheetParent else { return }
+                ancestor = parent
+            }
+            DispatchQueue.main.async { [weak presentingWindow] in
+                guard let content = presentingWindow?.attachedSheet?.contentView else { return }
+                Self.hideButtonFocus(in: content)
+            }
+        }
+
+        private static func hideButtonFocus(in view: NSView) {
+            if let button = view as? NSButton { button.focusRingType = .none }
+            for child in view.subviews { hideButtonFocus(in: child) }
+        }
+
+        deinit { NotificationCenter.default.removeObserver(self) }
     }
 }
 
@@ -130,7 +205,7 @@ struct SectionCard<Content: View>: View {
 
     var body: some View {
         GroupBox {
-            content.frame(maxWidth: .infinity, alignment: .leading)
+            content.padding(10).frame(maxWidth: .infinity, alignment: .leading)
         } label: {
             Text(title).font(Theme.sectionFont)
         }
@@ -226,7 +301,7 @@ struct SliderRow: View {
 
     var body: some View {
         HStack(spacing: 12) {
-            Text(title).font(.system(size: 13, weight: .medium))
+            Text(title).font(Theme.controlFont)
                 .frame(width: Theme.parameterLabelWidth, alignment: .leading)
             FastSlider(value: $value, range: range, step: 1) { v in
                 onCommit(Int(v))
@@ -256,7 +331,7 @@ struct PageHeader: View {
 
     var body: some View {
         HStack {
-            Text(title).font(.system(size: 22, weight: .semibold))
+            Text(title).font(Theme.pageTitle)
             Spacer()
             Button(action: onRefresh) {
                 Label("刷新", systemImage: "arrow.clockwise")

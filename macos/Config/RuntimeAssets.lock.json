@@ -30,7 +30,7 @@
     {
       "path": "macos/assets/AppIcon.icns",
       "destination": "AppIcon.icns",
-      "sha256": "05664d98d0f11db2c72a71e8f79ab1f471d9f15ddaa5f0a0ca82c8580c6dab0b",
+      "sha256": "888adcb69a2ae6f9219450f2fba80ba7a875d300c4415811f8958a9c6ea05f8a",
       "source_reference": "macos/assets/AppIcon.png"
     },
     {

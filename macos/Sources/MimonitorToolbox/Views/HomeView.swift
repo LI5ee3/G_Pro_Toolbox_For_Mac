@@ -8,19 +8,24 @@ struct HomeView: View {
     @ToolboxActions var state
     @Environment(ConnectionModel.self) private var connection
     @Environment(PictureModel.self) private var picture
+    @Environment(PresetsModel.self) private var presets
     @Environment(ToolsModel.self) private var tools
     @Environment(HotkeysModel.self) private var keyboard
     @Environment(NavigationModel.self) private var navigation
     @State private var backlight = 1.0
+    @State private var showsNewPreset = false
 
+    private var selectedSource: Int {
+        connection.isConnected ? picture.intValue("mitv.tvplayer.hdmi.last.source", default: -1) : -1
+    }
     private var source: String {
-        guard connection.isConnected else { return "—" }
-        guard let raw = picture.currentValues["mitv.tvplayer.hdmi.last.source"],
-              let value = Int(raw), let name = RegisterMap.sourceNames[value] else { return "—" }
+        guard let name = RegisterMap.sourceNames[selectedSource] else { return "未知" }
         return name == "DP" ? "DisplayPort" : name
     }
     private var backlightReading: Int? {
-        connection.isConnected ? Int(picture.currentValues["picture_backlight"] ?? "") : nil
+        guard connection.isConnected, let value = Int(picture.currentValues["picture_backlight"] ?? ""),
+              ControlRanges.backlight.contains(value) else { return nil }
+        return value
     }
     private var guardian: String {
         if !connection.isConnected { return "保活状态待连接" }
@@ -36,71 +41,72 @@ struct HomeView: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 24) {
-                VStack(alignment: .leading, spacing: 16) {
-                    HStack(alignment: .top, spacing: 16) {
-                        VStack(alignment: .leading, spacing: 4) {
-                            Text(connection.deviceDisplayName).font(.system(size: 24, weight: .semibold))
-                            Text(connection.activeControlText).font(.system(size: 13)).foregroundStyle(Theme.secondaryText)
-                                .textSelection(.enabled)
-                        }
-                        Spacer()
-                        if !connection.isConnected {
-                            Button("连接显示器…") { navigation.showsConnectionSettings = true }.toolboxAction(prominent: true)
-                        }
-                    }
-                    if !connection.identityNotice.isEmpty {
-                        Label(connection.identityNotice, systemImage: "person.crop.circle.badge.questionmark")
-                            .font(.system(size: 13)).foregroundStyle(Theme.warning)
-                    }
-                    SectionCard(title: "常用控制") {
-                        VStack(alignment: .leading, spacing: 16) {
-                            HStack(alignment: .top, spacing: 48) {
-                                DashboardVolumeControl().frame(maxWidth: .infinity)
-                                backlightControl.frame(maxWidth: .infinity)
-                            }
-                            .overlay {
-                                Rectangle().fill(Theme.stroke).frame(width: 1)
-                            }
+                deviceHeader
+                GroupBox {
+                    VStack(alignment: .leading, spacing: 20) {
+                        HStack(alignment: .top, spacing: 28) {
+                            DashboardVolumeControl().frame(maxWidth: .infinity)
                             Divider()
-                            VStack(alignment: .leading, spacing: 8) {
-                                HStack(spacing: 24) {
-                                    Text("画面模式").font(Theme.sectionFont)
-                                    SegmentedOptionPicker(options: [14, 9, 10].map {
-                                        Option(label: RegisterMap.modeNames[$0] ?? "", value: $0)
-                                    }, selectedValue: selectedMode, controlSize: .regular) { state.setMode($0) }
-                                        .frame(width: 252)
-                                        .disabled(!connection.isConnected)
-                                        .accessibilityLabel("画面模式")
-                                    Spacer(minLength: 0)
+                            backlightControl.frame(maxWidth: .infinity)
+                        }.fixedSize(horizontal: false, vertical: true)
+                        Divider()
+                        VStack(alignment: .leading, spacing: 8) {
+                            HStack(spacing: 20) {
+                                Text("画面模式").font(Theme.sectionFont)
+                                GlassEffectContainer(spacing: 8) {
+                                    HStack(spacing: 8) {
+                                        ForEach([14, 9, 10], id: \.self) { mode in
+                                            Button { state.setMode(mode) } label: {
+                                                Text(RegisterMap.modeNames[mode] ?? "")
+                                                    .frame(maxWidth: .infinity)
+                                            }
+                                            .font(Theme.controlFont).controlSize(.large)
+                                            .buttonBorderShape(.capsule)
+                                            .modifier(ToolboxSelectionButtonSurface(selected: selectedMode == mode))
+                                            .accessibilityValue(selectedMode == mode ? "当前模式" : "未选中")
+                                            .accessibilityAddTraits(selectedMode == mode ? .isSelected : [])
+                                        }
+                                    }
                                 }
-                                Text(connection.isConnected ? picture.pictureModeHint : "当前场景：未知（未连接）")
-                                    .font(.system(size: 13)).foregroundStyle(Theme.secondaryText)
+                                    .frame(width: 252)
+                                    .accessibilityElement(children: .contain).accessibilityLabel("画面模式")
+                                    .disabled(!connection.isConnected || presets.presetConfiguration.applicationIncomplete)
+                                Spacer(minLength: 0)
                             }
+                            Text(connection.isConnected ? picture.pictureModeHint : "当前场景：未知（未连接）")
+                                .font(Theme.detailFont).foregroundStyle(Theme.secondaryText)
                         }
+                    }.padding(16)
+                }
+                VStack(alignment: .leading, spacing: 12) {
+                    HStack {
+                        Text("视频输入").font(Theme.sectionFont)
+                        Spacer()
+                        Text("当前为 \(source)").font(Theme.detailFont).foregroundStyle(Theme.secondaryText)
                     }
-                }
-                VStack(spacing: 0) {
-                    destination("视频输入", value: source, icon: "cable.connector", page: .source)
-                        .disabled(!connection.isConnected)
-                    Divider()
-                    destination("预设", value: state.activePresetName, icon: "square.stack.3d.up", page: .presets)
+                    VideoInputPicker(selectedValue: selectedSource) { state.setSource($0) }
                         .disabled(!connection.isConnected)
                 }
-                VStack(alignment: .leading, spacing: 8) {
+                presetRow
+                VStack(alignment: .leading, spacing: 10) {
                     HStack(spacing: 12) {
-                        Button { state.requestedPage = .tools } label: { Label(guardian, systemImage: "checkmark.shield") }
-                            .help(tools.guardianStatus)
                         Button { session.settingsPane = .keyboard; openSettings() } label: {
                             Label(keyboard.mediaVolumeKeysEnabled ? (keyboard.accessibilityTrusted ? "键盘音量控制已开启" : "键盘控制需要授权") : "键盘音量设置", systemImage: "keyboard")
-                        }
+                        }.toolboxAction()
                         Spacer()
-                        Button("设备身份与归属…") { navigation.showsConnectionSettings = true }
+                        Button { state.requestedPage = .tools } label: {
+                            Label(guardian, systemImage: "checkmark.shield")
+                        }.toolboxAction().help(tools.guardianStatus)
                     }
-                    .font(.system(size: 13)).buttonStyle(.bordered)
-                    Text(connection.recoveryText).font(.system(size: 12)).foregroundStyle(Theme.secondaryText)
+                    if !connection.recoveryText.isEmpty {
+                        Text(connection.recoveryText).font(Theme.captionFont).foregroundStyle(Theme.secondaryText)
+                    }
                 }
             }
-            .padding(24).frame(maxWidth: 970).frame(maxWidth: .infinity, alignment: .top)
+            .padding(28).frame(maxWidth: 970).frame(maxWidth: .infinity, alignment: .top)
+        }
+        .sheet(isPresented: $showsNewPreset) {
+            PresetNameSheet(preset: nil) { state.createPreset(name: $0) }
         }
         .onAppear {
             syncBacklight()
@@ -109,13 +115,64 @@ struct HomeView: View {
         .onChange(of: picture.currentValues["picture_backlight"]) { syncBacklight() }
     }
 
+    private var deviceHeader: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(spacing: 16) {
+                Image(systemName: "display")
+                    .font(.system(size: 38, weight: .light)).foregroundStyle(Theme.accent)
+                    .frame(width: 64, height: 64).accessibilityHidden(true)
+                VStack(alignment: .leading, spacing: 7) {
+                    Text(connection.deviceDisplayName).font(Theme.deviceTitle)
+                    HStack(spacing: 10) {
+                        Label(connection.statusTitle, systemImage: connection.statusSymbol)
+                            .foregroundStyle(connection.statusColor).help(connection.statusText)
+                        Text(connection.activeControlText).foregroundStyle(Theme.secondaryText)
+                            .textSelection(.enabled)
+                    }.font(Theme.detailFont)
+                }
+                Spacer(minLength: 8)
+                if !connection.isConnected {
+                    Button("连接显示器…") { navigation.showsConnectionSettings = true }.toolboxAction(prominent: true)
+                }
+            }
+            if !connection.identityNotice.isEmpty {
+                HStack(alignment: .firstTextBaseline, spacing: 12) {
+                    Label(connection.identityNotice, systemImage: "person.crop.circle.badge.questionmark")
+                        .foregroundStyle(Theme.warning).fixedSize(horizontal: false, vertical: true)
+                    Spacer(minLength: 0)
+                    Button("确认归属…") { navigation.showsConnectionSettings = true }.toolboxAction().fixedSize()
+                }.font(Theme.detailFont)
+            }
+        }
+    }
+
+    private var presetRow: some View {
+        HStack(spacing: 14) {
+            Image(systemName: "square.stack.3d.up").font(.system(size: 21)).foregroundStyle(Theme.accent)
+                .frame(width: 30).accessibilityHidden(true)
+            VStack(alignment: .leading, spacing: 5) {
+                Text(state.activePresetName).font(Theme.sectionFont)
+                Text(presets.presetConfiguration.applicationIncomplete ? "应用未完成，自动保存已暂停" : state.activePresetID == nil ? "调整仅作用于当前显示器" : "画面调整自动保存到此预设")
+                    .font(Theme.detailFont).foregroundStyle(Theme.secondaryText)
+            }.frame(maxWidth: .infinity, alignment: .leading)
+            Button("管理预设") { state.requestedPage = .presets }.toolboxAction()
+            Button { showsNewPreset = true } label: { Label("新建预设", systemImage: "plus") }
+                .toolboxAction().disabled(!connection.isConnected || presets.presetConfiguration.applicationIncomplete)
+        }.padding(.vertical, 20)
+            .overlay(alignment: .top) { Divider() }
+            .overlay(alignment: .bottom) { Divider() }
+    }
+
     private var backlightControl: some View {
         VStack(alignment: .leading, spacing: 12) {
-            HStack(alignment: .firstTextBaseline) {
-                Label("背光", systemImage: "sun.max").font(Theme.sectionFont)
+            Label("背光", systemImage: "sun.max").font(Theme.sectionFont)
+            HStack(alignment: .firstTextBaseline, spacing: 4) {
+                Text(backlightReading != nil ? String(Int(backlight)) : "—")
+                    .font(Theme.readingFont).monospacedDigit()
+                Text("/ 100").font(Theme.detailFont).foregroundStyle(Theme.secondaryText)
                 Spacer()
-                Text(backlightReading != nil ? String(Int(backlight)) : "—").font(.system(size: 28, weight: .medium)).monospacedDigit()
-                Text("/ 100").font(.system(size: 12)).foregroundStyle(Theme.secondaryText)
+                Button("画面设置") { state.requestedPage = .picture }
+                    .toolboxAction().disabled(!connection.isConnected)
             }
             FastSlider(value: $backlight, range: ControlRanges.backlight.sliderBounds, step: 1) { value in
                 state.setPictureSlider(title: "背光", value: Int(value), jniKey: "g_disp__disp_back_light",
@@ -123,34 +180,8 @@ struct HomeView: View {
             }
             .accessibilityLabel("显示器背光")
             .accessibilityValue(backlightReading != nil ? String(Int(backlight)) : "未知")
-            .disabled(!connection.isConnected || picture.currentValues["picture_backlight"] == nil)
-            Button { state.requestedPage = .picture } label: {
-                HStack(spacing: 4) {
-                    Text("更多画面设置")
-                    Image(systemName: "chevron.right").font(.system(size: 10, weight: .semibold))
-                        .accessibilityHidden(true)
-                }
-            }
-            .buttonStyle(.borderless)
-            .frame(minHeight: 24, alignment: .leading)
-            .disabled(!connection.isConnected)
+            .disabled(backlightReading == nil || presets.presetConfiguration.applicationIncomplete)
         }
-    }
-
-    private func destination(_ title: String, value: String, icon: String, page: Page) -> some View {
-        Button { state.requestedPage = page } label: {
-            HStack(alignment: .firstTextBaseline, spacing: 12) {
-                HStack(spacing: 8) {
-                    Image(systemName: icon).frame(width: 20)
-                    Text(title)
-                }.font(.system(size: 14, weight: .medium)).frame(width: 105, alignment: .leading)
-                Text(value).font(.system(size: 13)).foregroundStyle(Theme.secondaryText)
-                    .fixedSize(horizontal: false, vertical: true)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                Image(systemName: "chevron.right").font(.system(size: 11, weight: .semibold)).foregroundStyle(Theme.secondaryText)
-                    .accessibilityHidden(true)
-            }.padding(.vertical, 15).contentShape(Rectangle())
-        }.buttonStyle(.plain)
     }
 
     private func syncBacklight() { backlight = Double(picture.intValue("picture_backlight", default: 1)) }

@@ -25,6 +25,7 @@ struct SegmentedOptionPicker: NSViewRepresentable {
         control.selectedSegmentBezelColor = Theme.selectedAccent
         control.segmentDistribution = distribution
         control.controlSize = controlSize
+        control.focusRingType = .none
         control.isEnabled = isEnabled
         control.setContentHuggingPriority(.defaultLow, for: .horizontal)
         control.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)

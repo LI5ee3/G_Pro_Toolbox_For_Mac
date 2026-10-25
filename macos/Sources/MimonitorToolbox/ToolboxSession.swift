@@ -56,6 +56,7 @@ private struct ToolboxEnvironment: ViewModifier {
             .environment(actions.connection).environment(actions.picture)
             .environment(actions.presets).environment(actions.navigation)
             .environment(actions.volume).environment(actions.tools).environment(actions.keyboard)
+            .background { ToolboxSheetButtonFocus().frame(width: 0, height: 0).accessibilityHidden(true) }
     }
 }
 

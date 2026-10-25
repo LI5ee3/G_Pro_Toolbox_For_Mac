@@ -16,7 +16,7 @@ struct PresetsView: View {
             VStack(alignment: .leading, spacing: 18) {
                 HStack(alignment: .top, spacing: 20) {
                     VStack(alignment: .leading, spacing: 8) {
-                        Text("预设模式").font(.system(size: 22, weight: .semibold))
+                        Text("画面预设").font(Theme.pageTitle)
                     }
                     Spacer(minLength: 12)
                     Button {
@@ -30,20 +30,22 @@ struct PresetsView: View {
                 }
 
                 VStack(alignment: .leading, spacing: 7) {
-                    Text(presets.presetConfiguration.applicationIncomplete
-                         ? "当前对象：\(state.activePresetName) · 应用未完成，自动保存已暂停"
-                         : connection.isConnected
-                         ? "当前对象：\(state.activePresetName)\(state.activePresetID == nil ? " · 仅调整显示器" : " · 画面调整自动保存到此预设")"
-                         : "未连接时不自动保存画面调整。")
+                    if presets.presetConfiguration.applicationIncomplete {
+                        Text("当前对象：\(state.activePresetName) · 应用未完成，自动保存已暂停")
+                    } else if !connection.isConnected {
+                        Text("未连接时不自动保存画面调整。")
+                    } else if state.activePresetID != nil {
+                        Text("画面调整自动保存到当前预设。")
+                    }
                     Label("菜单栏：\(presets.presetConfiguration.menuBarPresets.count)/4 个预设（含无预设）", systemImage: "menubar.rectangle")
                 }
-                .font(.system(size: 13))
+                .font(Theme.detailFont)
                 .foregroundColor(Theme.secondaryText)
                 .fixedSize(horizontal: false, vertical: true)
 
                 if !connection.isConnected {
                     Label("未连接显示器。可管理名称；创建、应用和编辑需先连接。", systemImage: "wifi.slash")
-                        .font(.system(size: 13))
+                        .font(Theme.detailFont)
                         .foregroundColor(Theme.secondaryText)
                         .padding(14)
                         .frame(maxWidth: .infinity, alignment: .leading)
@@ -80,6 +82,7 @@ struct PresetsView: View {
                                     .labelStyle(.iconOnly).frame(width: 24, height: 24)
                             }
                             .menuStyle(.borderlessButton)
+                            .focusEffectDisabled()
                             .menuIndicator(.hidden)
                             .fixedSize()
                             .frame(width: 28, height: 28)
@@ -105,7 +108,7 @@ struct PresetsView: View {
             .frame(maxWidth: 970, alignment: .leading)
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(24)
-            .font(.system(size: 14))
+            .font(Theme.bodyFont)
             .tint(Theme.accent)
             .disabled(presets.isPresetOperationInFlight)
         }
@@ -176,7 +179,7 @@ private struct PresetRow<Actions: View>: View {
                             .font(.system(size: 12, weight: .medium)).foregroundColor(Theme.warning).fixedSize()
                     }
                 }
-                Text(summary).font(.system(size: 13)).foregroundColor(Theme.secondaryText)
+                Text(summary).font(Theme.detailFont).foregroundColor(Theme.secondaryText)
                     .fixedSize(horizontal: false, vertical: true)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
@@ -185,7 +188,7 @@ private struct PresetRow<Actions: View>: View {
                     .controlSize(.regular)
                 Toggle("在菜单栏显示", isOn: $showInMenuBar)
                     .toggleStyle(.switch).controlSize(.small).fixedSize()
-                    .font(.system(size: 12)).foregroundColor(Theme.secondaryText)
+                    .font(Theme.captionFont).foregroundColor(Theme.secondaryText)
                     .disabled(!showInMenuBar && !canEnableMenuBar)
                     .help(canEnableMenuBar ? "将此预设加入菜单栏" : "菜单栏最多添加 4 个预设，请先关闭一个已有选项")
             }
@@ -202,7 +205,7 @@ private struct PresetNameRequest: Identifiable {
     let preset: PicturePreset?
 }
 
-private struct PresetNameSheet: View {
+struct PresetNameSheet: View {
     @ToolboxActions private var state
     @Environment(PresetsModel.self) private var presets
     @Environment(\.dismiss) private var dismiss
@@ -219,23 +222,23 @@ private struct PresetNameSheet: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
             Label(preset == nil ? "新建预设" : "重命名预设", systemImage: "slider.horizontal.3")
-                .font(.system(size: 22, weight: .semibold))
-            if let preset { Text("当前对象：\(preset.name)").font(.system(size: 13)).foregroundStyle(Theme.secondaryText) }
+                .font(Theme.pageTitle)
+            if let preset { Text("当前对象：\(preset.name)").font(Theme.detailFont).foregroundStyle(Theme.secondaryText) }
             VStack(alignment: .leading, spacing: 6) {
-                Text("预设名称").font(.system(size: 13, weight: .medium))
+                Text("预设名称").font(Theme.controlFont)
                 TextField("预设名称", text: $name).textFieldStyle(.roundedBorder)
                     .labelsHidden().disabled(saving).focused($nameFocused)
                     .accessibilityLabel("预设名称")
             }
-            Text(preset == nil ? "读取当前设备设置后创建，并进入画面页继续调整。" : "重名时会自动添加序号；已有任务引用不受影响。")
-                .font(.system(size: 13)).foregroundColor(Theme.secondaryText)
+            Text(preset == nil ? "保存当前画面设置（含 FreeSync），不保存音量和视频输入。创建后进入画面页继续调整。" : "重名时会自动添加序号；已有任务引用不受影响。")
+                .font(Theme.detailFont).foregroundColor(Theme.secondaryText)
             if saving || presets.isPresetOperationInFlight {
                 HStack(spacing: 8) { ProgressView().controlSize(.small); Text(presets.presetOperationText) }
-                    .font(.system(size: 13))
+                    .font(Theme.detailFont)
             }
             if let failure {
                 Label(failure, systemImage: "exclamationmark.circle")
-                    .font(.system(size: 13)).foregroundColor(Theme.warning)
+                    .font(Theme.detailFont).foregroundColor(Theme.warning)
                     .fixedSize(horizontal: false, vertical: true)
             }
             HStack {
@@ -255,7 +258,7 @@ private struct PresetNameSheet: View {
             }
         }
         .padding(24).frame(width: 460)
-        .font(.system(size: 14))
+        .font(Theme.bodyFont)
         .tint(Theme.accent)
         .interactiveDismissDisabled(saving)
         .onChange(of: presets.isPresetOperationInFlight) { _, inFlight in

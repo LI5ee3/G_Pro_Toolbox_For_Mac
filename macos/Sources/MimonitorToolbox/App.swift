@@ -21,8 +21,8 @@ struct MenuBarPanel: View {
             VStack(alignment: .leading, spacing: 6) {
                 Label(connection.deviceDisplayName, systemImage: "display").font(.system(size: 15, weight: .semibold))
                 Label(connection.isConnected ? "已连接" : connection.statusText, systemImage: connection.statusSymbol)
-                    .font(.system(size: 12)).foregroundStyle(connection.statusColor).lineLimit(2)
-                Text(connection.activeControlText).font(.system(size: 12)).foregroundStyle(Theme.secondaryText)
+                    .font(Theme.captionFont).foregroundStyle(connection.statusColor).lineLimit(2)
+                Text(connection.activeControlText).font(Theme.captionFont).foregroundStyle(Theme.secondaryText)
                     .lineLimit(2).textSelection(.enabled)
             }.padding(.horizontal, 14).padding(.vertical, 12)
             Divider()
@@ -39,7 +39,7 @@ struct MenuBarPanel: View {
                     }
                     if keyboard.menuBarItems.isEmpty && presets.presetConfiguration.menuBarPresets.isEmpty {
                         Text("尚未添加参数快捷项，可在“更多”中配置。")
-                            .font(.system(size: 13)).foregroundStyle(Theme.secondaryText)
+                            .font(Theme.detailFont).foregroundStyle(Theme.secondaryText)
                     }
                 }
                 .padding(.horizontal, 14).padding(.vertical, 12)
@@ -66,7 +66,7 @@ struct MenuBarPanel: View {
                         Button("连接显示器…") { navigation.showsConnectionSettings = true; showMainWindow() }
                     }
                     Button("退出") { state.quit() }
-                }.menuStyle(.borderlessButton).fixedSize().font(.system(size: 13))
+                }.menuStyle(.borderlessButton).focusEffectDisabled().fixedSize().font(Theme.detailFont)
             }.padding(.horizontal, 14).padding(.vertical, 10)
         }
         .padding(6).toolboxGlass(cornerRadius: 18).tint(Theme.accent).accentColor(Theme.accent)
@@ -127,6 +127,7 @@ private struct PresetSegmentedControl: NSViewRepresentable {
         control.trackingMode = .selectOne
         control.segmentStyle = .automatic
         control.segmentDistribution = .fillEqually
+        control.focusRingType = .none
         control.setContentHuggingPriority(.defaultLow, for: .horizontal)
         control.target = context.coordinator
         control.action = #selector(Coordinator.selectSegment(_:))
@@ -190,6 +191,7 @@ private struct MenuBarPanelRow: View {
                     }
                 }
                 .pickerStyle(.menu)
+                .focusEffectDisabled()
                 .labelsHidden()
                 .accessibilityLabel(entry.label)
                 .frame(maxWidth: .infinity, alignment: .leading)

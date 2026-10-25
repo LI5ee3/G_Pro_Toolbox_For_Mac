@@ -63,7 +63,9 @@ struct GeneralSettingsView: View {
                 LabeledContent {
                     HStack {
                         Button("登录项设置") { state.openLoginItemSettings() }
+                            .focusEffectDisabled()
                         Button("重新检测") { state.refreshLoginItem() }
+                            .focusEffectDisabled()
                     }
                     .disabled(settings.loginItemBusy)
                 } label: {
@@ -76,6 +78,7 @@ struct GeneralSettingsView: View {
             Section {
                 LabeledContent("本地网络") {
                     Button("打开隐私设置") { state.openLocalNetworkSettings() }
+                        .focusEffectDisabled()
                         .help("系统设置 → 隐私与安全 → 本地网络")
                 }
             } header: {
@@ -104,6 +107,7 @@ private struct KeyboardSettingsView: View {
                 LabeledContent("快捷键", value: "已配置 \(configuredHotkeyCount) 个")
                 LabeledContent("组合键、系统音量键与亮度键") {
                     Button("配置快捷键…") { showHotkeySheet = true }
+                        .focusEffectDisabled()
                 }
             } header: {
                 Text("键盘控制")
@@ -115,7 +119,9 @@ private struct KeyboardSettingsView: View {
                 if !keyboard.accessibilityTrusted {
                     HStack {
                         Button("前往授权") { state.requestAccessibilityPermission() }
+                            .focusEffectDisabled()
                         Button("重新检测") { state.refreshAccessibilityStatus() }
+                            .focusEffectDisabled()
                     }
                 }
                 if keyboard.listenerStatus == .failed {

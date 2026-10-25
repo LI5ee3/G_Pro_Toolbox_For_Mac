@@ -80,14 +80,14 @@ struct LightView: View {
             }
             .frame(maxWidth: 970, alignment: .leading)
             .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(24).font(.system(size: 14))
+            .padding(24).font(Theme.bodyFont)
         }
         .onAppear { state.refreshPage("light") }
     }
 
     private func parameterHint(_ text: String) -> some View {
         Text(text)
-            .font(.system(size: 13))
+            .font(Theme.detailFont)
             .foregroundStyle(Theme.secondaryText)
             .fixedSize(horizontal: false, vertical: true)
             .padding(.leading, Theme.parameterLabelWidth + 12)

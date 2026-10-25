@@ -83,7 +83,7 @@ struct GameView: View {
             .frame(maxWidth: 970, alignment: .leading)
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(24)
-            .font(.system(size: 14))
+            .font(Theme.bodyFont)
         }
         .onAppear { state.refreshPage("game") }
         .loadingOverlay(picture.loadingPages.contains("game"))
@@ -102,7 +102,7 @@ struct GameView: View {
                     .fixedSize()
             }
         }
-        .font(.system(size: 13))
+        .font(Theme.detailFont)
         .padding(picture.gameModeHintIsWarning ? 12 : 0)
         .background {
             if picture.gameModeHintIsWarning {
@@ -124,7 +124,7 @@ struct GameView: View {
             Text(title).font(Theme.sectionFont)
             if picture.gameModeState != .active {
                 Text(picture.gameModeState == .inactive ? "记忆值" : "待确认")
-                    .font(.system(size: 12))
+                    .font(Theme.captionFont)
                     .foregroundColor(Theme.secondaryText)
             }
             Spacer(minLength: 0)

@@ -12,6 +12,7 @@ struct MenuBarSettingsView: View {
             Section {
                 LabeledContent("快捷项", value: "\(keyboard.menuBarItems.count) 项")
                 Button("恢复默认") { state.menuBarItems = MenuBarCatalog.defaultEnabled }
+                    .focusEffectDisabled()
                     .help("恢复默认快捷项及其排列顺序")
             } header: {
                 Text("菜单栏配置")
@@ -31,7 +32,7 @@ struct MenuBarSettingsView: View {
                             if let entry = MenuBarCatalog.entry(id) {
                                 HStack(spacing: 12) {
                                     Image(systemName: "line.3.horizontal")
-                                        .font(.system(size: 12)).foregroundStyle(Theme.secondaryText)
+                                        .font(Theme.captionFont).foregroundStyle(Theme.secondaryText)
                                         .accessibilityHidden(true)
                                     Image(systemName: icon(for: entry))
                                         .foregroundStyle(Theme.accent).frame(width: 20)
@@ -80,7 +81,7 @@ struct MenuBarSettingsView: View {
                         VStack(alignment: .leading, spacing: 5) {
                             Text(entry.label)
                             Text(describe(entry))
-                                .font(.system(size: 13)).foregroundStyle(Theme.secondaryText)
+                                .font(Theme.detailFont).foregroundStyle(Theme.secondaryText)
                         }
                         Spacer(minLength: 12)
                         Toggle(entry.label, isOn: Binding(

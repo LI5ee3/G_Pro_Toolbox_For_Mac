@@ -31,3 +31,6 @@ __pycache__/
 *.xcuserstate
 
 /macos/.swiftpm/
+
+# Local validation screenshots, logs and source backups.
+/validation/
