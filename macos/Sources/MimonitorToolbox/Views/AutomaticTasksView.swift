@@ -15,7 +15,7 @@ struct AutomaticTasksView: View {
             VStack(alignment: .leading, spacing: 18) {
                 HStack(alignment: .top, spacing: 20) {
                     VStack(alignment: .leading, spacing: 8) {
-                        Text("自动任务").font(.system(size: 23, weight: .semibold))
+                        Text("自动任务").font(.system(size: 22, weight: .semibold))
                     }
                     Spacer(minLength: 12)
                     Button {
@@ -73,12 +73,14 @@ struct AutomaticTasksView: View {
                             taskRow(task, index: index)
                         }
                     }
-                    .background(Theme.card, in: RoundedRectangle(cornerRadius: 16))
-                    .overlay(RoundedRectangle(cornerRadius: 16).stroke(Theme.stroke.opacity(0.65)))
+                    .background(Theme.card, in: RoundedRectangle(cornerRadius: Theme.sectionRadius))
+                    .overlay(RoundedRectangle(cornerRadius: Theme.sectionRadius).stroke(Theme.stroke.opacity(0.65)))
                 }
 
             }
-            .padding(28)
+            .frame(maxWidth: 970, alignment: .leading)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(24)
             .font(.system(size: 14))
             .tint(Theme.accent)
             .disabled(presets.isPresetOperationInFlight)
@@ -97,11 +99,11 @@ struct AutomaticTasksView: View {
     private func taskRow(_ task: ScheduledPresetTask, index: Int) -> some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack(spacing: 12) {
-                Text("\(task.start) – \(task.end)")
-                    .font(.system(size: 26, weight: .medium))
+                Text(verbatim: "\(task.start)–\(task.end)")
+                    .font(.system(size: 18, weight: .semibold))
                     .monospacedDigit()
                     .foregroundColor(task.enabled ? .primary : Theme.secondaryText)
-                Text(isOvernight(task) ? "每天 · 跨午夜" : "每天")
+                Text((task.enabled ? "每天" : "已停用") + (isOvernight(task) ? " · 跨午夜" : ""))
                     .font(.system(size: 12)).foregroundColor(Theme.secondaryText)
                 Spacer(minLength: 8)
                 Toggle("启用", isOn: Binding(
@@ -143,11 +145,14 @@ struct AutomaticTasksView: View {
                     .disabled(index == presets.presetConfiguration.tasks.count - 1)
                 }
                 Button("编辑") { editing = task }.toolboxAction()
-                Button("删除…", role: .destructive) { deleting = task; showDelete = true }
-                    .toolboxAction()
+                Menu {
+                    Button("删除…", role: .destructive) { deleting = task; showDelete = true }
+                } label: { Image(systemName: "ellipsis").frame(width: 24, height: 24) }
+                    .menuStyle(.borderlessButton).menuIndicator(.hidden).fixedSize()
+                    .accessibilityLabel("管理任务 \(task.start)–\(task.end)")
             }
         }
-        .padding(18)
+        .padding(16)
         .frame(maxWidth: .infinity, alignment: .leading)
     }
 
@@ -161,8 +166,12 @@ struct AutomaticTasksView: View {
 }
 
 private struct AutomaticTaskSheet: View {
+    @ToolboxActions private var state
+    @Environment(PresetsModel.self) private var model
     @Environment(\.dismiss) private var dismiss
     @State private var task: ScheduledPresetTask
+    @State private var saving = false
+    @State private var failure: String?
     let presets: [PicturePreset]
     let save: (ScheduledPresetTask) -> Void
     init(task: ScheduledPresetTask, presets: [PicturePreset], save: @escaping (ScheduledPresetTask) -> Void) {
@@ -171,7 +180,7 @@ private struct AutomaticTaskSheet: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
             Label("自动任务", systemImage: "calendar.badge.clock")
-                .font(.system(size: 23, weight: .semibold))
+                .font(.system(size: 22, weight: .semibold))
             Form {
                 Picker("时段内使用", selection: $task.presetID) {
                     Text("无预设").tag(PicturePreset.baselineID)
@@ -181,21 +190,49 @@ private struct AutomaticTaskSheet: View {
                 DatePicker("结束时间", selection: timeBinding(start: false), displayedComponents: .hourAndMinute)
                 Toggle("启用任务", isOn: $task.enabled)
             }
+            .disabled(saving)
             Text("每天按所选时间执行，支持跨午夜，例如 23:00–02:00。开始时间包含在时段内，结束时间不包含；两者不能相同。")
                 .font(.system(size: 13)).foregroundColor(Theme.secondaryText)
             if !task.isValid { Text("请填写有效且不同的开始、结束时间。") .font(.system(size: 13)).foregroundColor(Theme.warning) }
+            if saving || model.isPresetOperationInFlight {
+                HStack(spacing: 8) { ProgressView().controlSize(.small); Text(model.presetOperationText) }
+                    .font(.system(size: 13))
+            }
+            if let failure {
+                Label(failure, systemImage: "exclamationmark.circle")
+                    .font(.system(size: 13)).foregroundStyle(Theme.warning)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
             HStack {
                 Spacer()
                 Button("取消") { dismiss() }.keyboardShortcut(.cancelAction)
-                    .toolboxAction()
-                Button("保存") { save(task); dismiss() }.keyboardShortcut(.defaultAction)
+                    .toolboxAction().disabled(saving)
+                Button(saving ? "保存中…" : "保存") {
+                    failure = nil
+                    state.presetError = nil
+                    saving = true
+                    save(task)
+                }.keyboardShortcut(.defaultAction)
                     .toolboxAction(prominent: true)
-                    .disabled(!task.isValid)
+                    .disabled(saving || model.isPresetOperationInFlight || !task.isValid)
             }
         }
-        .padding(28).frame(width: 460)
+        .padding(24).frame(width: 480)
         .font(.system(size: 14))
         .tint(Theme.accent)
+        .interactiveDismissDisabled(saving)
+        .onChange(of: model.isPresetOperationInFlight) { _, inFlight in
+            guard saving, !inFlight else { return }
+            saving = false
+            if let message = model.presetError {
+                failure = message
+                state.presetError = nil
+            } else if model.presetConfiguration.tasks.contains(task) {
+                dismiss()
+            } else {
+                failure = "保存未完成，输入已保留，请重试。"
+            }
+        }
     }
 
     private func timeBinding(start: Bool) -> Binding<Date> {
