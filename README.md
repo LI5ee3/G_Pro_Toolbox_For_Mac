@@ -22,7 +22,7 @@ Redmi G Pro 27U / 32U 显示器的原生 macOS 控制应用，使用 SwiftUI、A
 
 手动 USB/TCP 操作、授权与排障、连接偏好、旧配置归属及备份/恢复限制集中在 [手动连接与配置](macos/README.md#手动连接与配置)。连接成功不会自动保存偏好，全局记忆归属也不是必做步骤。
 
-当前架构与运行边界见 [ARCHITECTURE](docs/ARCHITECTURE.md)，执行范围及验收状态以 [ROADMAP](docs/ROADMAP.md) 为准。S2-01 至 S2-06 已合入，包含手动 USB/TCP 选择和经确认的身份兼容，详见 [ADB 契约第 0 节](docs/ADB-CONTRACTS.md)。
+当前架构与运行边界见 [ARCHITECTURE](docs/ARCHITECTURE.md)，当前范围及任务状态见 [ROADMAP](docs/ROADMAP.md)；项目更新历史及后续变更统一记录在 [CHANGELOG](docs/CHANGELOG.md)，协作遵循 [AGENT.md](AGENT.md)。S2-01 至 S2-06 已合入，包含手动 USB/TCP 选择和经确认的身份兼容，详见 [ADB 契约第 0 节](docs/ADB-CONTRACTS.md)。
 
 PR #4 已合并；源码 `839186f` 的候选 `0.1.0 (20261024.1)` 已有真实 TCP 接入、既有 shell 探活及默认 `5038` 端口交接成功记录，当前用于正常使用。本次交接没有新增源码修复、重新构建或重签，不代表所有控制、预设、任务或恢复场景均已验证。完整历史 M2/G2 仍为 NOT_PASSED；Auto 继续暂缓（DEFERRED）。
 

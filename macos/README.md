@@ -3,7 +3,7 @@
 Redmi G Pro 27U / 32U 显示器的原生 macOS 控制工具，使用 SwiftUI、AppKit 和 CoreAudio。
 仅支持 macOS 27 及以上的 Apple Silicon Mac（M 系列芯片）。本仓库仅维护 Mac 应用；设备端协议与实现源自 [原项目](https://github.com/YiHoooong/Mimonitor_Toolbox)，在此基础上继续开发。
 
-现行依赖、状态/并发所有权及遗留保留理由见 [ARCHITECTURE](../docs/ARCHITECTURE.md)；执行范围与验收状态以 [ROADMAP](../docs/ROADMAP.md) 为准。R0–R6c 文件保留历史事实，不作为当前进度表。
+现行依赖、状态/并发所有权及遗留保留理由见 [ARCHITECTURE](../docs/ARCHITECTURE.md)；当前范围与任务状态见 [ROADMAP](../docs/ROADMAP.md)，项目更新历史及后续变更统一记录在 [CHANGELOG](../docs/CHANGELOG.md)。R0–R6c 文件保留历史事实，不作为当前进度表。
 
 ## 手动连接与配置
 
@@ -335,4 +335,4 @@ EDID / FreeSync 这类会改变显示器输入信号格式（可能黑屏或改�
 
 `.github/workflows/macos.yml` 的默认 build job 只运行资源校验、Python/Swift 测试、架构/Preview 边界检查、App Debug/Release 和 Preview Debug 编译及验证；不打包、不上传 DMG/ZIP、不安装应用、不使用签名秘密。所有构建输出位于 runner.temp 的 run ID/attempt 独立目录，外部 fork PR 不在自托管 runner 执行。
 
-只有 `workflow_dispatch` 显式选择 `package=true`（默认 false），并且 build 成功后，独立 package job 才生成并上传 development DMG/ZIP。该路径不需要 Developer ID、公证或 `macos-release` environment；现行工作流不创建 Release，也不调用 reinstall.sh。S1-08 的源码基线、测试、限制及回滚证据见 [ROADMAP](../docs/ROADMAP.md)；历史分发与版权说明见 [R6-RELEASE.md](R6-RELEASE.md)。
+只有 `workflow_dispatch` 显式选择 `package=true`（默认 false），并且 build 成功后，独立 package job 才生成并上传 development DMG/ZIP。该路径不需要 Developer ID、公证或 `macos-release` environment；现行工作流不创建 Release，也不调用 reinstall.sh。S1-08 的源码基线、测试、限制及回滚证据见 [更新历史](../docs/CHANGELOG.md#83-s1-08-执行与验收报告2026-10-22utc8)；历史分发与版权说明见 [R6-RELEASE.md](R6-RELEASE.md)。
