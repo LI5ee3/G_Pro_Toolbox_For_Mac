@@ -31,26 +31,6 @@ final class ObservationTests: XCTestCase {
         XCTAssertEqual(preferences.string(forKey: "close_behavior"), "tray")
     }
 
-    func testUnrelatedLogWritesDoNotInvalidateSettingsReaders() {
-        let runtime = PreviewRuntime(), state = runtime.makeState()
-        let changes = ObservationCount()
-        withObservationTracking { _ = state.settings.theme } onChange: { changes.increment() }
-        for i in 0..<500 { state.logs.append("\(i)") }
-        XCTAssertEqual(changes.value, 0)
-        state.settings.theme = "dark"
-        XCTAssertEqual(changes.value, 1)
-    }
-
-    func testCloseBehaviorDoesNotInvalidateThemeReader() {
-        let runtime = PreviewRuntime(), state = runtime.makeState()
-        let changes = ObservationCount()
-        withObservationTracking { _ = state.settings.theme } onChange: { changes.increment() }
-        state.settings.closeBehavior = "exit"
-        XCTAssertEqual(changes.value, 0)
-        state.settings.theme = "light"
-        XCTAssertEqual(changes.value, 1)
-    }
-
     func testLogCapRetainsSequenceForAutoScroll() {
         let model = LogModel()
         for i in 0..<510 { model.append("line \(i)") }
@@ -65,17 +45,6 @@ final class ObservationTests: XCTestCase {
         XCTAssertEqual(changes.value, 1)
     }
 
-    func testLegacyActionFacadeUsesSameLeafModelInstances() {
-        let runtime = PreviewRuntime(), state = runtime.makeState()
-        state.theme = "dark"
-        XCTAssertEqual(state.settings.theme, "dark")
-        state.settings.closeBehavior = "exit"
-        XCTAssertEqual(state.closeBehavior, "exit")
-        state.logToFileEnabled = true
-        XCTAssertTrue(state.logs.recordsToFile)
-        XCTAssertTrue(runtime.display.recordedCommands.isEmpty)
-    }
-
     func testVolumeDoesNotInvalidatePictureOrPresetReaders() {
         let state = PreviewRuntime().makeState()
         let picture = ObservationCount(), presets = ObservationCount(), volume = ObservationCount()
@@ -86,16 +55,6 @@ final class ObservationTests: XCTestCase {
         XCTAssertEqual(picture.value, 0)
         XCTAssertEqual(presets.value, 0)
         XCTAssertEqual(volume.value, 1)
-    }
-
-    func testPictureMutationDoesNotInvalidateVolumeReader() {
-        let state = PreviewRuntime().makeState(), changes = ObservationCount()
-        withObservationTracking { _ = state.volume.dashboardVolume } onChange: { changes.increment() }
-        state.currentValues["picture_backlight"] = "60"
-        state.logs.append("picture changed")
-        XCTAssertEqual(changes.value, 0)
-        state.seedSimulationReadings(volume: 20, muted: false)
-        XCTAssertEqual(changes.value, 1)
     }
 
     func testConnectionRecoveryIntentIsObservedWithoutGlobalNotifications() {
@@ -117,15 +76,6 @@ final class ObservationTests: XCTestCase {
         XCTAssertEqual(runtime.preferences.integer(forKey: "media_brightness_step"), 9)
         XCTAssertEqual(runtime.preferences.string(forKey: "media_volume_output_name"), "Mi Monitor (eqMac)")
         XCTAssertEqual(runtime.hotkeyDriver.starts, 0)
-    }
-
-    func testBusyAndNavigationAreIndependentOfPresetConfiguration() {
-        let state = PreviewRuntime().makeState(), changes = ObservationCount()
-        withObservationTracking { _ = state.presets.presetConfiguration } onChange: { changes.increment() }
-        state.isPresetBusy = true; state.requestedPage = .picture
-        XCTAssertEqual(changes.value, 0)
-        XCTAssertTrue(state.presets.isPresetBusy)
-        XCTAssertEqual(state.navigation.requestedPage, .picture)
     }
 
     func testDisconnectInvalidatesPresetIdentityReadersWithoutChangingConfiguration() {

@@ -95,16 +95,6 @@ final class RuntimeSafetyTests: XCTestCase {
         XCTAssertNil(state.dashboardMuted)
     }
 
-    func testTwoRapidMuteClicksAreSerializedOnTheMockDisplay() async {
-        let runtime = PreviewRuntime(), state = runtime.makeState()
-        state.toggleDashboardMute(); state.toggleDashboardMute()
-        let completion = expectation(description: "device queue drained")
-        state.deviceQueue.async { completion.fulfill() }
-        await fulfillment(of: [completion], timeout: 2)
-        XCTAssertFalse(runtime.display.muted)
-        XCTAssertEqual(runtime.display.recordedCommands.filter { $0.contains("service call audio 10") }.count, 2)
-    }
-
     func testDisconnectDropsQueuedVolumeWriteAndTrailingCommit() async {
         let runtime = PreviewRuntime(), state = runtime.makeState()
         state.deviceQueue.suspend()

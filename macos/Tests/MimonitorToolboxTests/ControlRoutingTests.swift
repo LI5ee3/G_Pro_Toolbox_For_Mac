@@ -240,7 +240,9 @@ final class ControlRoutingTests: XCTestCase {
             s.handleHotkeyTrigger("input_source_cycle"); await s.waitForPendingWork()
             assertShells(f, endpoint, sourceCommands(29))
             f.clear()
-            s.handleHotkeyTrigger("picture_mode_cycle"); await s.waitForPendingWork()
+            s.handleHotkeyTrigger("picture_mode_cycle")
+            XCTAssertEqual(s.picture.currentValues["picture_mode"], "10")
+            await s.waitForPendingWork()
             assertShells(f, endpoint, ["settings put global picture_mode 10"])
             f.clear()
             s.mediaVolumeKeysEnabled = true; s.mediaVolumeOutputGateEnabled = false

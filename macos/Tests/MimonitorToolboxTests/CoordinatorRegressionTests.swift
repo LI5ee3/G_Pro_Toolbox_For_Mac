@@ -37,23 +37,4 @@ final class CoordinatorRegressionTests: XCTestCase {
         XCTAssertFalse(state.presets.isPresetBusy)
     }
 
-    func testPictureActionsKeepExistingADBOrderAndOptimisticValue() async {
-        let runtime = PreviewRuntime(), state = runtime.makeState()
-        state.setMode(9)
-        XCTAssertEqual(state.picture.currentValues["picture_mode"], "9")
-        await drain(state)
-        XCTAssertTrue(runtime.display.recordedCommands.contains { $0.hasSuffix("settings put global picture_mode 9") })
-        XCTAssertTrue(runtime.display.recordedCommands.allSatisfy { !$0.contains("KEYCODE_VOLUME") })
-    }
-
-    func testDashboardVolumeWritesMemoryDisplayAndReadbackPublishesToVolumeModel() async {
-        let runtime = PreviewRuntime(), state = runtime.makeState()
-        state.setDashboardVolume(27); await drain(state)
-        runtime.scheduler.advance(by: 0.2); await drain(state)
-        state.refreshMediaVolumeState(); await drain(state)
-        XCTAssertEqual(runtime.display.volume, 27)
-        XCTAssertEqual(state.volume.dashboardVolume, 27)
-        XCTAssertFalse(state.volume.dashboardMuted ?? true)
-        XCTAssertEqual(runtime.display.recordedCommands.filter { $0.contains("service call audio 12 i32 3 i32 27 i32 0 s16 com.android.shell") }.count, 1)
-    }
 }

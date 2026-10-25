@@ -28,19 +28,6 @@ final class AdbSessionTests: XCTestCase {
         XCTAssertTrue(session.cancellation.isCancelled)
         XCTAssertEqual(adb.serial, "192.0.2.2:5555")
     }
-    func testReconnectingSameAddressStillInvalidatesOldSession() {
-        let adb = client { _ in XCTFail("stale work executed"); return ProcessResult(output: "", exitCode: 0) }
-        adb.beginSession(ip: "192.0.2.1")
-        let previous = adb.session()
-        adb.beginSession(ip: "192.0.2.1")
-        let result = adb.withSession(previous) { adb.run(["-s", adb.serial, "get-state"]) }
-        XCTAssertEqual(result.outcome, .cancelled)
-        XCTAssertFalse(adb.session().cancellation.isCancelled)
-    }
-    func testEmptyTargetNeverFallsThroughToAdbDefaultDevice() {
-        let adb = client { _ in XCTFail("empty -s executed"); return ProcessResult(output: "", exitCode: 0) }
-        XCTAssertEqual(adb.shell("input keyevent KEYCODE_POWER"), "未连接显示器")
-    }
     func testBinderCapabilityIsSeparateForEachDisplay() throws {
         var calls: [String] = []
         let adb = client { request in

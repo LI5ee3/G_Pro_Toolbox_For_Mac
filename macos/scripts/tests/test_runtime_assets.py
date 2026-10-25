@@ -8,8 +8,6 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import runtime_assets as assets
 
 class RuntimeAssetsTests(unittest.TestCase):
-    def test_repository_inputs_match_all_pins(self):
-        self.assertEqual(len(assets.inputs()), 7)
     def test_missing_and_modified_input_fail(self):
         with tempfile.TemporaryDirectory() as tmp:
             p = Path(tmp) / 'input'
@@ -41,7 +39,5 @@ class RuntimeAssetsTests(unittest.TestCase):
             subprocess.run(['lipo', str(source), '-thin', 'arm64', '-output', str(target)], check=True)
             subprocess.run(['codesign', '--force', '--sign', '-', '--options', 'runtime', str(target)], check=True, capture_output=True)
             self.assertEqual(assets.unsigned_arm64(target), assets.load()['platform_tools']['arm64_unsigned_sha256'])
-    def test_signed_adb_code_normalizes_to_pinned_code(self):
-        self.assertEqual(assets.unsigned_arm64(assets.inputs()['runtime/adb']), assets.load()['platform_tools']['arm64_unsigned_sha256'])
 
 if __name__ == '__main__': unittest.main()

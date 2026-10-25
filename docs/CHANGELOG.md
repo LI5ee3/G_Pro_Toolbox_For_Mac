@@ -4,6 +4,14 @@
 
 [ROADMAP](ROADMAP.md) 只维护当前范围、任务状态和按需执行原则。协作以用户最新明确要求和根目录 [AGENT.md](../AGENT.md) 为准。
 
+## 2026-10-25 测试去重
+
+- Swift 用例由 484 项缩减为 467 项（403 + 64），Python 由 24 项缩减为 22 项；不设删减比例或数量目标，上游既有测试保持。
+- 删除重复的空端点、同址重连与音量回归检查，沿用 `AdbEndpointTests`、`ControlRoutingTests` 和 `MediaControlResultTests.swift` 中更完整的现有覆盖；画面模式的即时预览断言并入已有 USB/TCP 控制路由测试。
+- 删除只重复核对 Preview 固定种子、fake 命令处理和非零布局尺寸，以及 Observation 框架行为、简单属性转发的检查；保留生产 USB 选择限制、全部页面/菜单的代表布局、权限与登录项结果、偏好键、状态发布及会话安全测试。
+- Python 删除固定资源数量断言与原始 adb 的重复归一化检查；保留资源篡改拒绝、写前完整验证、重签后代码摘要及现有签名/打包安全门禁。
+- 验证：实际发现 467 项 Swift、22 项 Python；仅运行相关的 32 项 Swift 与 5 项资源测试，均通过，差异检查通过。生产源码、资源、工作流、历史工作树、未提交内容和现用 App 保持；按用户要求用 `[skip ci]` 直接推送，本次不触发 CI，也不重复本机全量回归与构建。缩减前基线 `1ee8b53` 的 [默认 CI](https://github.com/LI5ee3/G_Pro_Toolbox_For_Mac/actions/runs/40171724089) 已通过，其结论不冒称为新提交的完整回归结果。
+
 ## 2026-10-25 无引用代码清理与现行说明修正
 
 - 删除没有代码引用的 `MonitorHardwareView`、`ToolboxGlassGroup`、`ButtonGroupSection`、四个 HDR 辅助方法及 `AppCoordinator.setValue`。保留实际使用的主机 HDR 检测与现有综合判定，不改变生产页面或设备控制逻辑。
