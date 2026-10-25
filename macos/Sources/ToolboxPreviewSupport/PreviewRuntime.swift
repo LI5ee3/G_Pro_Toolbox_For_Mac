@@ -178,8 +178,8 @@ package final class PreviewDisplay: PresetDevice {
         if shell.contains("init.svc.adbd") { return result("running") }
         if shell.contains("persist.appcontrol_w_mask") { return result("-134250497") }
         if shell.hasPrefix("stat ") { return result("4096") }
-        if shell.hasPrefix("wm size") { return result("Physical size: 1920x1080") }
-        if shell.hasPrefix("wm density") { return result("Physical density: 320") }
+        if shell.hasPrefix("wm size") { return result(unknownReadings ? "" : "Physical size: 1920x1080") }
+        if shell.hasPrefix("wm density") { return result(unknownReadings ? "" : "Physical density: 320") }
         return result("Result: Parcel(00000000)")
     }
 }
@@ -192,6 +192,7 @@ package final class PreviewRuntime {
         case multipleDevices = "多台候选", dualTransport = "USB 与 TCP 同时在线"
         case connecting = "连接中", connectionFailure = "连接失败"
         case hdrCustom = "HDR 与 RGB"
+        case workflow = "预设与任务", localSaveFailure = "本地保存失败"
     }
     package let preferences = MemoryPreferences()
     package let scheduler = ManualScheduler()
@@ -266,6 +267,21 @@ package final class PreviewRuntime {
         loginState = scenario == .loginApproval ? .requiresApproval : .notRegistered
         automationDenied = scenario == .permissionDenied
         loginLock.unlock()
+        if scenario == .workflow || scenario == .localSaveFailure {
+            // Use the existing engine and in-memory device/store, never production defaults.
+            let engine = PresetEngine(store: PresetStore(defaults: preferences))
+            if let reading = try? engine.create(name: "日常阅读", device: display) {
+                display.values["picture_mode"] = "9"
+                display.values["picture_backlight"] = "25"
+                display.values["xiaomi_picture_backlight"] = "25"
+                if let movie = try? engine.create(name: "夜间电影 · 暖色低背光", device: display) {
+                    try? engine.setMenuBarVisibility(id: PicturePreset.baselineID, visible: true)
+                    try? engine.setMenuBarVisibility(id: movie.id, visible: true)
+                    try? engine.saveTask(ScheduledPresetTask(presetID: reading.id, start: "18:00", end: "20:00"))
+                    try? engine.saveTask(ScheduledPresetTask(presetID: movie.id, start: "23:00", end: "02:00"))
+                }
+            }
+        }
         let state = AppCoordinator(environment: environment())
         state.settings.loginItem = LoginItemSnapshot(status: scenario == .loginApproval ? .requiresApproval : .notRegistered)
         if scenario == .permissionDenied {
@@ -356,6 +372,10 @@ package final class PreviewRuntime {
         }
         if scenario == .connecting { state.connectionStatus = .connecting }
         if scenario == .connectionFailure { state.connectionStatus = .failed("模拟连接超时，请检查目标地址或显示器授权") }
+        if scenario == .localSaveFailure {
+            // Simulate a competing in-memory owner after the worker loaded its snapshot.
+            preferences.set(Data("simulation-storage-conflict".utf8), forKey: "picture_presets_v1")
+        }
         return state
     }
 }

@@ -16,7 +16,7 @@ struct PresetsView: View {
             VStack(alignment: .leading, spacing: 18) {
                 HStack(alignment: .top, spacing: 20) {
                     VStack(alignment: .leading, spacing: 8) {
-                        Text("预设模式").font(.system(size: 23, weight: .semibold))
+                        Text("预设模式").font(.system(size: 22, weight: .semibold))
                     }
                     Spacer(minLength: 12)
                     Button {
@@ -30,8 +30,12 @@ struct PresetsView: View {
                 }
 
                 VStack(alignment: .leading, spacing: 7) {
-                    Text("应用后，画面页、快捷键和菜单栏的调整会自动保存到当前预设。")
-                    Label("菜单栏：\(presets.presetConfiguration.menuBarPresets.count)/4 个预设", systemImage: "menubar.rectangle")
+                    Text(presets.presetConfiguration.applicationIncomplete
+                         ? "当前对象：\(state.activePresetName) · 应用未完成，自动保存已暂停"
+                         : connection.isConnected
+                         ? "当前对象：\(state.activePresetName)\(state.activePresetID == nil ? " · 仅调整显示器" : " · 画面调整自动保存到此预设")"
+                         : "未连接时不自动保存画面调整。")
+                    Label("菜单栏：\(presets.presetConfiguration.menuBarPresets.count)/4 个预设（含无预设）", systemImage: "menubar.rectangle")
                 }
                 .font(.system(size: 13))
                 .foregroundColor(Theme.secondaryText)
@@ -46,11 +50,11 @@ struct PresetsView: View {
                         .background(Theme.control, in: RoundedRectangle(cornerRadius: 14))
                 }
                 VStack(spacing: 0) {
-                    PresetCard(title: "无预设", summary: "不使用任何预设，仅修改当前显示器状态",
+                    PresetRow(title: "无预设", summary: "不使用任何预设，仅修改当前显示器状态",
                                isCurrent: baselineIsCurrent, applicationIncomplete: false,
                                showInMenuBar: menuBarBinding(PicturePreset.baselineID),
                                canEnableMenuBar: presets.presetConfiguration.canEnableMenuBarPreset(id: PicturePreset.baselineID)) {
-                        Button { state.restoreBaseline(edit: true) } label: {
+                        Button { state.restoreBaseline(edit: true); refreshImmediatePictureNavigation() } label: {
                             Text("编辑画面").frame(width: 64)
                         }
                         .toolboxAction()
@@ -58,12 +62,12 @@ struct PresetsView: View {
                         Button { state.restoreBaseline() } label: {
                             Text("应用").frame(width: 48)
                         }
-                        .toolboxAction(prominent: true)
+                        .toolboxAction()
                         .disabled(!state.canRestoreBaseline || baselineIsCurrent)
                     }
                     ForEach(presets.presetConfiguration.presets) { preset in
                         Divider().overlay(Theme.stroke.opacity(0.65)).padding(.horizontal, 18)
-                        PresetCard(title: preset.name, summary: summary(preset),
+                        PresetRow(title: preset.name, summary: summary(preset),
                                    isCurrent: connection.isConnected && state.activePresetID == preset.id && !presets.presetConfiguration.applicationIncomplete,
                                    applicationIncomplete: state.activePresetID == preset.id && presets.presetConfiguration.applicationIncomplete,
                                    showInMenuBar: menuBarBinding(preset.id),
@@ -81,7 +85,7 @@ struct PresetsView: View {
                             .background(Theme.control, in: RoundedRectangle(cornerRadius: 6))
                             .help("管理预设")
                             .accessibilityLabel("管理预设 \(preset.name)")
-                            Button { state.applyPreset(id: preset.id, edit: true) } label: {
+                            Button { state.applyPreset(id: preset.id, edit: true); refreshImmediatePictureNavigation() } label: {
                                 Text("编辑画面").frame(width: 64)
                             }
                             .toolboxAction()
@@ -89,16 +93,18 @@ struct PresetsView: View {
                             Button { state.applyPreset(id: preset.id) } label: {
                                 Text("应用").frame(width: 48)
                             }
-                            .toolboxAction(prominent: true)
+                            .toolboxAction(prominent: state.activePresetID == preset.id && presets.presetConfiguration.applicationIncomplete)
                             .disabled(!connection.isConnected || (state.activePresetID == preset.id && !presets.presetConfiguration.applicationIncomplete))
                         }
                     }
                 }
-                .background(Theme.card, in: RoundedRectangle(cornerRadius: 16))
-                .overlay(RoundedRectangle(cornerRadius: 16).stroke(Theme.stroke.opacity(0.65)))
+                .background(Theme.card, in: RoundedRectangle(cornerRadius: Theme.sectionRadius))
+                .overlay(RoundedRectangle(cornerRadius: Theme.sectionRadius).stroke(Theme.stroke.opacity(0.65)))
 
             }
-            .padding(28)
+            .frame(maxWidth: 970, alignment: .leading)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(24)
             .font(.system(size: 14))
             .tint(Theme.accent)
             .disabled(presets.isPresetOperationInFlight)
@@ -117,6 +123,11 @@ struct PresetsView: View {
         }
     }
 
+    private func refreshImmediatePictureNavigation() {
+        // An already-active target navigates immediately, without the apply completion's refresh.
+        if state.requestedPage == .picture { state.forceRefreshPage("picture") }
+    }
+
     private var baselineIsCurrent: Bool {
         connection.isConnected && state.activePresetID == nil && !presets.presetConfiguration.applicationIncomplete
     }
@@ -130,13 +141,14 @@ struct PresetsView: View {
 
     private func summary(_ preset: PicturePreset) -> String {
         let mode = Int(preset.values["picture_mode"] ?? "") ?? -1
-        let modeName = RegisterMap.sceneNames[mode] ?? "模式 \(mode)"
-        return "\(modeName) · 背光 \(preset.values["picture_backlight"] ?? "—") · 对比度 \(preset.values["picture_contrast"] ?? "—") · FreeSync \(preset.values["freesync"] == "1" ? "开" : "关")"
+        let modeName = RegisterMap.sceneNames[mode] ?? (mode == -1 ? "模式未知" : "模式 \(mode)")
+        let freesync = ["0": "关", "1": "开"][preset.values["freesync"] ?? ""] ?? "未知"
+        return "\(modeName) · 背光 \(preset.values["picture_backlight"] ?? "—") · 对比度 \(preset.values["picture_contrast"] ?? "—") · FreeSync \(freesync)"
     }
 }
 
 /// Saved presets keep their status and actions beside the object they affect.
-private struct PresetCard<Actions: View>: View {
+private struct PresetRow<Actions: View>: View {
     let title: String
     let summary: String
     let isCurrent: Bool
@@ -148,14 +160,14 @@ private struct PresetCard<Actions: View>: View {
     var body: some View {
         HStack(alignment: .top, spacing: 14) {
             Image(systemName: "display")
-                .font(.system(size: 18, weight: .regular))
+                .font(.system(size: 16, weight: .regular))
                 .foregroundColor(isCurrent ? Theme.accent : Theme.secondaryText)
-                .frame(width: 36, height: 36)
+                .frame(width: 28, height: 28)
                 .background(isCurrent ? Theme.accent.opacity(0.10) : Theme.control,
                             in: RoundedRectangle(cornerRadius: 9))
             VStack(alignment: .leading, spacing: 7) {
                 HStack(spacing: 9) {
-                    Text(title).font(.system(size: 16, weight: .semibold)).lineLimit(2)
+                    Text(title).font(Theme.sectionFont).lineLimit(2)
                     if isCurrent {
                         Label("当前使用", systemImage: "checkmark.circle.fill")
                             .font(.system(size: 12, weight: .medium)).foregroundColor(Theme.accent).fixedSize()
@@ -178,10 +190,10 @@ private struct PresetCard<Actions: View>: View {
                     .help(canEnableMenuBar ? "将此预设加入菜单栏" : "菜单栏最多添加 4 个预设，请先关闭一个已有选项")
             }
         }
-        .padding(18)
+        .padding(16)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(isCurrent ? Theme.accent.opacity(0.035) : Color.clear)
-        .clipShape(RoundedRectangle(cornerRadius: 15))
+        .clipShape(RoundedRectangle(cornerRadius: Theme.sectionRadius))
     }
 }
 
@@ -206,11 +218,19 @@ private struct PresetNameSheet: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
             Label(preset == nil ? "新建预设" : "重命名预设", systemImage: "slider.horizontal.3")
-                .font(.system(size: 23, weight: .semibold))
-            TextField("预设名称", text: $name).textFieldStyle(.roundedBorder)
-                .disabled(saving)
+                .font(.system(size: 22, weight: .semibold))
+            if let preset { Text("当前对象：\(preset.name)").font(.system(size: 13)).foregroundStyle(Theme.secondaryText) }
+            VStack(alignment: .leading, spacing: 6) {
+                Text("预设名称").font(.system(size: 13, weight: .medium))
+                TextField("预设名称", text: $name).textFieldStyle(.roundedBorder)
+                    .labelsHidden().disabled(saving)
+            }
             Text(preset == nil ? "读取当前设备设置后创建，并进入画面页继续调整。" : "重名时会自动添加序号；已有任务引用不受影响。")
                 .font(.system(size: 13)).foregroundColor(Theme.secondaryText)
+            if saving || presets.isPresetOperationInFlight {
+                HStack(spacing: 8) { ProgressView().controlSize(.small); Text(presets.presetOperationText) }
+                    .font(.system(size: 13))
+            }
             if let failure {
                 Label(failure, systemImage: "exclamationmark.circle")
                     .font(.system(size: 13)).foregroundColor(Theme.warning)
@@ -223,15 +243,16 @@ private struct PresetNameSheet: View {
                     .disabled(saving)
                 Button(saving ? "保存中…" : "保存") {
                     failure = nil
+                    state.presetError = nil
                     saving = true
                     save(name)
                 }
                     .toolboxAction(prominent: true)
                     .keyboardShortcut(.defaultAction)
-                    .disabled(saving || name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                    .disabled(saving || presets.isPresetOperationInFlight || name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
             }
         }
-        .padding(28).frame(width: 440)
+        .padding(24).frame(width: 460)
         .font(.system(size: 14))
         .tint(Theme.accent)
         .interactiveDismissDisabled(saving)
@@ -239,7 +260,7 @@ private struct PresetNameSheet: View {
             guard saving, !inFlight else { return }
             saving = false
             if let message = presets.presetError {
-                failure = preset == nil ? "未能创建预设。请检查 ADB 连接或本机存储后重试；名称已保留。" : message
+                failure = message
                 state.presetError = nil
             } else {
                 dismiss()

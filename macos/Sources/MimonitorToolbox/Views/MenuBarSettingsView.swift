@@ -9,11 +9,11 @@ struct MenuBarSettingsView: View {
 
     var body: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 26) {
+            VStack(alignment: .leading, spacing: 24) {
                 HStack(alignment: .top, spacing: 20) {
                     VStack(alignment: .leading, spacing: 6) {
-                        Text("菜单栏").font(.system(size: 23, weight: .semibold))
-                        Text("不打开主窗口，也能调整常用参数。")
+                        Text("菜单栏配置").font(.system(size: 22, weight: .semibold))
+                        Text("选择常用参数，菜单面板沿用这里的启用项与顺序。")
                             .foregroundStyle(Theme.secondaryText)
                     }
                     Spacer()
@@ -24,9 +24,9 @@ struct MenuBarSettingsView: View {
 
                 MenuSettingsSection(title: "快捷项顺序 · \(keyboard.menuBarItems.count) 项") {
                     HStack(spacing: 8) {
-                        Image(systemName: "cursorarrow.and.square.on.square.dashed")
+                        Image(systemName: "info.circle")
                             .foregroundStyle(Theme.accent)
-                        Text("拖动下方条目调整顺序，修改立即保存。")
+                        Text("拖动或使用上下移按钮调整顺序；修改立即保存，无需另点保存。")
                             .font(.system(size: 13)).foregroundStyle(Theme.secondaryText)
                     }
                     if keyboard.menuBarItems.isEmpty {
@@ -41,7 +41,7 @@ struct MenuBarSettingsView: View {
                     } else {
                         // List + onMove 保留真正的原生拖放排序。
                         List {
-                            ForEach(keyboard.menuBarItems, id: \.self) { id in
+                            ForEach(Array(keyboard.menuBarItems.enumerated()), id: \.element) { index, id in
                                 if let entry = MenuBarCatalog.entry(id) {
                                     HStack(spacing: 12) {
                                         Image(systemName: "line.3.horizontal")
@@ -51,6 +51,16 @@ struct MenuBarSettingsView: View {
                                             .foregroundStyle(Theme.accent).frame(width: 20)
                                         Text(entry.label)
                                         Spacer()
+                                        Button { state.moveMenuBarItems(from: IndexSet(integer: index), to: index - 1) } label: {
+                                            Image(systemName: "arrow.up")
+                                        }
+                                        .toolboxAction().disabled(index == 0)
+                                        .accessibilityLabel("上移\(entry.label)")
+                                        Button { state.moveMenuBarItems(from: IndexSet(integer: index), to: index + 2) } label: {
+                                            Image(systemName: "arrow.down")
+                                        }
+                                        .toolboxAction().disabled(index == keyboard.menuBarItems.count - 1)
+                                        .accessibilityLabel("下移\(entry.label)")
                                         Button { state.toggleMenuBarItem(id) } label: {
                                             Label("移除\(entry.label)", systemImage: "minus.circle")
                                                 .labelStyle(.iconOnly)
@@ -80,8 +90,7 @@ struct MenuBarSettingsView: View {
                         HStack(spacing: 14) {
                             Image(systemName: icon(for: entry))
                                 .foregroundStyle(Theme.accent)
-                                .frame(width: 32, height: 32)
-                                .background(Theme.accent.opacity(0.08), in: RoundedRectangle(cornerRadius: 9))
+                                .frame(width: 20)
                             VStack(alignment: .leading, spacing: 5) {
                                 Text(entry.label)
                                 Text(describe(entry))
@@ -98,18 +107,16 @@ struct MenuBarSettingsView: View {
                             ))
                             .labelsHidden().toggleStyle(.switch)
                         }
-                        .padding(.vertical, 8)
-                        .padding(.horizontal, 12)
-                        .background(Theme.card, in: RoundedRectangle(cornerRadius: 10))
+                        .padding(.vertical, 6)
                     }
                 }
 
                 Label("选项在菜单中显示为勾选列表；数值参数提供增大、减小操作。", systemImage: "info.circle")
                     .font(.system(size: 13)).foregroundStyle(Theme.secondaryText)
             }
-            .padding(28)
-            .frame(maxWidth: 1000)
-            .frame(maxWidth: .infinity)
+            .frame(maxWidth: 970, alignment: .leading)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(24)
         }
         .font(.system(size: 14))
         .tint(Theme.accent)
@@ -141,7 +148,7 @@ private struct MenuSettingsSection<Content: View>: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text(title).font(.system(size: 15, weight: .semibold))
+            Text(title).font(Theme.sectionFont)
             content
         }
         .frame(maxWidth: .infinity, alignment: .leading)

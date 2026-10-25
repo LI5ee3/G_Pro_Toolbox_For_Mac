@@ -1,16 +1,48 @@
 # 红米 G Pro ToolBox 设计规范
 
-更新：2026-10-25 · **方向已采用；S3-03 已 review 合并；S3-04 参数页一致化待 review**。
+更新：2026-10-25 · **方向已采用；S3-04 已 review 合并；S3-05 工作流与设置一致化待 review**。
 
 用户已采用 PR #5 的“控制优先的原生工作区”。S3-01 复核 HEAD `c71f799` 经默认 CI #33 通过，以 merge commit `b6648bccf47117b3619a465af98ffc435704f323` 合入 master，合并 CI #34 通过。S3-02 的 PR #6 HEAD 与已复核的 `e9b8574fc218c17b422e1c0c95d6e1a523dc39de` 完全一致，沿用已通过的默认 CI [#35](https://github.com/LI5ee3/G_Pro_Toolbox_For_Mac/actions/runs/40098121445)，标记 ready 后以 merge commit `ea8f7b608cf044ec7b9cf9274a8ef55f9a55d2c0` 合入 master；自然触发的合并 CI [#36](https://github.com/LI5ee3/G_Pro_Toolbox_For_Mac/actions/runs/40099394801) 通过。确认包含关系后正常删除已合并分支引用，原工作树与内容保留。
 
 PR #7 的复核 HEAD `ae3e8750ebdee695cc52800179cceaea556c712c` 与远端一致，直接沿用已通过的默认 CI [#37](https://github.com/LI5ee3/G_Pro_Toolbox_For_Mac/actions/runs/40104714754)，标记 ready 后以 merge commit `a2275fd73fbe674185cde9f9050ed409d8bc37d3` 合入 master；自然合并 CI [#38](https://github.com/LI5ee3/G_Pro_Toolbox_For_Mac/actions/runs/40130043388) 通过。包含关系已核验，S3-03 分支引用正常删除，原工作树 detached 于同一复核 HEAD，内容保留。
 
-本轮由用户单独授权 S3-04，止于新草稿 PR review，不开始 S3-05。M2/G2 NOT_PASSED、Auto DEFERRED、G3 未通过；现用 App 不替换。下文 S3-01/02/03 与 Pro B 记录保留为各自当时范围，历史停止点由最新授权取代。平台及业务边界见 [ARCHITECTURE](docs/ARCHITECTURE.md)，进度以 [ROADMAP](docs/ROADMAP.md) 为准。
+PR #8 的复核 HEAD `31bf91fc16276b2ccef6b81a525d98c3e8903973` 与远端一致，直接沿用已通过的默认 CI [#39](https://github.com/LI5ee3/G_Pro_Toolbox_For_Mac/actions/runs/40132640326)，标记 ready 后以 merge commit `c5cf2e15235eefa63ae28e6fc5e379bbdbc0af60` 合入 master；自然合并 CI [#40](https://github.com/LI5ee3/G_Pro_Toolbox_For_Mac/actions/runs/40155370724) 通过。包含关系已验证，S3-04 本地/远端分支引用正常删除，原工作树 detached 于同一复核 HEAD，目录内容保留。
 
-## S3-04：画面、游戏、信号源与灯光（实现待 review）
+本轮由用户单独授权 S3-05，止于新草稿 PR review，不开始 S3-06。M2/G2 NOT_PASSED、Auto DEFERRED、G3 未通过；现用 App 不替换。下文 S3-01/02/03/04 与 Pro B 记录保留为各自当时范围，历史停止点由最新授权取代。平台及业务边界见 [ARCHITECTURE](docs/ARCHITECTURE.md)，进度以 [ROADMAP](docs/ROADMAP.md) 为准。
 
-独立分支 `ui/s3-04-parameter-pages` 基于合并后的 `a2275fd`。继续实际读取并使用已安装 **oil-ui-pro 0.24.2** 的存量项目、组件、交互/状态、布局及视觉精修规则，沿用下文 Apple HIG；不升级技能、不重新探索方向或评分。对照原作者参数页与当前生产 View/动作，保留已成熟的映射和实现。本机仍为 macOS 27.0.1、Xcode 27.1 / SDK 27.0，只使用公开 SwiftUI/AppKit API。
+## S3-05：预设、自动任务、遥控器、工具与菜单配置（实现待 review）
+
+独立分支 `ui/s3-05-workflow-pages` 基于合并后的 `c5cf2e1`。本轮是在已采用方向内迁移存量页面；实际使用已安装 **oil-ui-pro 0.24.2** 的现有项目、组件、交互/状态、布局和视觉精修规则，继续遵循下文 Apple HIG。平台仍为 macOS 27.0.1、Xcode 27.1 / SDK 27.0；不升级技能、不重新探索方向或评分。（当前范围由用户授权；下列局部实现待 review）
+
+- **共享阅读规则**：五页沿用 Theme、原动作按钮和 S3-03 外壳，页名 22pt、分组 14pt、正文 13–14pt，主内容限宽 970pt、边距 24pt。预设与任务用连续对象列表，遥控器保留方向空间，工具沿用任务分组，菜单目录采用紧凑行；不套同一种参数表，不新建表单引擎或另一套设计系统。
+- **预设**：当前自动保存对象与应用未完成/暂停状态明确；无预设、创建/名称、重命名、删除及关联任务影响、应用/编辑画面、菜单栏可见性和原四项上限全部保留。行内动作降为普通层级，仅创建及需要重新应用时强调；缺失的摘要值显示“—/未知”。名称表单保留当前对象、常驻字段名、真实 busy 与错误，失败保留名称和弹窗；新操作先清理旧错误，结果仍来自原模型。已在使用的预设/无预设直接进入编辑时，局部复用既有刷新入口更新画面缓存；需先应用的路径继续由原 Coordinator 完成刷新，不改变预设事务。
+- **自动任务**：时间使用等宽数字，目标、启用、执行状态、优先级、上下移与编辑靠近同一任务；删除收在“更多”，影响确认沿用。保留本地时间、跨午夜、开始含/结束不含、靠下优先、返回目标及睡眠/重连规则，不与跨传输 Auto 连接混淆。`AutomaticTaskSheet` 不再 `save; dismiss`：提交后观察既有忙碌与错误，保存中锁定本表单并显示原操作文字；完成后配置包含本次任务才关闭，失败/未完成保留输入和位置。保存中不把关闭当作取消后台操作，没有新 token 或通用结果服务。
+- **遥控器**：紧凑方向/OK 区与导航、声音、电源分组并排，移除整块遥控器外壳及阴影；12 个原键码和每个按钮直接调用一次 `key` 的方式保持，没有新增能力或普通按键确认。
+- **工具与设置**：保留键盘控制、应用偏好、记忆联动、连接保活、高级工具的现有结构，统一字级与阅读轴；空的状态文字显示“状态待确认”。四处实际复用的局部复选行将名称保留为清晰正文，仅原生控件采用禁用外观，原锁定/未知条件保持。实际看图发现应用偏好的分段控件错位，复用上游 `56fa67e8` 的小型 `SegmentedOptionPicker`（`NSSegmentedControl`），只用于现有两组偏好并保留 `tray/exit`、`auto/dark/light` 存储值。快捷键记录/媒体键规则、权限/登录项、4K 未知及重启确认、Guardian 确认、APK、Terminal/Shell、源码入口均沿用；不更改系统或设备动作。
+- **菜单栏配置**：保留真实目录、启用项、原生 List 拖动、恢复默认及即时保存；新增上下移按钮直接调用原 `moveMenuBarItems`，不新增排序或存储机制。当前顺序与启用数立即反映模型，文案明确无需另点保存；S3-03 的实际菜单面板结构未改。
+
+安全 Preview 仍显示这些生产 View。新增“预设与任务”场景通过原引擎/内存 store 和 fake 设备生成“日常阅读”“夜间电影 · 暖色低背光”及 18:00–20:00、23:00–02:00 两个任务；“本地保存失败”在 worker 读取后模拟内存配置归属冲突，用于检查表单失败保留。既有“未知读数”让 fake 的 4K 查询也返回未知。上述数据不代表真实设备或共享偏好。
+
+只构建现有安全 Preview：
+
+```sh
+xcodebuild -project macos/Toolbox.xcodeproj -scheme ToolboxPreviews -configuration Debug \
+  -derivedDataPath /tmp/s3-05-review-preview -destination 'platform=macOS,arch=arm64' \
+  CODE_SIGN_IDENTITY=- build
+```
+
+打开 `/tmp/s3-05-review-preview/Build/Products/Debug/ToolboxPreviewHost.app`，窗口名“S3-05 工作流与设置 · 安全 Preview”。底栏可切换模拟场景、外观及默认/最小窗口；所有设备、权限、文件与系统动作均在原有模拟环境中，不连接 5038 或真实显示器。
+
+实际原生截图：[预设列表](docs/design/S3-05/presets-light.jpg) · [任务列表](docs/design/S3-05/tasks-min-dark.jpg) · [遥控器](docs/design/S3-05/remote-min-dark.jpg) · [工具上部](docs/design/S3-05/tools-light.jpg) · [记忆联动与保活](docs/design/S3-05/tools-memory-guardian-min-dark.jpg) · [高级工具与未知 4K](docs/design/S3-05/tools-advanced-unknown-min-dark.jpg) · [菜单配置](docs/design/S3-05/menu-settings-min-light.jpg)。直接修改的表单：[任务编辑](docs/design/S3-05/task-editor-dark.jpg) · [任务保存失败](docs/design/S3-05/task-save-failure-dark.jpg) · [名称失败保留](docs/design/S3-05/preset-name-failure-light.jpg) · [快捷键面板](docs/design/S3-05/hotkeys-sheet-light.jpg)。截图为默认 1120×820、最小 1020×740 及原生 sheet 的实际运行记录，包含必要滚动区域；不是生产 App 或真机验收。
+
+必要检查：安全 Preview 编译与既有隔离检查通过；仅对新增分段接线补一个直接 native/fake 检查，确认真实偏好值及原即时存储、外部同步，另沿用原排序检查，两项通过。实际操作确认任务保存成功关闭并重新打开读回、失败保留修改后的目标/时间/启用而原任务不变；名称失败保留原对象及新名称。菜单上下移实际改变顺序并可移回，真实目录末项可达；五页与直接修改表单已在代表浅深/默认及最小窗口看图，4K 未知与原禁用原因可辨。Coordinator、业务模型、调度/预设事务/存储格式、FastSlider 与既有连接/菜单面板未改。本机未重复完整 Swift/Python 回归、三种构建、全状态矩阵、Instruments 或真机验收；完整默认 CI 自然触发，不启用打包。S3-06 全面键盘/辅助功能、S3-07 完整矩阵和 S3-08 性能验收留待后续，G3 未通过。
+
+
+一次不打分的独立看图（`/root/s305_visual_final`）保留对象/动作关系、时间/优先级、紧凑方向区与工具分组，指出禁用复选项名称偏暗；已局部修正四处名称并只重看受影响区域，原禁用条件仍在。独立 UX 走查（`/root/s305_ux_walk`）自选“阅读预设背光 45→35”，当时部分完成，卡在保存与重进读数一致性；[原始观察](docs/design/S3-05/ux-before-clock.jpg)。必要复现区分了原 ManualScheduler 需手动推进，以及已使用预设编辑入口沿用旧画面缓存：仅在立即导航路径补调用既有刷新。修正后主 Agent 沿同一路径推进模拟时间，[列表摘要 35](docs/design/S3-05/preset-autosave-readback-light.jpg) 与[再次编辑 35](docs/design/S3-05/preset-edit-readback-light.jpg) 一致；无预设同类入口也读回新值 44。Preview 中测试延迟自动保存需使用底栏“推进 15 秒”；没有改动生产时钟、调度、存储或参数写入。走查与复现不代表真机效果，也不作为 S3-06/07/08 或 G3 通过。
+
+## S3-04：画面、游戏、信号源与灯光（已 review 合并）
+
+以下保留 S3-04 当时实现与检查记录。独立分支 `ui/s3-04-parameter-pages` 当时基于合并后的 `a2275fd`。继续实际读取并使用已安装 **oil-ui-pro 0.24.2** 的存量项目、组件、交互/状态、布局及视觉精修规则，沿用下文 Apple HIG；不升级技能、不重新探索方向或评分。对照原作者参数页与当前生产 View/动作，保留已成熟的映射和实现。本机仍为 macOS 27.0.1、Xcode 27.1 / SDK 27.0，只使用公开 SwiftUI/AppKit API。
 
 - **连续参数列**：画面页移除双列大滑块卡片，以基础画面、色彩、光影与响应分组。标签 112pt，滑块伸缩，读数 42pt、范围 62pt；RGB 范围保持一行。仅提取实际跨三页复用的 `ParameterPickerRow`，局部复用提案验证过的固定宽度原生 `NSPopUpButton`，220×28pt，按现有 `OptionLists` 的真实 tag 提交，外部选中同步不触发 action。没有参数 schema、注册表或表单引擎。
 - **读数与提交**：`SliderRow` 去掉逐行容器，仍用原 FastSlider 的 Binding、范围、步长 1、松手/辅助功能提交与外部读数同步。未知/无效输入只给轨道一个内部位置，读数及辅助功能值显示“—/未知”，不显示默认 50 或 1024；外部同步只更新本地显示。选项未读时显示不可提交的“未知”占位，其余真实选项仍按原规则可选。

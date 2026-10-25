@@ -46,6 +46,37 @@ final class PreviewRenderingTests: XCTestCase {
         state.stop()
     }
 
+    func testNativeAppPreferenceSegmentsKeepExistingStoredValues() throws {
+        let runtime = PreviewRuntime(), state = runtime.makeState()
+        func content() -> some View {
+            ToolsView().environment(\.toolboxActions, state).environment(state.connection)
+                .environment(state.tools).environment(state.keyboard).environment(state.settings)
+        }
+        func segments(in view: NSView) -> [NSSegmentedControl] {
+            (view as? NSSegmentedControl).map { [$0] } ?? view.subviews.flatMap { segments(in: $0) }
+        }
+        let host = NSHostingView(rootView: content())
+        host.frame = NSRect(x: 0, y: 0, width: 800, height: 800)
+        host.layoutSubtreeIfNeeded()
+        let controls = segments(in: host)
+        let close = try XCTUnwrap(controls.first { $0.label(forSegment: 0) == "在菜单栏继续运行" })
+        let theme = try XCTUnwrap(controls.first { $0.label(forSegment: 0) == "跟随系统" })
+        close.selectedSegment = 1; close.sendAction(close.action!, to: close.target)
+        theme.selectedSegment = 1; theme.sendAction(theme.action!, to: theme.target)
+        XCTAssertEqual(state.settings.closeBehavior, "exit")
+        XCTAssertEqual(state.settings.theme, "dark")
+        XCTAssertEqual(runtime.preferences.string(forKey: "close_behavior"), "exit")
+        XCTAssertEqual(runtime.preferences.string(forKey: "theme"), "dark")
+        state.settings.closeBehavior = "tray"; state.settings.theme = "light"
+        let effects = runtime.effects
+        host.rootView = content(); host.layoutSubtreeIfNeeded()
+        XCTAssertEqual(close.selectedSegment, 0)
+        XCTAssertEqual(theme.selectedSegment, 2)
+        XCTAssertEqual(runtime.preferences.string(forKey: "theme"), "light")
+        XCTAssertEqual(runtime.effects, effects) // External selection updates must not reapply preferences.
+        state.stop()
+    }
+
     func testEnvironmentKeyPathCanBeSetBeforeAnActionConsumerExists() {
         let state = PreviewRuntime().makeState()
         var environment = EnvironmentValues()

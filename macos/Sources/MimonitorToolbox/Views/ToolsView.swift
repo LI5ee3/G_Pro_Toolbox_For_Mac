@@ -22,9 +22,9 @@ struct ToolsView: View {
 
     var body: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 26) {
+            VStack(alignment: .leading, spacing: 24) {
                 VStack(alignment: .leading, spacing: 6) {
-                    Text("工具与设置").font(.system(size: 23, weight: .semibold))
+                    Text("工具与设置").font(.system(size: 22, weight: .semibold))
                 }
                 keyboardSettings
                 Divider()
@@ -61,9 +61,9 @@ struct ToolsView: View {
                 .font(.system(size: 13))
                 .foregroundStyle(Theme.secondaryText)
             }
-            .padding(28)
-            .frame(maxWidth: 1000)
-            .frame(maxWidth: .infinity)
+            .frame(maxWidth: 970, alignment: .leading)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(24)
         }
         .font(.system(size: 14))
         .tint(Theme.accent)
@@ -126,7 +126,7 @@ struct ToolsView: View {
                 set: { state.hotkeyCountdownEnabled = $0 }
             ))
             HStack(spacing: 16) {
-                Text("等待时长").frame(width: 92, alignment: .leading)
+                Text("等待时长").frame(width: Theme.parameterLabelWidth, alignment: .leading)
                 FastSlider(value: Binding(
                     get: { keyboard.hotkeyCountdownSeconds },
                     set: { state.hotkeyCountdownSeconds = $0 }
@@ -135,7 +135,6 @@ struct ToolsView: View {
                 Text(String(format: "%.1f 秒", keyboard.hotkeyCountdownSeconds))
                     .monospacedDigit().frame(width: 60, alignment: .trailing)
             }
-            .opacity(keyboard.hotkeyCountdownEnabled ? 1 : 0.4)
             Text(keyboard.hotkeyCountdownEnabled
                  ? "倒计时结束后提交，连续按键只保留最后一个值。"
                  : "每次按键立即提交；连续按键可能使 ADB 命令排队。")
@@ -144,25 +143,25 @@ struct ToolsView: View {
     }
 
     private var appSettings: some View {
-        @Bindable var settings = settings
-        return SettingsTaskSection(title: "应用偏好") {
+        SettingsTaskSection(title: "应用偏好") {
             HStack(spacing: 16) {
-                Text("关闭窗口时").frame(width: 110, alignment: .leading)
-                Picker("关闭窗口时", selection: $settings.closeBehavior) {
-                    Text("在菜单栏继续运行").tag("tray")
-                    Text("退出应用").tag("exit")
+                Text("关闭窗口时").frame(width: Theme.parameterLabelWidth, alignment: .leading)
+                SegmentedOptionPicker(options: [.init(label: "在菜单栏继续运行", value: 0), .init(label: "退出应用", value: 1)],
+                                      selectedValue: ["tray": 0, "exit": 1][settings.closeBehavior] ?? -1,
+                                      distribution: .fillProportionally, controlSize: .regular) {
+                    settings.closeBehavior = $0 == 1 ? "exit" : "tray"
                 }
-                .labelsHidden().pickerStyle(.segmented).frame(maxWidth: 360)
+                .frame(width: 360).accessibilityLabel("关闭窗口时")
                 Spacer(minLength: 0)
             }
             HStack(spacing: 16) {
-                Text("外观").frame(width: 110, alignment: .leading)
-                Picker("外观", selection: $settings.theme) {
-                    Text("跟随系统").tag("auto")
-                    Text("深色").tag("dark")
-                    Text("浅色").tag("light")
+                Text("外观").frame(width: Theme.parameterLabelWidth, alignment: .leading)
+                SegmentedOptionPicker(options: [.init(label: "跟随系统", value: 0), .init(label: "深色", value: 1), .init(label: "浅色", value: 2)],
+                                      selectedValue: ["auto": 0, "dark": 1, "light": 2][settings.theme] ?? -1,
+                                      distribution: .fillProportionally, controlSize: .regular) {
+                    if let value = [0: "auto", 1: "dark", 2: "light"][$0] { settings.theme = value }
                 }
-                .labelsHidden().pickerStyle(.segmented).frame(maxWidth: 360)
+                .frame(width: 360).accessibilityLabel("外观")
                 Spacer(minLength: 0)
             }
             Divider().padding(.vertical, 2)
@@ -217,39 +216,36 @@ struct ToolsView: View {
 
     private var memorySettings: some View {
         SettingsTaskSection(title: "自动记忆与联动") {
-            Toggle("分别记忆 HDR / SDR 精密控光", isOn: Binding(
+            settingToggle("分别记忆 HDR / SDR 精密控光", isOn: Binding(
                 get: { state.effectiveHdrMemoryEnabled },
                 set: { state.toggleHdrMemory($0) }
-            ))
-            .disabled(state.memoriesSuspendedByPreset)
-            Text(tools.hdrMemoryStatusText).foregroundStyle(Theme.secondaryText)
+            ), disabled: state.memoriesSuspendedByPreset)
+            Text(tools.hdrMemoryStatusText.isEmpty ? "状态待确认" : tools.hdrMemoryStatusText).foregroundStyle(Theme.secondaryText)
             Text("根据 macOS EDR 判断 HDR 信号。")
                 .font(.system(size: 13)).foregroundStyle(Theme.secondaryText)
             Divider().padding(.vertical, 2)
-            Toggle("关闭 FreeSync 后恢复原画面模式", isOn: Binding(
+            settingToggle("关闭 FreeSync 后恢复原画面模式", isOn: Binding(
                 get: { state.effectiveFreesyncMemoryEnabled },
                 set: { state.toggleFreesyncMemory($0) }
-            ))
-            .disabled(state.memoriesSuspendedByPreset)
-            Text(tools.freesyncMemoryStatusText).foregroundStyle(Theme.secondaryText)
+            ), disabled: state.memoriesSuspendedByPreset)
+            Text(tools.freesyncMemoryStatusText.isEmpty ? "状态待确认" : tools.freesyncMemoryStatusText).foregroundStyle(Theme.secondaryText)
             if state.memoriesSuspendedByPreset {
                 Label(!connection.identityNotice.isEmpty ? connection.identityNotice : "使用预设时记忆设置已锁定；返回无预设后恢复。", systemImage: "lock")
                     .font(.system(size: 13)).foregroundStyle(Theme.secondaryText)
             }
             Divider().padding(.vertical, 2)
-            Toggle("准星仅在游戏模式下生效", isOn: Binding(
+            settingToggle("准星仅在游戏模式下生效", isOn: Binding(
                 get: { tools.crosshairGameModeOnly },
                 set: { state.toggleCrosshairGameModeOnly($0) }
-            ))
-            .disabled(state.memoriesSuspendedByPreset)
-            Text(tools.crosshairModeStatusText).foregroundStyle(Theme.secondaryText)
+            ), disabled: state.memoriesSuspendedByPreset)
+            Text(tools.crosshairModeStatusText.isEmpty ? "状态待确认" : tools.crosshairModeStatusText).foregroundStyle(Theme.secondaryText)
         }
     }
 
     private var displayResolutionSettings: some View {
         VStack(alignment: .leading, spacing: 10) {
             HStack {
-                Text("显示器 4K UI").font(.system(size: 15, weight: .semibold))
+                Text("显示器 4K UI").font(Theme.sectionFont)
                 Spacer()
                 Button("重新检测") { state.check4KState() }
                     .toolboxAction()
@@ -258,11 +254,10 @@ struct ToolsView: View {
                  ? "当前：\(tools.is4KUI ? "4K · 3840×2160 / DPI 640" : "1080p · 1920×1080 / DPI 320")"
                  : "当前：未知（读取失败，请重新检测）")
                 .foregroundStyle(Theme.secondaryText)
-            Toggle("启用 4K UI", isOn: Binding(
+            settingToggle("启用 4K UI", isOn: Binding(
                 get: { tools.is4KUI },
                 set: { pending4K = $0; show4KConfirm = true }
-            ))
-            .disabled(tools.fourKReadFailure != nil)
+            ), disabled: tools.fourKReadFailure != nil)
             Text("仅改变显示器内置系统界面的分辨率。切换前会再次确认，确认后显示器将重启。")
                 .font(.system(size: 13)).foregroundStyle(Theme.secondaryText)
         }
@@ -270,7 +265,7 @@ struct ToolsView: View {
 
     private var installationTools: some View {
         VStack(alignment: .leading, spacing: 10) {
-            Text("安装显示器应用").font(.system(size: 15, weight: .semibold))
+            Text("安装显示器应用").font(Theme.sectionFont)
             Text("选择本地 APK，使用 adb install -r -d 安装到显示器。")
                 .font(.system(size: 13)).foregroundStyle(Theme.secondaryText)
             HStack(spacing: 12) {
@@ -283,10 +278,17 @@ struct ToolsView: View {
         }
     }
 
+    // Keep the name readable while only the native control adopts its disabled appearance.
+    private func settingToggle(_ title: String, isOn: Binding<Bool>, disabled: Bool) -> some View {
+        LabeledContent(title) {
+            Toggle(title, isOn: isOn).labelsHidden().toggleStyle(.checkbox).disabled(disabled)
+        }
+    }
+
     private var terminalTools: some View {
         VStack(alignment: .leading, spacing: 10) {
-            Text("ADB 命令行").font(.system(size: 15, weight: .semibold))
-            Text("在终端打开独立 ADB server（端口 5038），供手动调试。")
+            Text("ADB 命令行").font(Theme.sectionFont)
+            Text("使用当前 ADB 端点打开终端。命令可直接修改显示器，请确认操作对象。")
                 .font(.system(size: 13)).foregroundStyle(Theme.secondaryText)
             HStack(spacing: 10) {
                 Button("打开 ADB 命令行") { state.openAdbCmd() }
@@ -316,13 +318,13 @@ struct HotkeyConfigSheet: View {
         VStack(alignment: .leading, spacing: 0) {
             HStack {
                 VStack(alignment: .leading, spacing: 6) {
-                    Text("键盘控制").font(.system(size: 23, weight: .semibold))
+                    Text("键盘控制").font(.system(size: 22, weight: .semibold))
                     Text("录入组合键，或直接接管系统音量与亮度键。")
                         .font(.system(size: 13)).foregroundStyle(Theme.secondaryText)
                 }
                 Spacer()
             }
-            .padding(28)
+            .padding(24)
 
             Divider()
 
@@ -437,7 +439,7 @@ struct HotkeyConfigSheet: View {
                         .disabled(!keyboard.mediaVolumeKeysEnabled || !keyboard.mediaVolumeOutputGateEnabled)
                     }
                 }
-                .padding(28)
+                .padding(24)
             }
 
             Divider()
@@ -465,7 +467,7 @@ struct HotkeyConfigSheet: View {
                     .toolboxAction(prominent: true)
                 }
             }
-            .padding(28)
+            .padding(24)
         }
         .frame(minWidth: 760, idealWidth: 800, maxWidth: 940, minHeight: 620, idealHeight: 760, maxHeight: 900)
         .font(.system(size: 14))
@@ -608,7 +610,7 @@ private struct SettingsTaskSection<Content: View>: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
-            Text(title).font(.system(size: 15, weight: .semibold))
+            Text(title).font(Theme.sectionFont)
             content
         }
         .frame(maxWidth: .infinity, alignment: .leading)
