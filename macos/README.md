@@ -74,11 +74,13 @@ Redmi G Pro 27U / 32U 显示器的原生 macOS 控制工具，使用 SwiftUI、A
 - **ToolboxApp**：真实应用；运行会启动现有 ADB 连接、快捷键和后台任务。
 - **ToolboxPreviews**：隔离的 App Target；不链接 `ToolboxMacAdapters` / `ToolboxProcessExecution`，不包含 adb/JAR/APK。
 
-选 **ToolboxPreviews**，打开 `Sources/ToolboxPreviewSupport/PreviewGallery.swift`，仅在 Xcode Canvas 中刷新、修改和验看 UI。不要直接 Run 该 scheme，也不另建、复制、打包或启动独立 Preview App、预览工程或网页。页面、场景、外观与虚拟时间均在 Canvas 的既有画廊中选择；所有权限、文件、终端、登录项和设备动作均为内存模拟。不要用真实 App scheme 预览：生产组合根会检测并拒绝 Xcode Preview 运行上下文。
+选 **ToolboxPreviews**，统一入口为 `macos/Sources/ToolboxPreviewSupport/PreviewGallery.swift`（仓库根目录相对路径）。UI 修改直接作用于正式 SwiftUI 组件，在 Xcode Canvas 刷新和查看；新页面与模拟场景优先扩展现有画廊。不要自动新增重复的 `#Preview`、Preview 文件、Target、Scheme 或临时预览工程；只有用户明确要求时才新增独立 Preview。
 
-同文件的“应用设置 · 原生”“键盘控制 · 原生”“菜单栏设置 · 原生”三个 Canvas 预览使用实际设置视图和内存配置。安全宿主只作为 Canvas 的隔离上下文保留；Canvas 中不申请真实权限、不改正式 App 配置。
+Canvas 用于日常视觉预览，不再依赖对 Canvas 的自动化点击。仅在必要时运行同一 **ToolboxPreviews** Scheme 的现有独立窗口，使用已有工具验证点击与键盘交互，不新增无必要的测试框架。页面、场景、外观与虚拟时间沿用同一画廊；所有权限、文件、终端、登录项和设备动作均为内存模拟，不连接真实设备。不要用真实 App scheme 预览：生产组合根会检测并拒绝 Xcode Preview 运行上下文。
 
-UI 预览的构建与刷新由 Canvas 管理，不另外创建预览构建目录。既有依赖/源码与二进制/资源检查继续保留；下列为按任务需要使用的工程检查及生产构建入口，不是 UI 验看的默认步骤。
+同文件已有的“应用设置 · 原生”“键盘控制 · 原生”“菜单栏设置 · 原生”三个 Canvas 预览继续使用实际设置视图和内存配置；独立宿主的 Settings 场景共享画廊的内存会话。不申请真实权限、不改正式 App 配置。
+
+Canvas 的构建与刷新由 Xcode 管理；交互验证优先复用已有宿主产物，不额外创建临时预览工程或构建目录。既有依赖/源码与二进制/资源检查继续保留；下列为按任务需要使用的工程检查及生产构建入口，不是 UI 预览的默认步骤，不因插件调用而触发完整构建或重复测试。
 
 ```sh
 swift test
