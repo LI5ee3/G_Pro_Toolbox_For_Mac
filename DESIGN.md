@@ -1,6 +1,6 @@
 # 红米 G Pro ToolBox 设计规范
 
-更新：2026-10-25 · **方向已采用；S3-07 已 review 合并；S3-08 差异与性能记录待 review**。
+更新：2026-10-25 · **方向已采用；S3-01～08 已 review 合并；G3 REVIEW_PENDING；仅准备独立候选**。
 
 用户已采用 PR #5 的“控制优先的原生工作区”。S3-01 复核 HEAD `c71f799` 经默认 CI #33 通过，以 merge commit `b6648bccf47117b3619a465af98ffc435704f323` 合入 master，合并 CI #34 通过。S3-02 的 PR #6 HEAD 与已复核的 `e9b8574fc218c17b422e1c0c95d6e1a523dc39de` 完全一致，沿用已通过的默认 CI [#35](https://github.com/LI5ee3/G_Pro_Toolbox_For_Mac/actions/runs/40098121445)，标记 ready 后以 merge commit `ea8f7b608cf044ec7b9cf9274a8ef55f9a55d2c0` 合入 master；自然触发的合并 CI [#36](https://github.com/LI5ee3/G_Pro_Toolbox_For_Mac/actions/runs/40099394801) 通过。确认包含关系后正常删除已合并分支引用，原工作树与内容保留。
 
@@ -14,9 +14,13 @@ PR #10 的复核 HEAD `115e24b451a9e320a1dfd48f506de6d231e859f3` 与远端一致
 
 PR #11 的复核 HEAD `713fa1290e6cdbe9cd72270cbb2c8c0283e0e828` 与远端一致，沿用已通过的默认 CI [#45](https://github.com/LI5ee3/G_Pro_Toolbox_For_Mac/actions/runs/40163361220)，标记 ready 后以双亲 merge commit `a5010d0db43a46b7ae22188481efe67c293d950e` 合入 master；自然合并 CI [#46](https://github.com/LI5ee3/G_Pro_Toolbox_For_Mac/actions/runs/40164207535) 通过，未重跑 #45。已 fetch 并验证包含关系，正常删除 S3-07 本地/远端分支引用，原工作树 detached 于同一 HEAD，目录内容保留。
 
-本轮由用户单独授权 S3-08，止于新草稿 PR review，不开始阶段四。M2/G2 NOT_PASSED、Auto DEFERRED、G3 待用户 review，未通过；现用 App 不替换。下文 S3-01 至 S3-07 与 Pro B 保留为各自当时范围，历史停止点由最新授权取代。平台及业务边界见 [ARCHITECTURE](docs/ARCHITECTURE.md)，进度以 [ROADMAP](docs/ROADMAP.md) 为准。
+PR #12 的复核 HEAD `99a6ee3ce37223847f84e49a443877df0abe33f3` 与远端一致，沿用已通过的默认 CI [#47](https://github.com/LI5ee3/G_Pro_Toolbox_For_Mac/actions/runs/40164571380)，标记 ready 后以 merge commit `23a7b3ea43920fe8f24b6d2f82dca896de3e305c` 合入 master；包含关系已验证，S3-08 本地/远端分支引用正常删除，原工作树 detached 于同一 HEAD，目录内容保留。
 
-## S3-08：阶段三差异与性能观察（记录完成，待 review）
+本轮只作一次纯文档收尾，再从该提交对应的干净 master 固定完整 SHA，复用现有 development 入口生成一个 Release / arm64 / ad-hoc 独立候选；候选不启动、不安装、不交接，不开始完整阶段四验收。构建日志和验证报告随候选保留，不为回填路径或 CI 编号追加提交。M2/G2 NOT_PASSED、Auto DEFERRED、G3 REVIEW_PENDING，等待用户确认阶段三结果及未实测边界；现用 App 不替换。下文 S3-01 至 S3-08 与 Pro B 保留为各自当时范围，历史停止点由最新授权取代。平台及业务边界见 [ARCHITECTURE](docs/ARCHITECTURE.md)，进度以 [ROADMAP](docs/ROADMAP.md) 为准。
+
+## S3-08：阶段三差异与性能观察（已 review 合并）
+
+以下保留 S3-08 当时的比较基线、采样与未测边界；“本轮”指该阶段，当前授权见页首。
 
 本项是已采用方案的差异核对与证据收口，没有发现需要新增生产修复的具体问题。比较固定的阶段三前基线 `0bc16898243e269b486a274b7d1720be007bfe23` 与本轮实际基线 `a5010d0db43a46b7ae22188481efe67c293d950e`；独立工作树 `s3-08-acceptance` / 分支 `ui/s3-08-acceptance`。本轮只改本文件、ROADMAP 和采样证据，不改生产/Preview 源码、测试或 CI。实际读取 oil-ui-pro 0.24.2 的 SKILL、存量项目、交互与状态规则，用于核对对象、动作和可观察结果；沿用 Apple HIG 与已采用方向，不升级、重设计或评分。
 
@@ -42,14 +46,14 @@ R6 [真实生产 App / 实体媒体键记录](macos/R6-CLOSEOUT.md) 保留为历
 - **实际源码/环境**：`a5010d0db43a46b7ae22188481efe67c293d950e`，源码干净时构建；Mac mini M4 / arm64，macOS 27.0.1 (26A434)，Xcode 与 xctrace 27.1 (27A9275)，SDK 27.0；`ToolboxPreviews` / Debug / ad-hoc。宿主保留原名“S3-07 视觉覆盖 · 安全 Preview”，本轮未为命名改源码。
 - **场景/操作**：默认 1120×820pt、浅色、原“已连接”内存场景（TCP 192.0.2.27:5555；初始背光 45）。从侧栏进入生产画面页，拖动背光至本地显示 25 并松手，滚到底部再回顶部，打开实际菜单面板；关闭后推进原虚拟时钟 0.2 秒，再打开菜单。不是实时生产时钟；菜单当时仍显示原读数 45，本次不把本地拖动值或尚未刷新读数当作设备结果。控制/提交语义沿用上表已复核证据，不为采样补设备模拟。
 - **采样**：仅 attach 此 Preview PID 5433，Time Profiler 默认配置；2026-10-25 13:06:16.260–13:06:48.026（UTC+8），实际 31.766893 秒，完成路径后主动停止，没有重复循环或固定时长门槛。采样期间本轮 CI runner 尚未启动，未并行构建；没有更改系统权限或全局设置。
-- **结果**：导出 `time-profile` 共 1626 个样本，主线程 1500 个、权重合计 1500ms（每样本 1ms，不是单次操作延迟）。主线程叶端主要为系统/SwiftUI/AttributeGraph 工作，例如 `objc_msgSend` 51ms、`AG::Graph::UpdateStack::update()` 25ms；少量符号合并或未解析。锁慢路径样本共 2ms，所见栈位于 CFRunLoop timer 清理，不能从累计权重推断一次阻塞。`hang-risks` 和阈值 250ms 的 `potential-hangs` 均无记录；本次没有得到可定位的新增主线程阻塞证据，因此不追加性能改造或旧版对照。
+- **结果**：导出 `time-profile` 共 1626 个样本，主线程 1500 个、权重合计 1500ms（每样本 1ms，不是单次操作延迟）。主线程叶端主要为系统/SwiftUI/AttributeGraph 工作，例如 `objc_msgSend` 51ms、`AG::Graph::UpdateStack::update()` 25ms；少量符号合并或未解析。两个锁获取慢路径样本分别位于系统 CFRunLoop observer 与 timer 路径，累计采样权重为 2ms，不能解释为单次阻塞时长。`hang-risks` 和阈值 250ms 的 `potential-hangs` 均无记录；本次没有得到可定位的新增主线程阻塞证据，因此不追加性能改造或旧版对照。
 - **限制**：短时统计采样、Debug、fake、单一路径；未开启 waiting-thread/context-switch 采样，空 hang 表不代表所有延迟为零。不宣称性能提升、完全无回退或生产真机性能通过；R6 仍只适用于当时生产构建。S3-06 的 VoiceOver 朗读/角色/阅读顺序、系统键盘设置组合，以及生产窗口/Dock/真实 MenuBarExtra 生命周期继续未实测；S3-07 未覆盖组合继续保留。
 
 可 review 的原始导出：[CPU 样本 XML（gzip）](docs/design/S3-08/time-profile.xml.gz)、[hang 表 XML](docs/design/S3-08/hangs.xml)。前者解压 SHA-256 为 `a75b3ce2faea080c22055755d5106e79effda98b1e2c86233a2c6c18c0b14dc8`；原 `.trace` 与 toc 留在开发 Mac 的 `/Users/li5ee3/Documents/Codex/ADB/validation/S3-08-a5010d0-20261025/`，不上传包含进程环境的完整 trace。没有新增测量脚本、基准或截图设施。
 
 复现沿用 S3-07 的安全 Preview 构建/隔离命令，换为本轮临时输出 `/tmp/s308-preview`。采样命令是 `xcrun xctrace record --template 'Time Profiler' --attach <Preview PID> --output <本轮路径>.trace --no-prompt`，完成同类路径后 Ctrl-C；导出使用 `xcrun xctrace export --input <trace> --xpath '/trace-toc/run[@number="1"]/data/table[@schema="time-profile"]'`，另对 `potential-hangs` / `hang-risks` 查询。PID 应取实际安全宿主，不能附加现用 App。
 
-本轮安全 Preview 编译和既有依赖/源码副作用/二进制资源隔离检查通过，采样已完成并退出宿主。其余只检查文档链接、表述与差异，不新增测试，不在本机重复完整 Swift/Python 回归及全部构建；自然默认 CI 及本轮临时产物清理结果记录在 PR。现用 App 开工时未运行，本轮保持该状态；5038、原七个未提交文件、既有工作树与历史标签保留。**S3-08 记录待 review，G3 不自动通过，不开始阶段四。**
+本轮安全 Preview 编译和既有依赖/源码副作用/二进制资源隔离检查通过，采样已完成并退出宿主。其余只检查文档链接、表述与差异，不新增测试，不在本机重复完整 Swift/Python 回归及全部构建；自然默认 CI 及本轮临时产物清理结果记录在 PR。现用 App 开工时未运行，本轮保持该状态；5038、原七个未提交文件、既有工作树与历史标签保留。**S3-08 已 review 合并；G3 仍为 REVIEW_PENDING，不自动通过。**
 
 ## S3-07：视觉覆盖索引与实际缺口（已 review 合并）
 
