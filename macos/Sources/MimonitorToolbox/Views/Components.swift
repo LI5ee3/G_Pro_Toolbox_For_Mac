@@ -29,6 +29,7 @@ enum Theme {
     static let stroke = adaptive(NSColor(white: 0.78, alpha: 1), NSColor(white: 0.36, alpha: 1))
     static let secondaryText = adaptive(NSColor(white: 0.38, alpha: 1), NSColor(white: 0.76, alpha: 1))
     static let sectionFont = Font.system(size: 14, weight: .semibold)
+    static let parameterLabelWidth: CGFloat = 112
     static let controlRadius: CGFloat = 8
     static let sectionRadius: CGFloat = 12
 }
@@ -324,14 +325,13 @@ struct FastSlider: View {
 // MARK: - 滑条行（对应 _add_slider，松手提交）
 
 struct SliderRow: View {
-    @Environment(\.colorSchemeContrast) private var contrast
-    @Environment(\.toolboxPreviewAccessibility) private var preview
     let title: String
     let range: ClosedRange<Double>
     let externalValue: Int
     let onCommit: (Int) -> Void
 
     @State private var value: Double
+    private var readingIsKnown: Bool { range.contains(Double(externalValue)) }
 
     init(title: String,
          range: ClosedRange<Double>,
@@ -341,32 +341,30 @@ struct SliderRow: View {
         self.range = range
         self.externalValue = externalValue
         self.onCommit = onCommit
-        self._value = State(initialValue: Double(externalValue))
+        // Unknown input positions the track without presenting that placeholder as a reading.
+        self._value = State(initialValue: range.contains(Double(externalValue)) ? Double(externalValue) : range.lowerBound)
     }
 
     var body: some View {
         HStack(spacing: 12) {
             Text(title).font(.system(size: 13, weight: .medium))
-                .frame(width: 96, alignment: .leading)
+                .frame(width: Theme.parameterLabelWidth, alignment: .leading)
             FastSlider(value: $value, range: range, step: 1) { v in
                 onCommit(Int(v))
             }
             .accessibilityLabel(title)
-            Text("\(Int(value))")
-                .font(.system(size: 13, weight: .semibold))
-                .monospacedDigit()
-                .frame(width: 44, alignment: .trailing)
-                .foregroundColor(.primary)
+            .accessibilityValue(readingIsKnown ? String(Int(value)) : "未知")
+            Text(readingIsKnown ? String(Int(value)) : "—")
+                .font(.system(size: 13, weight: .semibold)).monospacedDigit()
+                .frame(width: 42, alignment: .trailing)
+            Text(verbatim: "\(Int(range.lowerBound))–\(Int(range.upperBound))")
+                .font(.system(size: 12)).monospacedDigit().foregroundStyle(Theme.secondaryText)
+                .lineLimit(1)
+                .frame(width: 62, alignment: .trailing)
         }
-        // Keep the existing row alignment and FastSlider submission behavior.
-        .padding(.horizontal, 16)
-        .padding(.vertical, 12)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(Theme.card, in: RoundedRectangle(cornerRadius: Theme.sectionRadius))
-        .overlay(RoundedRectangle(cornerRadius: Theme.sectionRadius)
-            .stroke(contrast == .increased || preview.increasedContrast ? Color.primary.opacity(0.55) : Theme.stroke))
+        .frame(minHeight: 34)
         .onChange(of: externalValue) { _, newValue in
-            value = Double(newValue)
+            value = range.contains(Double(newValue)) ? Double(newValue) : range.lowerBound
         }
     }
 }
