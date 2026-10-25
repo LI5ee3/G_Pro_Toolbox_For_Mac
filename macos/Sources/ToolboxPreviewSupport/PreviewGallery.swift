@@ -11,7 +11,7 @@ private final class PreviewSelection {
     var screen = ToolboxScreen.home
     var colorScheme = ColorScheme.light
     var accessibility = ToolboxPreviewAccessibility()
-    var compact = false
+    var windowSize = "默认"
 }
 
 /// This module has no dependency on ToolboxMacAdapters and cannot launch the live runtime.
@@ -37,7 +37,11 @@ public struct ToolboxPreviewGallery: View {
                     Text("浅色").tag(ColorScheme.light)
                     Text("深色").tag(ColorScheme.dark)
                 }.labelsHidden().frame(width: 80)
-                Toggle("最小窗口", isOn: $selection.compact).toggleStyle(.checkbox)
+                Picker("窗口", selection: $selection.windowSize) {
+                    Text("最小").tag("最小")
+                    Text("默认").tag("默认")
+                    Text("大窗").tag("大窗")
+                }.frame(width: 115)
                 Menu("辅助功能") {
                     Toggle("减少透明度", isOn: $selection.accessibility.reduceTransparency)
                     Toggle("减少动态效果", isOn: $selection.accessibility.reduceMotion)
@@ -49,10 +53,11 @@ public struct ToolboxPreviewGallery: View {
         }
         .preferredColorScheme(selection.colorScheme)
         .frame(minWidth: 1020, minHeight: 688)
-        .onChange(of: selection.compact) { _, small in
-            guard let window = NSApp.windows.first(where: { $0.title == "S3-06 键盘与焦点 · 安全 Preview" }) else { return }
+        .onChange(of: selection.windowSize) { _, sizeName in
+            guard let window = NSApp.windows.first(where: { $0.title == "S3-07 视觉覆盖 · 安全 Preview" }) else { return }
             var frame = window.frame
-            let size = NSSize(width: small ? 1020 : 1120, height: small ? 740 : 820)
+            let size = sizeName == "最小" ? NSSize(width: 1020, height: 740)
+                : sizeName == "大窗" ? NSSize(width: 1440, height: 1000) : NSSize(width: 1120, height: 820)
             frame.origin.y += frame.height - size.height; frame.size = size
             window.setFrame(frame, display: true)
         }

@@ -193,6 +193,7 @@ package final class PreviewRuntime {
         case connecting = "连接中", connectionFailure = "连接失败"
         case hdrCustom = "HDR 与 RGB"
         case workflow = "预设与任务", localSaveFailure = "本地保存失败"
+        case longContent = "长内容与未完成"
     }
     package let preferences = MemoryPreferences()
     package let scheduler = ManualScheduler()
@@ -267,7 +268,7 @@ package final class PreviewRuntime {
         loginState = scenario == .loginApproval ? .requiresApproval : .notRegistered
         automationDenied = scenario == .permissionDenied
         loginLock.unlock()
-        if scenario == .workflow || scenario == .localSaveFailure {
+        if [.workflow, .localSaveFailure, .longContent].contains(scenario) {
             // Use the existing engine and in-memory device/store, never production defaults.
             let engine = PresetEngine(store: PresetStore(defaults: preferences))
             if let reading = try? engine.create(name: "日常阅读", device: display) {
@@ -279,6 +280,13 @@ package final class PreviewRuntime {
                     try? engine.setMenuBarVisibility(id: movie.id, visible: true)
                     try? engine.saveTask(ScheduledPresetTask(presetID: reading.id, start: "18:00", end: "20:00"))
                     try? engine.saveTask(ScheduledPresetTask(presetID: movie.id, start: "23:00", end: "02:00"))
+                    if scenario == .longContent {
+                        try? engine.rename(id: movie.id, name: "夜间电影 · 暖色低背光 · 客厅 USB-C 输入与长时间阅读")
+                        // The existing engine records an incomplete application in the memory store.
+                        display.failWrites = true
+                        try? engine.apply(id: movie.id, device: display)
+                        display.failWrites = false
+                    }
                 }
             }
         }
@@ -375,6 +383,13 @@ package final class PreviewRuntime {
         if scenario == .localSaveFailure {
             // Simulate a competing in-memory owner after the worker loaded its snapshot.
             preferences.set(Data("simulation-storage-conflict".utf8), forKey: "picture_presets_v1")
+        }
+        if scenario == .longContent {
+            state.menuBarItems = MenuBarCatalog.all.map(\.id)
+            // Fixed visual fixture, not a real failure or a timed background operation.
+            for index in 1...36 {
+                state.logs.append("[模拟记录 \(index)] TCP 192.0.2.27:5555 · 预设未完整应用：读取画面参数时控制通道暂时不可用，已保留当前对象与无预设基线。请检查显示器授权后重新应用，或返回无预设；自动保存暂时暂停。")
+            }
         }
         return state
     }

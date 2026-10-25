@@ -1,6 +1,6 @@
 # 红米 G Pro ToolBox 设计规范
 
-更新：2026-10-25 · **方向已采用；S3-05 已 review 合并；S3-06 键盘与焦点待 review**。
+更新：2026-10-25 · **方向已采用；S3-06 已 review 合并；S3-07 视觉覆盖待 review**。
 
 用户已采用 PR #5 的“控制优先的原生工作区”。S3-01 复核 HEAD `c71f799` 经默认 CI #33 通过，以 merge commit `b6648bccf47117b3619a465af98ffc435704f323` 合入 master，合并 CI #34 通过。S3-02 的 PR #6 HEAD 与已复核的 `e9b8574fc218c17b422e1c0c95d6e1a523dc39de` 完全一致，沿用已通过的默认 CI [#35](https://github.com/LI5ee3/G_Pro_Toolbox_For_Mac/actions/runs/40098121445)，标记 ready 后以 merge commit `ea8f7b608cf044ec7b9cf9274a8ef55f9a55d2c0` 合入 master；自然触发的合并 CI [#36](https://github.com/LI5ee3/G_Pro_Toolbox_For_Mac/actions/runs/40099394801) 通过。确认包含关系后正常删除已合并分支引用，原工作树与内容保留。
 
@@ -10,9 +10,56 @@ PR #8 的复核 HEAD `31bf91fc16276b2ccef6b81a525d98c3e8903973` 与远端一致�
 
 PR #9 的复核 HEAD `5f7593cf37f7bf7a7be521318c833f8f11f48ef5` 与远端一致，沿用已通过的默认 CI [#41](https://github.com/LI5ee3/G_Pro_Toolbox_For_Mac/actions/runs/40158374786)，标记 ready 后以 merge commit `d06a6797645af7c9eac77053e5a0bdb139659b88` 合入 master；自然合并 CI [#42](https://github.com/LI5ee3/G_Pro_Toolbox_For_Mac/actions/runs/40159403802) 通过。确认包含关系后正常删除 S3-05 本地/远端分支引用，原工作树 detached 于同一复核 HEAD，内容保留。
 
-本轮由用户单独授权 S3-06，止于新草稿 PR review，不开始 S3-07。M2/G2 NOT_PASSED、Auto DEFERRED、G3 未通过；现用 App 不替换。下文 S3-01 至 S3-05 与 Pro B 保留为各自当时范围，历史停止点由最新授权取代。平台及业务边界见 [ARCHITECTURE](docs/ARCHITECTURE.md)，进度以 [ROADMAP](docs/ROADMAP.md) 为准。
+PR #10 的复核 HEAD `115e24b451a9e320a1dfd48f506de6d231e859f3` 与远端一致，直接沿用已通过的默认 CI [#43](https://github.com/LI5ee3/G_Pro_Toolbox_For_Mac/actions/runs/40161969271)，标记 ready 后以 merge commit `aa3bff6cb296761432424c39cdcad07b6c24185f` 合入 master；自然合并 CI [#44](https://github.com/LI5ee3/G_Pro_Toolbox_For_Mac/actions/runs/40162735668) 通过，未重跑 #43。确认包含关系后正常删除 S3-06 本地/远端分支引用，原工作树 detached 于同一复核 HEAD，目录内容保留。
 
-## S3-06：原生键盘、焦点、窗口与辅助功能（实现待 review）
+本轮由用户单独授权 S3-07，止于新草稿 PR review，不开始 S3-08。M2/G2 NOT_PASSED、Auto DEFERRED、G3 未通过；现用 App 不替换。下文 S3-01 至 S3-06 与 Pro B 保留为各自当时范围，历史停止点由最新授权取代。平台及业务边界见 [ARCHITECTURE](docs/ARCHITECTURE.md)，进度以 [ROADMAP](docs/ROADMAP.md) 为准。
+
+## S3-07：视觉覆盖索引与实际缺口（补查完成，待 review）
+
+本项是现有生产 UI 的证据整理与缺口补查，不是重新设计。继续使用本机 oil-ui-pro 0.24.2 的存量项目、交互/状态、空间/滚动与布局视口规则，沿用下文 Apple HIG；不升级、不评分。旧截图是对应阶段当时的安全 Preview 记录，本轮只重读和核对适用范围，不冒称重新运行。S3-01 独立提案不计入生产覆盖。尺寸指宿主窗口 pt，弹层保持自身尺寸。
+
+| 生产页面或弹层 | 关键场景 | 外观/尺寸 | 已有证据与适用范围 | 本轮是否需要补查 |
+| --- | --- | --- | --- | --- |
+| 控制台 | 已连接、失败、未知与断开门控 | 默认浅/最小深 | [S3-03 首页](docs/design/S3-03/home-light.jpg)、[最小深色](docs/design/S3-03/home-min-dark.jpg)、[失败](docs/design/S3-03/home-failure-min-light.jpg)；首页布局未改，键盘差异见 S3-06 | 不重拍；大窗限宽另抽参数页 |
+| 画面 | 连续参数、RGB/HDR、未知、焦点 | 默认浅/最小深 | [S3-04 条件下部](docs/design/S3-04/picture-hdr-rgb-min-dark.jpg)、[未知](docs/design/S3-04/picture-unknown-min-dark.jpg)、[S3-06 焦点](docs/design/S3-06/slider-focus-min-dark.jpg) | 已补[大窗浅色](docs/design/S3-07/picture-large-light.jpg)：参数列限宽 970pt、留白正常；截图边界见下文 |
+| 游戏 | 有效/记忆值、长选项 | 最小深 | [S3-04 记忆态](docs/design/S3-04/game-memory-min-dark.jpg)；保留原可编辑规则 | 不重复 |
+| 信号源 | USB-C 视频与 TCP 控制区分 | 最小浅 | [S3-04 输入摘要](docs/design/S3-04/source-usbc-min-light.jpg)；source 映射未改 | 不重复 |
+| 灯光 | 关闭时亮度记忆、模式切换说明 | 默认浅 | [S3-04 记忆态](docs/design/S3-04/light-memory-light.jpg) | 不重复 |
+| 预设 | 当前对象、基线、应用未完成、长名称 | 默认浅；补最小深 | [S3-05 列表](docs/design/S3-05/presets-light.jpg)；仅管理菜单 AX 名在 S3-06 改动 | 已看空集合及无预设基线；[最小深色长名/未完成](docs/design/S3-07/presets-incomplete-min-dark.jpg) 的说明与动作不重叠 |
+| 自动任务 | 空态、跨夜、目标、优先级 | 最小深；补默认浅 | [S3-05 列表](docs/design/S3-05/tasks-min-dark.jpg)；S3-06 只补动作名称 | 已补[默认浅色空态](docs/design/S3-07/tasks-empty-light.jpg)；最小深色长目标/优先级/编辑与上下移实际看图可达 |
+| 遥控器 | 紧凑方向空间、全部动作 | 最小深 | [S3-05 遥控器](docs/design/S3-05/remote-min-dark.jpg) | 不重复 |
+| 工具与设置 | 偏好、记忆/保活、高级工具、4K 未知 | 默认浅/最小深 | [S3-05 上部](docs/design/S3-05/tools-light.jpg)、[记忆/保活](docs/design/S3-05/tools-memory-guardian-min-dark.jpg)、[高级工具](docs/design/S3-05/tools-advanced-unknown-min-dark.jpg)；S3-06 补键盘/AX，不改布局 | 不重复 |
+| 菜单栏配置页 | 启用目录、排序、即时保存 | 最小浅 | [S3-05 配置](docs/design/S3-05/menu-settings-min-light.jpg) 及目录末项/排序实操记录 | 不重复；与实际面板分列 |
+| 实际菜单面板 | 配置顺序、可见预设、滚动、底部管理 | 360pt 面板；已有浅 | [S3-03 面板](docs/design/S3-03/menu-configured-light.jpg)；仅适用于当时 3 快捷项/1 预设 | 已补[17 项滚动到底部](docs/design/S3-07/menu-long-bottom-accessibility-dark.jpg)：深色与三项本地辅助回退，2 个可见预设及固定底部“更多”可达 |
+| 连接设置 | 活动 A/草稿 B、保存反馈、授权/失败 | 620×620；浅/深及辅助回退 | [S3-03 草稿](docs/design/S3-03/connection-tcp-draft-light.jpg)、[保存](docs/design/S3-03/connection-save-feedback-light.jpg)、[授权回退](docs/design/S3-03/connection-authorization-accessibility-dark.jpg)；生产 sheet 自 S3-03 未改 | 不重复 |
+| 归属确认 | 端点、身份、旧数据归属及选项 | 原生确认弹窗 | [S3-03 完整依据](docs/design/S3-03/ownership-confirmation.jpg) 及旧依据拒绝检查 | 不重复 |
+| 操作日志 | 长行、滚动、固定底部动作 | 原 850pt sheet | S3-06 有日志派发观察，没有长内容视觉证据 | 已补[长日志底部](docs/design/S3-07/log-long-bottom-dark.jpg)：36 条长行换行，滚动到末项后底部动作仍可见，Tab 到复制按钮 |
+| 预设名称 | 名称/对象、失败留稿与焦点 | 原生 sheet/浅 | [S3-06 失败焦点](docs/design/S3-06/name-failure-focus-light.jpg) 覆盖最新改动；S3-05 保存结果记录保留 | 不重拍正常/失败表单 |
+| 任务编辑 | 时间/目标/启用、成功关闭、失败留稿 | 原生 sheet/深 | [S3-05 编辑](docs/design/S3-05/task-editor-dark.jpg)、[失败](docs/design/S3-05/task-save-failure-dark.jpg)，S3-06 焦点操作记录 | 不重复 |
+| 快捷键设置 | 参数/方向/录制、滚动、Return/Escape | 原生 sheet/浅 | [S3-05 面板](docs/design/S3-05/hotkeys-sheet-light.jpg) 布局；S3-06 新名称/录制优先级与返回记录 | 不重复；不宣称 VoiceOver 已朗读 |
+
+本轮基于 `aa3bff6` 的独立工作树 `s3-07-visual-coverage` / 分支 `ui/s3-07-visual-coverage`。核对阶段间差异后复用上述 S3-03 至 S3-06 证据：连接/归属与实际菜单布局未改，参数页仅有 S3-06 滑块焦点变化，工作流页仅有已登记的焦点/可访问名称变化。未重复运行旧功能检查。实际补查没有发现需要改生产 UI 的裁切、关键动作挤压或状态误示，故生产 View、组件、业务动作、模型和测试均无改动。
+
+只在既有 Preview 增加“长内容与未完成”场景：复用原内存设备、预设引擎与 store，先建立两项预设/任务，再令一次模拟写入失败生成原有 `applicationIncomplete`；长名称为“夜间电影 · 暖色低背光 · 客厅 USB-C 输入与长时间阅读”。该场景启用真实目录全部 17 项、保留无预设和电影预设的可见性，并追加 36 条明确标注的模拟日志。它是固定视觉快照，不表示正在发生的真实失败，也不新增后台等待。既有虚拟时钟不会自行推进，需要时仍用原 0.2 秒/15 秒按钮；未完善整套设备模拟。窗口入口仅将既有最小窗口开关扩为最小/默认/大窗选择，仍调用原宿主 `setFrame`，没有新窗口体系。
+
+复现：
+
+```sh
+xcodebuild -project macos/Toolbox.xcodeproj -scheme ToolboxPreviews -configuration Debug \
+  -derivedDataPath /tmp/s3-07-review-preview -destination 'platform=macOS,arch=arm64' \
+  CODE_SIGN_IDENTITY=- build
+python3 macos/scripts/validate_preview_boundary.py /tmp/s3-07-review-preview/Build/Products/Debug/ToolboxPreviewHost.app
+```
+
+打开该目录的安全宿主（“S3-07 视觉覆盖 · 安全 Preview”）。“已连接”场景的预设/任务为空，可查看默认浅色空态；“长内容与未完成”选择最小/深色，查看预设、任务、工具栏日志并滚动到底部。实际菜单面板由底栏原入口打开，滚动到末项后打开“更多”；长预设按钮按现有规则省略，完整名称仍在 AX 名称/帮助中。辅助功能菜单仅向 Preview 注入减少透明度、减少动态效果和增加对比度，不改用户全局设置。大窗使用“已连接”+画面+浅色，窗口为 1440×1000；本机截图底部少量宿主调试栏超出屏幕可视边界，图片保留原样，生产正文、侧栏和工具栏均已呈现，不能用该图声称宿主底栏完整显示。切回最小后确认尺寸选择及整个调试栏可用。
+
+必要检查：最终源码的安全 Preview 编译成功，现有依赖/源码副作用/二进制资源隔离检查通过；实际看图覆盖上述补查、默认 1120×820、最小 1020×740、大窗 1440×1000、浅深色及菜单回退。截图为 2× 原生采集，日志 sheet 自身为 850×476；早期四张仍显示原“最小窗口”开关，大窗图显示三尺寸入口之后的宿主，生产内容一致。文档相对链接及 `git diff --check` 检查完成。不新增功能测试，不在本机运行完整 Swift/Python 回归、各生产构建、Instruments 或真机；自然默认 CI 结果记录于 PR Checks，不为结果制造补提交或手动重跑。
+
+边界：没有遍历所有忙碌阶段、状态×外观×尺寸组合或跟随系统外观切换；本轮以应用未完成快照补状态覆盖，表单异步保存的成功/失败/忙碌规则沿用 S3-05/06 记录。S3-06 未实测的 VoiceOver 朗读、角色/阅读顺序、系统键盘设置组合和生产窗口生命周期仍未实测，不改记通过。保留 5038、现用 App 和其他工作区；临时 Preview、runner 与本轮构建产物在本轮 CI 完成后清理。S3-08 未开始，G3 未通过。
+
+## S3-06：原生键盘、焦点、窗口与辅助功能（已 review 合并）
+
+以下保留 S3-06 当时的实现、验证与未实测记录；当时的停止点和宿主名称属于该基线，当前合并结果及执行范围见页首。
 
 独立分支 `ui/s3-06-native-interaction` 基于合并后的 `d06a679`。沿用已采用方向、现有组件及 Apple HIG；实际读取本机 **oil-ui-pro 0.24.2** 的 SKILL、存量项目、组件、交互/状态及轻量 UX 规则，不升级、不重做页面或评分。对照上游 `56fa67e8` 后保留当前 FastSlider；上游仍只有拖拽，没有可直接复用的普通键盘支持。本机仍为 macOS 27.0.1、Xcode 27.1 / SDK 27.0；核对 SDK 与 Apple [onKeyPress](https://developer.apple.com/documentation/swiftui/view/onkeypress(keys:phases:action:))，只使用公开 API。
 
