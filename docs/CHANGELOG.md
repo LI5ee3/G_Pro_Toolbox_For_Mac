@@ -4,6 +4,12 @@
 
 [ROADMAP](ROADMAP.md) 只维护当前范围、任务状态和按需执行原则。协作以用户最新明确要求和根目录 [AGENT.md](../AGENT.md) 为准。
 
+## 2026-10-25 Preview 启动器修正与历史改动清理
+
+- 将 Preview scheme 的 `TestAction`、`LaunchAction` 两处 `selectedLauncherIdentifier` 从 `Xcode.IDEFoundation.Launcher.LLDB` 修正为本机 Xcode 已注册的 `Xcode.DebuggerFoundation.Launcher.LLDB`，其余配置和排版保持。
+- 清理两处历史工作树中已被 `e20ad00` 或其提交历史覆盖的 44 份旧改动；唯一需保留的 scheme 修正迁入主工作树。历史工作树保留各自原 HEAD，共享 `.git`、历史标签和现用 App 保留。
+- 按用户要求不执行测试、构建或真机操作，仅作文件差异与 Git 状态回读；使用 `[skip ci]` 直接推送，不触发 CI。
+
 ## 2026-10-25 测试去重
 
 - Swift 用例由 484 项缩减为 467 项（403 + 64），Python 由 24 项缩减为 22 项；不设删减比例或数量目标，上游既有测试保持。
