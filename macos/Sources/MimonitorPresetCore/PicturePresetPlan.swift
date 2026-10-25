@@ -1,7 +1,6 @@
-import ToolboxDomain
 import Foundation
 
-public enum PresetCommand: Equatable, Sendable {
+public enum PresetCommand: Equatable {
     case setting(String, String)
     case jni(String, String, Int)
     case refresh
@@ -11,9 +10,10 @@ public enum PresetCommand: Equatable, Sendable {
 
 /// Native Swift port of the device's picture write sequences. No process/language bridge.
 public enum PicturePresetPlan {
-    public static let colorTempToMtk = PictureMappings.colorTempToMtk
-    public static let hdrToneMappingToMtk = PictureMappings.hdrToneMappingToMtk
-    public static let hdrModes = PictureMappings.hdrModes
+    public static let colorTempToMtk = [0: 1, 1: 2, 2: 3, 3: 0, 4: 4, 5: 5, 8: 6]
+    public static let hdrToneMappingToMtk = [0: 5, 1: 0, 2: 2, 3: 1]
+    public static let hdrModes: Set<Int> = [11, 12, 13, 15, 16, 17, 18, 19, 22, 23,
+                                            29, 30, 31, 32, 33, 39, 40, 41, 42, 43, 44]
     public static let settingsKeys = [
         "picture_mode", "tv_picture_light_sensor", "picture_backlight", "xiaomi_picture_backlight",
         "picture_brightness", "picture_contrast", "picture_saturation", "picture_hue", "picture_sharpness",
@@ -48,11 +48,11 @@ public enum PicturePresetPlan {
         }
         override("g_disp__disp_back_light", ["picture_backlight", "xiaomi_picture_backlight"])
         override("g_video__vid_gamut_mapping_mode", ["tv_picture_advanced_video_color_space", "tv_picture_video_color_space"])
-        override("g_video__clr_temp", ["picture_color_temperature"], map: PictureMappings.mtkToColorTemp)
+        override("g_video__clr_temp", ["picture_color_temperature"], map: [1: 0, 2: 1, 3: 2, 0: 3, 4: 4, 5: 5, 6: 8])
         override("g_video__vid_local_dimming", ["picture_local_dimming", "tv_picture_video_local_dimming"])
         override("g_video__light_sensor_switch", ["tv_picture_light_sensor"])
         override("g_video__vid_hdr_tone_mapping_mode", ["picture_hdr_tone_mapping"])
-        override("g_video__vid_hdr_tone_mapping_mode", ["settings_display_hdr_color_tone"], map: PictureMappings.hdrToneMappingToUI)
+        override("g_video__vid_hdr_tone_mapping_mode", ["settings_display_hdr_color_tone"], map: [5: 0, 0: 1, 2: 2, 1: 3])
         override("g_video__vid_od_response_time", ["picture_response_time"])
         override("g_video__vid_insert_black", ["picture_dynamic_definition"])
         override("g_video__clr_gain_r", ["picture_red_gain"])
@@ -106,19 +106,19 @@ public enum PicturePresetPlan {
             }
         }
         // Mode changes reset parameter defaults, so every parameter follows this command.
-        item("画面模式") { [.setting("picture_mode", try text("picture_mode", range: ControlRanges.percentage))] }
+        item("画面模式") { [.setting("picture_mode", try text("picture_mode", range: 0...100))] }
         item("自动调整亮度") {
             let value = try text("tv_picture_light_sensor", range: 0...1)
             return [.jni("g_video__light_sensor_switch", value, 1), .setting("tv_picture_light_sensor", value)]
         }
         item("背光") {
-            let value = try text("picture_backlight", range: ControlRanges.backlight)
+            let value = try text("picture_backlight", range: 1...100)
             return [.jni("g_disp__disp_back_light", value, 3), .refresh,
                     .setting("picture_backlight", value), .setting("xiaomi_picture_backlight", value)]
         }
         for (label, key) in [("黑色级别", "picture_brightness"), ("对比度", "picture_contrast"),
                              ("饱和度", "picture_saturation"), ("色调", "picture_hue"), ("锐度", "picture_sharpness")] {
-            item(label) { [.setting(key, try text(key, range: ControlRanges.percentage))] }
+            item(label) { [.setting(key, try text(key, range: 0...100))] }
         }
         item("色温") {
             let value = try number("picture_color_temperature")
@@ -127,9 +127,9 @@ public enum PicturePresetPlan {
         }
         if (try? number("picture_color_temperature")) == 3 {
             item("色增益") {
-                let r = try text("picture_red_gain", range: ControlRanges.colorGain)
-                let g = try text("picture_green_gain", range: ControlRanges.colorGain)
-                let b = try text("picture_blue_gain", range: ControlRanges.colorGain)
+                let r = try text("picture_red_gain", range: 524...1524)
+                let g = try text("picture_green_gain", range: 524...1524)
+                let b = try text("picture_blue_gain", range: 524...1524)
                 return [.jni("g_video__clr_temp", "0", 3), .setting("picture_color_temperature", "3"),
                         .colorGains(r, g, b), .setting("picture_red_gain", r),
                         .setting("picture_green_gain", g), .setting("picture_blue_gain", b), .refresh]

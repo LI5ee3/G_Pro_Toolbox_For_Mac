@@ -194,6 +194,11 @@ public final class AppCoordinator {
         if logToFileEnabled { environment.system.startLog(Self.fileTimeFormatter.string(from: environment.now())) }
         startPresetFeatures()
         log("系统就绪，等待连接...")
+        if environment.system.isExecutable(adb.adbPath) {
+            log("ADB: \(adb.adbPath)")
+        } else {
+            log("ADB 不可用：找不到 \(adb.adbPath)。开发构建请先运行 python3 macos/scripts/runtime_assets.py prepare 准备 adb。")
+        }
         hotkeyManager.onTrigger = { [weak self] id in self?.handleHotkeyTrigger(id) }
         // 诊断默认关闭：每按一个不匹配的键就写一行日志，正常打字会把日志刷满。
         // 在「自定义全局快捷键」面板里按需打开。

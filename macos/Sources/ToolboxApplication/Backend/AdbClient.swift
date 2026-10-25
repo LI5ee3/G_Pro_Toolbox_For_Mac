@@ -417,15 +417,17 @@ package final class AdbClient {
 
     /// nil = 尚未验证 binder 通道；true/false = 验证结果。
     /// 只在第一次写音量/静音时回读确认 transaction code 没被 ROM 改掉。
-    private var binderVerification: [String: (sessionID: UUID, verified: Bool)] = [:]
+    // Upstream keeps one result. Retain only the session stamp needed for USB/TCP
+    // switching and same-endpoint reconnects; old sessions cannot reuse this result.
+    private var binderVerification: (sessionID: UUID, verified: Bool)?
     private var mediaVolumeBinderVerified: Bool? {
         get { transaction {
-            guard let cached = binderVerification[serial], cached.sessionID == operationSession?.sessionID else { return nil }
+            guard let cached = binderVerification, cached.sessionID == operationSession?.sessionID else { return nil }
             return cached.verified
         } }
         set { transaction {
             guard let session = operationSession else { return }
-            binderVerification[serial] = newValue.map { (session.sessionID, $0) }
+            binderVerification = newValue.map { (session.sessionID, $0) }
         } }
     }
 
