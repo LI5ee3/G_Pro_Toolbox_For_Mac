@@ -94,6 +94,24 @@ CI 要求在线且带 `toolbox-macos27` 标签的 macOS 27 ARM64 runner；没有
 
 构建产物不自动替换已安装/正在运行的应用。当前 development 构建与显式打包使用 ad-hoc 签名，无需正式凭据或安装验收；历史分发流程见 [R6-RELEASE.md](R6-RELEASE.md)，不作为当前完成门槛。
 
+### 与上游同步
+
+2026-10-25 对照 [上游 `56fa67e`](https://github.com/YiHoooong/Mimonitor_Toolbox/tree/56fa67e8d990a2dd8d7ebe1b6865d3b18928d08d) 与本项目主分支 `49c48d3`。优先比较上游 `macos/` 的 Swift 实现；原作者已有的功能直接复用，只在当前平台、手动 USB/TCP 或已确认的缺陷需要时保留局部适配。
+
+| 功能 | 上游位置 | 本项目位置与保留差异 |
+| --- | --- | --- |
+| 画面预设命令、调度引擎与控制策略 | `macos/Sources/MimonitorPresetCore/{PicturePresetPlan,PresetEngine,PresetControlPolicy}.swift` | 同路径；三个文件与上述上游提交逐字一致。预设计划的映射与范围恢复在原文件中，便于直接同步；UI 的 Domain 映射由现有 `DomainContractTests` 核对一致性。 |
+| 预设模型与存储 | `macos/Sources/MimonitorPresetCore/PresetModels.swift` | 同路径；保留跨队列快照的 `Sendable`、内存 Preview 偏好注入，以及原值冲突和写后回读保护。 |
+| ADB、JNI、TvService、音量 | `macos/Sources/MimonitorToolbox/Backend/AdbClient.swift` | `Sources/ToolboxApplication/Backend/AdbClient.swift`；复用命令格式、参数、JNI 渐变和批量读写，保留固定会话、取消及失败传播。Binder 校验只留一份带会话标识的结果，换目标或重连后重新校验。 |
+| ADB 资源查找 | 同上 `locateAdb()` | `Sources/ToolboxMacAdapters/LiveResourceLocator.swift`；方法与上游一致，依次检查内嵌资源、构建缓存、Homebrew 和 Android SDK。启动提示位于 `AppCoordinator.start()`，复用现有系统接口；准备命令适配为本项目的 `runtime_assets.py prepare`。 |
+| 预设采集、应用与读回 | `macos/Sources/MimonitorToolbox/Backend/AdbPresetDevice.swift` | `Sources/ToolboxMacAdapters/AdbPresetDevice.swift`；保留上游执行顺序和读回，仅适配提交时的 USB/TCP 端点、访问级别和可取消等待。 |
+| 画面、游戏、灯效、信号源、遥控及记忆 | `macos/Sources/MimonitorToolbox/AppState.swift` | `Sources/ToolboxApplication/AppCoordinator+{DisplayCommands,DisplayMemory,Refresh,Tools}.swift`；保留设备命令与顺序，适配状态发布、身份归属和未知读数。 |
+| 显示器端工具与资源 | `tools/mtk_direct/`、`tools/colorful_led/`、两份 JAR 与 Guardian APK | 与上述上游提交内容一致；资源更新时同步 Java/JAR，并更新 `Config/RuntimeAssets.lock.json` 的摘要。 |
+
+上游分叉后的三次提交主要涉及 macOS 26 界面、开发态 ADB 查找和签名 CI；本轮补入遗漏的 ADB 查找与提示。当前 macOS 27 界面、手动 USB/TCP、进程超时/取消、4K/JNI 失败显示、音量失败处理及安全 Preview 各有现行用途，继续保留。上游的单 IP 假设、自动重启 server、旧读数失败语义和发布签名流程不能直接覆盖这些适配。
+
+后续更新先 `git fetch upstream master`，按上表定位对应文件；无本地差异的文件直接同步，有差异的函数只移植上游实际变更。验证沿用受影响模块的现有测试和默认 CI，不为同步新增测试框架或重复未改变功能的真机验收。这里的对照是源码证据，不代表运行中的 App 已更新或新增真机验收通过。
+
 ## ADB 音量控制
 
 键盘音量加减和静音通过当前已连接的 USB/TCP ADB 会话控制显示器，声音可继续通过 DP/HDMI 输出。保留辅助功能授权、默认音频输出限制、自定义步长和原生 OSD 16 格。ADB 离线时不接管系统音量键；CoreAudio 只读取默认输出设备，不写入音量。原蓝牙控制已移除，系统配对不受影响。
