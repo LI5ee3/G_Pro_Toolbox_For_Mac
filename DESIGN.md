@@ -1,6 +1,6 @@
 # 红米 G Pro ToolBox 设计规范
 
-更新：2026-10-25 · **方向已采用；S3-06 已 review 合并；S3-07 视觉覆盖待 review**。
+更新：2026-10-25 · **方向已采用；S3-07 已 review 合并；S3-08 差异与性能记录待 review**。
 
 用户已采用 PR #5 的“控制优先的原生工作区”。S3-01 复核 HEAD `c71f799` 经默认 CI #33 通过，以 merge commit `b6648bccf47117b3619a465af98ffc435704f323` 合入 master，合并 CI #34 通过。S3-02 的 PR #6 HEAD 与已复核的 `e9b8574fc218c17b422e1c0c95d6e1a523dc39de` 完全一致，沿用已通过的默认 CI [#35](https://github.com/LI5ee3/G_Pro_Toolbox_For_Mac/actions/runs/40098121445)，标记 ready 后以 merge commit `ea8f7b608cf044ec7b9cf9274a8ef55f9a55d2c0` 合入 master；自然触发的合并 CI [#36](https://github.com/LI5ee3/G_Pro_Toolbox_For_Mac/actions/runs/40099394801) 通过。确认包含关系后正常删除已合并分支引用，原工作树与内容保留。
 
@@ -12,9 +12,48 @@ PR #9 的复核 HEAD `5f7593cf37f7bf7a7be521318c833f8f11f48ef5` 与远端一致�
 
 PR #10 的复核 HEAD `115e24b451a9e320a1dfd48f506de6d231e859f3` 与远端一致，直接沿用已通过的默认 CI [#43](https://github.com/LI5ee3/G_Pro_Toolbox_For_Mac/actions/runs/40161969271)，标记 ready 后以 merge commit `aa3bff6cb296761432424c39cdcad07b6c24185f` 合入 master；自然合并 CI [#44](https://github.com/LI5ee3/G_Pro_Toolbox_For_Mac/actions/runs/40162735668) 通过，未重跑 #43。确认包含关系后正常删除 S3-06 本地/远端分支引用，原工作树 detached 于同一复核 HEAD，目录内容保留。
 
-本轮由用户单独授权 S3-07，止于新草稿 PR review，不开始 S3-08。M2/G2 NOT_PASSED、Auto DEFERRED、G3 未通过；现用 App 不替换。下文 S3-01 至 S3-06 与 Pro B 保留为各自当时范围，历史停止点由最新授权取代。平台及业务边界见 [ARCHITECTURE](docs/ARCHITECTURE.md)，进度以 [ROADMAP](docs/ROADMAP.md) 为准。
+PR #11 的复核 HEAD `713fa1290e6cdbe9cd72270cbb2c8c0283e0e828` 与远端一致，沿用已通过的默认 CI [#45](https://github.com/LI5ee3/G_Pro_Toolbox_For_Mac/actions/runs/40163361220)，标记 ready 后以双亲 merge commit `a5010d0db43a46b7ae22188481efe67c293d950e` 合入 master；自然合并 CI [#46](https://github.com/LI5ee3/G_Pro_Toolbox_For_Mac/actions/runs/40164207535) 通过，未重跑 #45。已 fetch 并验证包含关系，正常删除 S3-07 本地/远端分支引用，原工作树 detached 于同一 HEAD，目录内容保留。
 
-## S3-07：视觉覆盖索引与实际缺口（补查完成，待 review）
+本轮由用户单独授权 S3-08，止于新草稿 PR review，不开始阶段四。M2/G2 NOT_PASSED、Auto DEFERRED、G3 待用户 review，未通过；现用 App 不替换。下文 S3-01 至 S3-07 与 Pro B 保留为各自当时范围，历史停止点由最新授权取代。平台及业务边界见 [ARCHITECTURE](docs/ARCHITECTURE.md)，进度以 [ROADMAP](docs/ROADMAP.md) 为准。
+
+## S3-08：阶段三差异与性能观察（记录完成，待 review）
+
+本项是已采用方案的差异核对与证据收口，没有发现需要新增生产修复的具体问题。比较固定的阶段三前基线 `0bc16898243e269b486a274b7d1720be007bfe23` 与本轮实际基线 `a5010d0db43a46b7ae22188481efe67c293d950e`；独立工作树 `s3-08-acceptance` / 分支 `ui/s3-08-acceptance`。本轮只改本文件、ROADMAP 和采样证据，不改生产/Preview 源码、测试或 CI。实际读取 oil-ui-pro 0.24.2 的 SKILL、存量项目、交互与状态规则，用于核对对象、动作和可观察结果；沿用 Apple HIG 与已采用方向，不升级、重设计或评分。
+
+### 变化范围—复用实现—现有证据
+
+以下“未变”来自两个固定 SHA 的路径/blob 与必要调用差异核对，不是重新验收全部设备命令；S3-03～07 的检查是当时记录，本轮没有重复运行。
+
+| 阶段三变化范围 | 复用实现与边界 | 现有证据 |
+| --- | --- | --- |
+| 共享样式、十页侧栏、首页及实际菜单 | 仍由同一 `ToolboxSession` / `AppCoordinator`、原 `Page` / `requestedPage` / `onPageAppear` 分发；保留用户菜单目录/顺序/可见预设。新增首页/菜单音量组件调用原 `setDashboardVolume` / `toggleDashboardMute`，背光调用原 `setPictureSlider`；无第二客户端/轮询 | S3-03 定向 fake 与菜单跳转记录；[ControlRoutingTests](macos/Tests/MimonitorToolboxTests/ControlRoutingTests.swift) 的菜单/快捷键实际入口检查；S3-07 十页及七类面板覆盖表 |
+| **手动失败与显式扫描** | Application 层实际改了 `AppCoordinator+Connection`：手动 TCP 失败由 `.disconnected` 改为 `.failed(state)`；`isAuto` 的失败回退保持。`scanNet(automaticallyConnect: false)` 只列结果、保留填写目标；默认 `true` 保持旧选择行为，活动连接仍拒绝扫描。未改底层连接/取消/恢复 | S3-03 失败图及 [ManualConnectionScanTests](macos/Tests/MimonitorToolboxTests/ManualConnectionScanTests.swift)（显式扫描/旧默认选择/活动会话保护）；原回归失败状态断言同步更新 |
+| **连接面板展示与对象接线** | `ConnectionPresentation` 从原状态派生短标题、显示名称、活动 ADB 端点及恢复提示；显示名称不是新的物理身份，完整身份仍读原模型。新增导航布尔值只控制 sheet。局部 `ConnectionDraft` 保存 USB/TCP/host/port 候选，仅明确连接才调用原断开/模式/连接；诊断同步捕获点击时地址后还原模型输入；保存捕获当前活动端点后还原草稿，直接观察原 busy/profileMessage | S3-03 [ConnectionDraftTests](macos/Tests/MimonitorToolboxTests/ConnectionDraftTests.swift)：A 会话/B 草稿、诊断对象、一次显式连接、活动端点保存及异步成功/陈旧失败；连接/保存截图沿用 |
+| **归属确认** | 原生产 `ConnectionIdentityControls` 在打开时固定 session、profile token、完整旧归属文案及选项；确认提交已展示依据，原 worker 校验拒绝陈旧依据。没有新 token/确认体系；身份、迁移与存储实现未改 | S3-03 完整确认图及 [IdentityConnectionTests](macos/Tests/MimonitorToolboxTests/IdentityConnectionTests.swift) 的 stale session / later ownership 拒绝检查 |
+| 参数页、原生选项与遥控 | Domain 的 `RegisterMap` / `OptionLists` / `ControlRanges` 及原 display/game/source/light 动作未变；JNI/settings key、RGB/HDR 条件、source 23/24/29/30、灯光 0…14 ↔ 1…15 和记忆联动继续使用。选项按真实 tag；未知只改展示。遥控仍是原 12 键码各一次 `key` | S3-04 映射、未知/记忆态与实际操作记录；[PreviewRenderingTests](macos/Tests/MimonitorToolboxTests/PreviewRenderingTests.swift) 原生 popup tag / 外部同步不写入；S3-05 遥控记录 |
+| **预设/任务表单与排序** | 原预设动作、引擎/事务、调度优先级、保存格式不变。任务保存由立即关闭改为观察原 busy/error 和配置中的同一任务，成功关闭、失败留稿；名称使用原异步结果并补失败焦点。已活动对象直接“编辑画面”时补调用原刷新；菜单上下移复用原 `moveMenuBarItems`，即时存储不变 | S3-05 任务成功重开读回/失败留稿、名称失败、排序及预设编辑读回记录；原偏好分段测试；S3-06 名称失败焦点 |
+| **FastSlider 与键盘入口** | 鼠标 Binding/范围/步长/松手和 AX 调整保留，外部读数同步只更新显示；新增焦点内方向键夹取并在值变化时调用一次原 `onCommit`，禁用有直接检查，带修饰键继续按源码放行。⌘, 复用工具页/原主窗入口；录制监听与键码规则未改 | S3-06 [PreviewRenderingTests](macos/Tests/MimonitorToolboxTests/PreviewRenderingTests.swift) 四向/步长/边界/禁用/外部同步检查，原生 Tab/Return/Escape/录制优先记录；窗口生命周期未重验 |
+| 未变化的后端、权限及执行机制 | `ToolboxDomain`、`MimonitorPresetCore`、`ToolboxConcurrency`、`ToolboxProcessExecution`、`ToolboxMacAdapters`、Application/Backend 逐路径无差异；Application 除上述 Connection 与 NavigationModel 外无差异。命令映射、事务、旧任务取消/旧结果隔离、预设/连接存储、同传输恢复、权限/登录项、任务执行继续沿用。Package/Xcode/Config/scripts/workflow 未改；上游来源如现有原生分段控件保留 | 固定 SHA 的 `git diff`；S3-03～06 的已复核结果与 CI，S3-07 CI #45；本轮自然默认 CI 承担完整回归，不在本机重做命令矩阵 |
+
+### 必要性能观察及适用范围
+
+R6 [真实生产 App / 实体媒体键记录](macos/R6-CLOSEOUT.md) 保留为历史，不能代替迁移后 UI。S3-03～07 没有适用于当前 UI 的 Instruments 采样，因此只补下面这一条安全路径，没有重建旧版或双版本基准。
+
+- **实际源码/环境**：`a5010d0db43a46b7ae22188481efe67c293d950e`，源码干净时构建；Mac mini M4 / arm64，macOS 27.0.1 (26A434)，Xcode 与 xctrace 27.1 (27A9275)，SDK 27.0；`ToolboxPreviews` / Debug / ad-hoc。宿主保留原名“S3-07 视觉覆盖 · 安全 Preview”，本轮未为命名改源码。
+- **场景/操作**：默认 1120×820pt、浅色、原“已连接”内存场景（TCP 192.0.2.27:5555；初始背光 45）。从侧栏进入生产画面页，拖动背光至本地显示 25 并松手，滚到底部再回顶部，打开实际菜单面板；关闭后推进原虚拟时钟 0.2 秒，再打开菜单。不是实时生产时钟；菜单当时仍显示原读数 45，本次不把本地拖动值或尚未刷新读数当作设备结果。控制/提交语义沿用上表已复核证据，不为采样补设备模拟。
+- **采样**：仅 attach 此 Preview PID 5433，Time Profiler 默认配置；2026-10-25 13:06:16.260–13:06:48.026（UTC+8），实际 31.766893 秒，完成路径后主动停止，没有重复循环或固定时长门槛。采样期间本轮 CI runner 尚未启动，未并行构建；没有更改系统权限或全局设置。
+- **结果**：导出 `time-profile` 共 1626 个样本，主线程 1500 个、权重合计 1500ms（每样本 1ms，不是单次操作延迟）。主线程叶端主要为系统/SwiftUI/AttributeGraph 工作，例如 `objc_msgSend` 51ms、`AG::Graph::UpdateStack::update()` 25ms；少量符号合并或未解析。锁慢路径样本共 2ms，所见栈位于 CFRunLoop timer 清理，不能从累计权重推断一次阻塞。`hang-risks` 和阈值 250ms 的 `potential-hangs` 均无记录；本次没有得到可定位的新增主线程阻塞证据，因此不追加性能改造或旧版对照。
+- **限制**：短时统计采样、Debug、fake、单一路径；未开启 waiting-thread/context-switch 采样，空 hang 表不代表所有延迟为零。不宣称性能提升、完全无回退或生产真机性能通过；R6 仍只适用于当时生产构建。S3-06 的 VoiceOver 朗读/角色/阅读顺序、系统键盘设置组合，以及生产窗口/Dock/真实 MenuBarExtra 生命周期继续未实测；S3-07 未覆盖组合继续保留。
+
+可 review 的原始导出：[CPU 样本 XML（gzip）](docs/design/S3-08/time-profile.xml.gz)、[hang 表 XML](docs/design/S3-08/hangs.xml)。前者解压 SHA-256 为 `a75b3ce2faea080c22055755d5106e79effda98b1e2c86233a2c6c18c0b14dc8`；原 `.trace` 与 toc 留在开发 Mac 的 `/Users/li5ee3/Documents/Codex/ADB/validation/S3-08-a5010d0-20261025/`，不上传包含进程环境的完整 trace。没有新增测量脚本、基准或截图设施。
+
+复现沿用 S3-07 的安全 Preview 构建/隔离命令，换为本轮临时输出 `/tmp/s308-preview`。采样命令是 `xcrun xctrace record --template 'Time Profiler' --attach <Preview PID> --output <本轮路径>.trace --no-prompt`，完成同类路径后 Ctrl-C；导出使用 `xcrun xctrace export --input <trace> --xpath '/trace-toc/run[@number="1"]/data/table[@schema="time-profile"]'`，另对 `potential-hangs` / `hang-risks` 查询。PID 应取实际安全宿主，不能附加现用 App。
+
+本轮安全 Preview 编译和既有依赖/源码副作用/二进制资源隔离检查通过，采样已完成并退出宿主。其余只检查文档链接、表述与差异，不新增测试，不在本机重复完整 Swift/Python 回归及全部构建；自然默认 CI 及本轮临时产物清理结果记录在 PR。现用 App 开工时未运行，本轮保持该状态；5038、原七个未提交文件、既有工作树与历史标签保留。**S3-08 记录待 review，G3 不自动通过，不开始阶段四。**
+
+## S3-07：视觉覆盖索引与实际缺口（已 review 合并）
+
+以下保留 S3-07 当时的覆盖、补查及未测边界；“本轮”和停止点均指该阶段，当前结果见页首。
 
 本项是现有生产 UI 的证据整理与缺口补查，不是重新设计。继续使用本机 oil-ui-pro 0.24.2 的存量项目、交互/状态、空间/滚动与布局视口规则，沿用下文 Apple HIG；不升级、不评分。旧截图是对应阶段当时的安全 Preview 记录，本轮只重读和核对适用范围，不冒称重新运行。S3-01 独立提案不计入生产覆盖。尺寸指宿主窗口 pt，弹层保持自身尺寸。
 
