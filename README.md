@@ -4,7 +4,7 @@ Redmi G Pro 27U / 32U 显示器的原生 macOS 控制应用，使用 SwiftUI、A
 
 本项目基于 [YiHoooong/Mimonitor_Toolbox](https://github.com/YiHoooong/Mimonitor_Toolbox) 的设备协议与 macOS 实现继续开发，保留原作者贡献。当前仓库仅维护 Mac 应用。
 
-当前界面采用「屏幕即遥控器」布局：首页集中控制音量、背光和画面模式，其余功能通过顶部导航进入。
+当前界面采用「控制优先的原生工作区」布局：首页集中控制音量、背光和画面模式，其余功能通过分组侧栏进入；窗口工具栏提供连接设置和日志入口。
 
 ## 功能
 
@@ -16,7 +16,7 @@ Redmi G Pro 27U / 32U 显示器的原生 macOS 控制应用，使用 SwiftUI、A
 - **所选传输恢复**：Mac 唤醒后检查实际连接并在所选 USB/TCP 传输内恢复，遵守显式断开抑制，不自动跨传输切换。
 - **AdbGuardian 部署与回读验证**：安装显示器端保活组件后确认实际运行、端口和权限状态。
 
-<img src="macos/assets/screenshots/ui-c-home.png" width="700" alt="Mac 应用控制台">
+<img src="docs/design/S3-03/home-light.jpg" width="700" alt="当前生产界面的安全 Preview：控制台">
 
 更多截图、配置和实测范围见 [Mac 使用与开发说明](macos/README.md)。
 
@@ -24,7 +24,7 @@ Redmi G Pro 27U / 32U 显示器的原生 macOS 控制应用，使用 SwiftUI、A
 
 当前架构与运行边界见 [ARCHITECTURE](docs/ARCHITECTURE.md)，当前范围及任务状态见 [ROADMAP](docs/ROADMAP.md)；项目更新历史及后续变更统一记录在 [CHANGELOG](docs/CHANGELOG.md)，协作遵循 [AGENT.md](AGENT.md)。S2-01 至 S2-06 已合入，包含手动 USB/TCP 选择和经确认的身份兼容，详见 [ADB 契约第 0 节](docs/ADB-CONTRACTS.md)。
 
-PR #4 已合并；源码 `839186f` 的候选 `0.1.0 (20261024.1)` 已有真实 TCP 接入、既有 shell 探活及默认 `5038` 端口交接成功记录，当前用于正常使用。本次交接没有新增源码修复、重新构建或重签，不代表所有控制、预设、任务或恢复场景均已验证。完整历史 M2/G2 仍为 NOT_PASSED；Auto 继续暂缓（DEFERRED）。
+PR #4 已合并；源码 `839186f` 的候选 `0.1.0 (20261024.1)` 曾完成真实 TCP 接入、既有 shell 探活及默认 `5038` 端口的正常使用交接。该历史交接没有新增源码修复、重新构建或重签，不代表当前源码或所有控制、预设、任务及恢复场景均已验证。完整历史 M2/G2 仍为 NOT_PASSED；Auto 继续暂缓（DEFERRED）。
 
 ## 使用条件
 

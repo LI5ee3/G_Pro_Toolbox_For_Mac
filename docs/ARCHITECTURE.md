@@ -1,6 +1,6 @@
 # 现行架构与运行边界
 
-更新：2026-10-23，S2-04。本文描述当前源码，进度、验收与后续授权统一以 [ROADMAP](ROADMAP.md) 为准；[ADB-CONTRACTS](ADB-CONTRACTS.md) 第 0 节记录已实施的 TCP/server、手动 USB 和身份/配置边界；控制入口完整审查、生命周期与 Auto 仍待后续门禁。本文不把设计类型或历史真机结果当作当前已实现、已复验功能。
+更新：2026-10-25。本文描述当前源码，范围与任务状态以 [ROADMAP](ROADMAP.md) 为准，变更与验证历史见 [CHANGELOG](CHANGELOG.md)。S2-01 至 S2-06 已合入，包含手动 USB/TCP、控制路由及所选传输内恢复；跨 USB/TCP 的 Auto 继续暂缓。[ADB-CONTRACTS](ADB-CONTRACTS.md) 第 0 节保留各阶段的实现边界，历史真机结果不作为当前源码已复验的证据。
 
 ## 平台、模块与语言模式
 
@@ -55,15 +55,15 @@ Application 不导入 SwiftUI 或生产适配器，也不启动真实进程；�
 
 ## ADB 目标、身份与恢复边界
 
-- [AdbEndpoint](../macos/Sources/ToolboxDomain/AdbEndpoint.swift) 支持 TCP host/port 和经枚举类型验证的 USB serial；设备端口默认 5555，手动输入校验 1–65535。显式发现不激活会话，不自动选择首项；Auto 未实现。
+- [AdbEndpoint](../macos/Sources/ToolboxDomain/AdbEndpoint.swift) 支持 TCP host/port 和经枚举类型验证的 USB serial；设备端口默认 5555，手动输入校验 1–65535。显式发现不激活会话，不自动选择首项；跨 USB/TCP 的 Auto 未实现。
 - [AdbSession](../macos/Sources/ToolboxApplication/Backend/AdbSession.swift) 固定提交时的 endpoint、clientID、sessionID 和取消令牌；nil 表示没有设备目标。设备命令显式使用该会话 serial，不退回 adb 默认设备。clientID 区分客户端实例，sessionID 区分每次接入；两者都不是物理设备身份。
-- [AdbClient](../macos/Sources/ToolboxApplication/Backend/AdbClient.swift) 的 ip / beginSession(ip:) / disconnect(ip:) 保留为旧 UI/配置兼容入口。serverPort 默认 5038，独立于设备端口，也不表示应用独占该 server。
+- [AdbClient](../macos/Sources/ToolboxApplication/Backend/AdbClient.swift) 的 ip / beginSession(ip:) / disconnect(ip:) 保留为 TCP 兼容包装，现由 Preview 和兼容测试使用；生产连接与音量回调使用完整 endpoint。serverPort 默认 5038，独立于设备端口，也不表示应用独占该 server。
 - [预设提交](../macos/Sources/ToolboxApplication/AppCoordinator+Presets.swift) 把 endpoint 与已确认的兼容身份键分别交给 [AdbPresetDevice](../macos/Sources/ToolboxMacAdapters/AdbPresetDevice.swift)。预设目标固定在提交时，identity 只做原所有权判断。picture_presets_v1 原始 JSON 不批量迁移，connection_profile_v1 保存明确确认的稳定属性证据、旧别名和全局记忆唯一归属；旧 IP 相等不能证明历史所有权。
 - 发现状态独立于连接状态，待授权/离线/失败明确显示。严格 get-state 与只读 shell 探针通过后读取本次会话的两项稳定属性；未确认暂停预设/任务/记忆，未知可人工确认当前会话，冲突取消会话并清空端点。固件属性的可靠性尚待真机验证。
 - `ensureConnected` 集中现有 TCP 恢复决策：优先原 get-state/shell 探活与目标级 connect/等待/探活；unauthorized 立即返回，不进入 shell/server 恢复。目标恢复失败后，私有边界最多执行一次 3 秒 `host-features` 查询，成功且 stdout 非空才允许最终目标重试；用单调时间施加 25 秒冷却，失败也记账，切换目标不重置冷却。
 - 应用不再显式循环 kill-server。`host-features` 是主动 server 查询，官方 adb 仍可能启动缺失 server 或协调不兼容版本；它不是被动健康探测，也不证明设备 ready。多客户端冲突与真实 USB/TCP 恢复未在阶段一获得硬件验收。
 
-生产连接不再隐式保存 IP，明确保存 TCP:5555 才镜像 saved_ip；新 envelope 优先。已经验证且确认的接入仍可能部署 JAR、触发已获准的记忆/预设任务，因此不能当作只读设备探针。USB 数据链路、视频信号源与默认音频输出是独立事实；历史 CLI 验证不替代 App 真机验收。USB 插拔/睡眠恢复与 Auto 没有在 S2-04 实现。
+生产连接不再隐式保存 IP，明确保存 TCP:5555 才镜像 saved_ip；新 envelope 优先。已经验证且确认的接入仍可能部署 JAR、触发已获准的记忆/预设任务，因此不能当作只读设备探针。USB 数据链路、视频信号源与默认音频输出是独立事实；历史 CLI 验证不替代 App 真机验收。S2-06 已实现所选传输内的断线/唤醒恢复、睡眠取消及显式断开抑制；未完成应用的预设不会自动重放，跨传输 Auto 继续暂缓。
 
 ## 偏好与未知读数
 
@@ -91,11 +91,11 @@ S1-07 的 [游戏 JNI 派生](../macos/Sources/ToolboxApplication/AppCoordinator
 
 ## 遗留保留与历史文档
 
-S1-09 删除项为 **0**。本次没有以文档整理为由删除兼容入口或历史脚本；以下引用说明保留原因，并不声称完成全库死代码证明。
+S1-09 当时删除项为 **0**；后续确认无引用的组件与辅助方法清理见 [CHANGELOG](CHANGELOG.md)。以下实现仍有使用者或明确的兼容用途，继续保留。
 
 | 保留项 | 当前引用 / 用途证据 |
 | --- | --- |
-| `adb.ip` 及旧 IP 包装入口 | [音量回调](../macos/Sources/ToolboxApplication/AppCoordinator+Volume.swift) 尚保留旧 ip 比较，完整入口审查留 S2-05；[预设所有权](../macos/Sources/ToolboxApplication/AppCoordinator+Presets.swift) 已改用确认后的兼容键；[TCPCompatibilityTests](../macos/Tests/MimonitorToolboxTests/TCPCompatibilityTests.swift) 覆盖旧入口与固定命令轨迹 |
+| `adb.ip` 及旧 IP 包装入口 | [PreviewRuntime](../macos/Sources/ToolboxPreviewSupport/PreviewRuntime.swift) 使用 TCP 包装建立模拟会话；[TCPCompatibilityTests](../macos/Tests/MimonitorToolboxTests/TCPCompatibilityTests.swift) 覆盖旧入口与固定命令轨迹。[音量回调](../macos/Sources/ToolboxApplication/AppCoordinator+Volume.swift) 已比较完整 endpoint，[预设所有权](../macos/Sources/ToolboxApplication/AppCoordinator+Presets.swift) 使用确认后的兼容键 |
 | `LegacyLoginItemFiles` | [LiveLoginItems](../macos/Sources/ToolboxMacAdapters/Autostart.swift) 构造并使用它；[LoginItemTests](../macos/Tests/MimonitorToolboxTests/LoginItemTests.swift) 覆盖归属、备份和迁移，是现行旧配置兼容路径 |
 | HUD 的 ObservableObject | [HUDWindow](../macos/Sources/ToolboxMacAdapters/HUDWindow.swift) 的视图观察并持有 HUDModel，仍有真实使用者，不属于已移除的全局 AppState |
 | 显式打包/安装与历史签名脚本 | workflow 的手动 package job 调用 [make_dmg.sh](../macos/make_dmg.sh)；[签名规则测试](../macos/scripts/tests/test_release_pipeline.py) 仍覆盖 distribution 门禁；[reinstall.sh](../macos/reinstall.sh) 保留显式安装入口，现行默认 CI 不调用它 |

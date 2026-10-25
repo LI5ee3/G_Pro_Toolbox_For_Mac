@@ -112,13 +112,6 @@ extension View {
     }
 }
 
-struct ToolboxGlassGroup<Content: View>: View {
-    @ViewBuilder let content: Content
-    var body: some View {
-        GlassEffectContainer(spacing: 16) { content }
-    }
-}
-
 /// A small, interruptible response shared by the screen controls and navigation.
 struct ControlPressStyle: ButtonStyle {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -221,32 +214,6 @@ struct SelectableButton: View {
         }
         .buttonStyle(ControlPressStyle())
         .accessibilityAddTraits(isSelected ? .isSelected : [])
-    }
-}
-
-// MARK: - 选项按钮组（对应 _btn_section）
-
-struct ButtonGroupSection: View {
-    let title: String
-    let options: [Option]
-    let selectedValue: Int
-    let onSelect: (Int) -> Void
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Text(title).font(Theme.sectionFont)
-            HStack(spacing: 8) {
-                ForEach(options) { opt in
-                    SelectableButton(title: opt.label,
-                                     isSelected: opt.value == selectedValue) {
-                        onSelect(opt.value)
-                    }
-                }
-                Spacer(minLength: 0)
-            }
-        }
-        .padding(.vertical, 10)
-        .frame(maxWidth: .infinity, alignment: .leading)
     }
 }
 

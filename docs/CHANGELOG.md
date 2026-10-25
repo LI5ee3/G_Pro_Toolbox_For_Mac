@@ -4,6 +4,13 @@
 
 [ROADMAP](ROADMAP.md) 只维护当前范围、任务状态和按需执行原则。协作以用户最新明确要求和根目录 [AGENT.md](../AGENT.md) 为准。
 
+## 2026-10-25 无引用代码清理与现行说明修正
+
+- 删除没有代码引用的 `MonitorHardwareView`、`ToolboxGlassGroup`、`ButtonGroupSection`、四个 HDR 辅助方法及 `AppCoordinator.setValue`。保留实际使用的主机 HDR 检测与现有综合判定，不改变生产页面或设备控制逻辑。
+- 保留 TCP 包装、旧配置与登录项迁移、HUD 观察模型及明确约定的恢复入口；历史工作树、未提交内容、标签和现用 App 保持。
+- README 改用当前侧栏布局与既有生产 UI Preview 图；ARCHITECTURE 修正已完成的控制路由、同传输恢复及音量 endpoint 判断，历史交接和设计记录保持原适用范围。
+- 验证：移除符号的源码/测试引用核对、保留的 `hostSideHDR` 原方法比对、新增文档链接和差异检查通过；既有架构与 Preview 静态边界检查通过。沿用两项现有定向 Swift 测试，确认全部页面/菜单可用 fake 依赖布局，以及 HDR 映射一致，2 项通过；未新增测试或执行本机全量回归、安装与真机操作。
+
 ## 2026-10-25 文档整理
 
 - 将 ROADMAP 中的阶段更新、历史授权、初版审计及旧验收规划迁入本文，保留原始 SHA、测试结果、失败、未执行项和适用基线。

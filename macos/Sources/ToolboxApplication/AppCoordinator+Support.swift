@@ -152,10 +152,4 @@ extension AppCoordinator {
         }
     }
 
-    internal func setValue(_ key: String, _ value: String) {
-        self.publish { self.currentValues[key] = value }
-    }
-
-
-    /// 启动时自动连接上次设备；没记录就扫描内网（对应原版 _auto_connect_on_startup）。
 }
