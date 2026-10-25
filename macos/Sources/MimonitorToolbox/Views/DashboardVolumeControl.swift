@@ -15,7 +15,7 @@ struct DashboardVolumeControl: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: compact ? 10 : 16) {
+        VStack(alignment: .leading, spacing: compact ? 10 : 12) {
             HStack(alignment: .firstTextBaseline) {
                 Label("音量", systemImage: volumeState.dashboardMuted == true ? "speaker.slash" : "speaker.wave.2")
                     .font(.system(size: 14, weight: .semibold))

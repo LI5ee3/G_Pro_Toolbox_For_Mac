@@ -53,16 +53,9 @@ struct AutomaticTasksView: View {
                     .background(Theme.control.opacity(0.65), in: RoundedRectangle(cornerRadius: 10))
                 }
                 if presets.presetConfiguration.tasks.isEmpty {
-                    VStack(spacing: 12) {
-                        Image(systemName: "calendar.badge.clock")
-                            .font(.system(size: 30, weight: .light))
-                            .foregroundColor(Theme.accent)
-                        Text("还没有自动任务").font(.system(size: 16, weight: .semibold))
-                        Text("添加一个时段，自动切换到需要的预设。")
-                            .font(.system(size: 13)).foregroundColor(Theme.secondaryText)
-                    }
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 38)
+                    ContentUnavailableView("还没有自动任务", systemImage: "calendar.badge.clock",
+                                           description: Text("添加一个时段，自动切换到需要的预设。"))
+                        .frame(maxWidth: .infinity)
                 }
                 if !presets.presetConfiguration.tasks.isEmpty {
                     VStack(spacing: 0) {

@@ -19,11 +19,11 @@ struct RemoteView: View {
                                 dpadButton("向左", symbol: "chevron.left", key: "KEYCODE_DPAD_LEFT")
                                 Button { state.key("KEYCODE_DPAD_CENTER") } label: {
                                     Text("OK").font(.system(size: 16, weight: .semibold))
-                                        .frame(width: 52, height: 52)
                                 }
-                                .foregroundStyle(Theme.onAccent)
-                                .background(Theme.accent, in: Circle())
-                                .buttonStyle(ControlPressStyle())
+                                .buttonStyle(.borderedProminent)
+                                .buttonBorderShape(.circle)
+                                .controlSize(.large)
+                                .frame(width: 52, height: 52)
                                 .accessibilityLabel("确认")
                                 .help("确认当前选择")
                                 dpadButton("向右", symbol: "chevron.right", key: "KEYCODE_DPAD_RIGHT")

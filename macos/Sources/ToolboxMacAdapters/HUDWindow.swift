@@ -10,8 +10,7 @@ final class HUDModel: ObservableObject {
     @Published var value: String = ""
     @Published var operationPhase: HUDOperationPhase?
     @Published var showsCountdown: Bool = false
-    /// 倒计时起点与时长。进度条不存"当前进度"，而是每帧按这两个值现算 ——
-    /// 这样由显示链路驱动，跟屏幕刷新率同步，不会有定时器的台阶感。
+    /// 倒计时起点与时长，原生 ProgressView 根据时间范围自行更新。
     @Published var countdownStart: Date = .distantPast
     @Published var countdownDuration: TimeInterval = 1
 }
@@ -58,20 +57,13 @@ private struct HUDView: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .overlay(alignment: .bottom) {
             if model.showsCountdown {
-                // TimelineView(.animation) 由显示链路驱动，每帧回调一次并按屏幕刷新率
-                // （60/120Hz）重绘 —— 比定时器逐帧写值平滑得多。
-                // 只在倒计时期间才挂上，平时不占用刷新。
-                TimelineView(.animation) { ctx in
-                    let elapsed = ctx.date.timeIntervalSince(model.countdownStart)
-                    let remain = max(0, 1 - elapsed / max(model.countdownDuration, 0.01))
-                    ZStack(alignment: .leading) {
-                        Capsule().fill(.primary.opacity(0.12))
-                        Capsule()
-                            .fill(Color.accentColor)
-                            .frame(width: remain * barWidth)
-                    }
+                ProgressView(timerInterval: model.countdownStart...model.countdownStart.addingTimeInterval(max(model.countdownDuration, 0.01)),
+                             countsDown: true) {
+                    EmptyView()
+                } currentValueLabel: {
+                    EmptyView()
                 }
-                .frame(width: barWidth, height: 5)
+                .frame(width: barWidth)
                 .padding(.bottom, 16)
             }
         }
@@ -135,10 +127,7 @@ final class HUDWindow {
     /// 显示提示并开始倒计时，走完才真正下发。
     /// 重复调用会重置倒计时 —— 对应"松手后才生效"。
     ///
-    /// 这里只记录「起点 + 时长」，具体进度由界面里的 `TimelineView(.animation)` 每帧现算。
-    /// 曾经试过两种画法都不行：
-    ///   - `withAnimation`：在无边框 NSPanel 的 NSHostingView 里根本不驱动，条子纹丝不动
-    ///   - 30Hz 定时器逐帧写值：能动，但只有 24 个台阶，肉眼能看出跳跃
+    /// 这里只记录「起点 + 时长」，原生 ProgressView 自行绘制倒计时。
     func show(title: String, value: String, countdown seconds: TimeInterval) {
         guard operation.acceptsValueHint else { return }
         operation.showValueHint()

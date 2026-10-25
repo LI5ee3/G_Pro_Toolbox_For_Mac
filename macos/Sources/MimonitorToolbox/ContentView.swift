@@ -23,6 +23,7 @@ struct ContentView: View {
         case .presets: return "预设"
         case .autoTasks: return "自动任务"
         case .menuBar: return "菜单栏配置"
+        case .tools: return "显示器工具"
         default: return page.title
         }
     }
@@ -30,7 +31,7 @@ struct ContentView: View {
     private func navigationSection(_ title: String, pages: [Page]) -> some View {
         Section(title) {
             ForEach(pages) { page in
-                Label(name(page), systemImage: page.icon).tag(page)
+                Label(name(page), systemImage: page.icon).tag(page).listItemTint(Theme.accent)
             }
         }
     }
@@ -43,7 +44,12 @@ struct ContentView: View {
                 List(selection: Binding<Page?>(get: { selection }, set: { if let page = $0 { selection = page } })) {
                     navigationSection("显示器", pages: [.home, .picture, .game, .source, .light])
                     navigationSection("工作流", pages: [.presets, .autoTasks, .remote])
-                    navigationSection("应用", pages: [.tools, .menuBar])
+                    navigationSection("工具", pages: [.tools])
+                    Section("应用") {
+                        SettingsLink { Label("设置…", systemImage: "gearshape") }
+                            .buttonStyle(.plain)
+                            .listItemTint(Theme.accent)
+                    }
                 }
                 .listStyle(.sidebar).accessibilityLabel("功能导航")
                 sidebarDevice
@@ -56,15 +62,19 @@ struct ContentView: View {
                     ToolbarItem(placement: .principal) {
                         Text(name(selection)).font(.system(size: 14, weight: .semibold))
                     }
-                    ToolbarItemGroup(placement: .primaryAction) {
+                    .sharedBackgroundVisibility(.hidden)
+                    ToolbarItem(placement: .primaryAction) {
                         Label(connection.statusTitle, systemImage: connection.statusSymbol)
                             .font(.system(size: 12)).foregroundStyle(connection.statusColor)
                             .lineLimit(1).help(connection.statusText).labelStyle(.titleAndIcon)
+                    }
+                    .sharedBackgroundVisibility(.hidden)
+                    ToolbarItemGroup(placement: .primaryAction) {
                         Button { navigation.showsConnectionSettings = true } label: {
                             Label("连接设置", systemImage: "cable.connector")
-                        }.toolboxAction().labelStyle(.titleAndIcon).keyboardShortcut("k", modifiers: .command)
+                        }.labelStyle(.titleAndIcon).keyboardShortcut("k", modifiers: .command)
                         Button { showLogs = true } label: { Label("日志", systemImage: "text.alignleft") }
-                            .toolboxAction().labelStyle(.titleAndIcon)
+                            .labelStyle(.titleAndIcon)
                     }
                 }
         }

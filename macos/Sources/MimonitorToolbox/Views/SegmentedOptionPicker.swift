@@ -3,8 +3,9 @@ import SwiftUI
 import ToolboxDomain
 
 // Reused from YiHoooong/Mimonitor_Toolbox, Views/Components.swift (upstream 56fa67e8d990a2dd8d7ebe1b6865d3b18928d08d).
-// A fixed-width native control keeps the two app preference rows aligned.
+// Native selection shared by app preferences, display modes and video inputs.
 struct SegmentedOptionPicker: NSViewRepresentable {
+    @Environment(\.isEnabled) private var isEnabled
     let options: [Option]
     let selectedValue: Int
     /// 选项组用等宽；设置页的两段式控件用按内容分配，长标签才不会被截断。
@@ -21,8 +22,10 @@ struct SegmentedOptionPicker: NSViewRepresentable {
             target: context.coordinator,
             action: #selector(Coordinator.selectionChanged(_:))
         )
+        control.selectedSegmentBezelColor = Theme.selectedAccent
         control.segmentDistribution = distribution
         control.controlSize = controlSize
+        control.isEnabled = isEnabled
         control.setContentHuggingPriority(.defaultLow, for: .horizontal)
         control.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
         updateSelection(control)
@@ -31,8 +34,10 @@ struct SegmentedOptionPicker: NSViewRepresentable {
 
     func updateNSView(_ control: NSSegmentedControl, context: Context) {
         context.coordinator.parent = self
+        control.selectedSegmentBezelColor = Theme.selectedAccent
         control.segmentDistribution = distribution
         control.controlSize = controlSize
+        control.isEnabled = isEnabled
         if control.segmentCount != options.count {
             control.segmentCount = options.count
         }
@@ -56,7 +61,7 @@ struct SegmentedOptionPicker: NSViewRepresentable {
 
         @objc func selectionChanged(_ sender: NSSegmentedControl) {
             let index = sender.selectedSegment
-            guard index >= 0, index < parent.options.count else { return }
+            guard sender.isEnabled, index >= 0, index < parent.options.count else { return }
             parent.onSelect(parent.options[index].value)
         }
     }

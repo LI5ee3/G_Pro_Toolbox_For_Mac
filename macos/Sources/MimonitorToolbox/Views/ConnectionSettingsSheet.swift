@@ -103,17 +103,25 @@ struct ConnectionSettingsSheet: View {
             if connection.connectionStatus == .scanning {
                 HStack { ProgressView().controlSize(.small); Text("正在扫描，结果不会自动连接…") }.font(.system(size: 13))
             }
-            ForEach(connection.scannedDevices, id: \.self) { host in
-                Button {
-                    draft.host = host; draft.port = "5555"
-                } label: {
-                    HStack {
-                        Image(systemName: draft.host == host && draft.port == "5555" ? "checkmark.circle.fill" : "circle")
-                        Text(connection.scannedDeviceModels[host] ?? host)
-                        Spacer()
-                        Text("\(host):5555").foregroundStyle(Theme.secondaryText)
-                    }.font(.system(size: 13)).padding(10).contentShape(Rectangle())
-                }.buttonStyle(.plain)
+            if !connection.scannedDevices.isEmpty {
+                List(selection: Binding<String?>(
+                    get: { draft.port == "5555" && connection.scannedDevices.contains(draft.host) ? draft.host : nil },
+                    set: { host in
+                        guard let host, connection.scannedDevices.contains(host) else { return }
+                        draft.host = host; draft.port = "5555"
+                    }
+                )) {
+                    ForEach(connection.scannedDevices, id: \.self) { host in
+                        HStack {
+                            Text(connection.scannedDeviceModels[host] ?? host)
+                            Spacer()
+                            Text("\(host):5555").foregroundStyle(Theme.secondaryText)
+                        }.font(.system(size: 13)).tag(host)
+                    }
+                }
+                .listStyle(.inset).environment(\.defaultMinListRowHeight, 44)
+                .frame(height: min(CGFloat(connection.scannedDevices.count) * 44 + 8, 184))
+                .accessibilityLabel("扫描到的 TCP 设备")
             }
         }
     }
@@ -133,20 +141,33 @@ struct ConnectionSettingsSheet: View {
             }
             Text("连接 USB 数据线，并在显示器上允许 ADB 授权。枚举只读取列表，不切换当前控制通道。")
                 .font(.system(size: 13)).foregroundStyle(Theme.secondaryText)
-            ForEach(Array(connection.discoveredDevices.enumerated()), id: \.offset) { _, device in
-                Button { draft.usbSerial = device.serial } label: {
-                    HStack(spacing: 10) {
-                        Image(systemName: draft.usbSerial == device.serial && device.canValidateAsUSB ? "checkmark.circle.fill" : "circle")
-                        VStack(alignment: .leading, spacing: 4) {
-                            Text(device.serial).font(.system(size: 13, weight: .medium))
-                            Text("\(device.discoveryTransportText) · \(device.discoveryStateText)")
-                                .font(.system(size: 12)).foregroundStyle(Theme.secondaryText)
+            if !connection.discoveredDevices.isEmpty {
+                List(selection: Binding<String?>(
+                    get: { connection.discoveredDevices.contains { $0.serial == draft.usbSerial && $0.canValidateAsUSB } ? draft.usbSerial : nil },
+                    set: { serial in
+                        guard !connection.connectionInProgress, let serial,
+                              connection.discoveredDevices.contains(where: { $0.serial == serial && $0.canValidateAsUSB }) else { return }
+                        draft.usbSerial = serial
+                    }
+                )) {
+                    ForEach(Array(connection.discoveredDevices.enumerated()), id: \.offset) { _, device in
+                        HStack(spacing: 10) {
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text(device.serial).font(.system(size: 13, weight: .medium))
+                                Text("\(device.discoveryTransportText) · \(device.discoveryStateText)")
+                                    .font(.system(size: 12)).foregroundStyle(Theme.secondaryText)
+                            }
+                            Spacer()
+                            if device.transport == .unknown { Text("需验证 USB").font(.system(size: 12)) }
                         }
-                        Spacer()
-                        if device.transport == .unknown { Text("需验证 USB").font(.system(size: 12)) }
-                    }.padding(10).contentShape(Rectangle())
-                }.buttonStyle(.plain).disabled(!device.canValidateAsUSB || connection.connectionInProgress)
-                    .accessibilityAddTraits(draft.usbSerial == device.serial && device.canValidateAsUSB ? .isSelected : [])
+                        .tag(device.serial)
+                        .disabled(!device.canValidateAsUSB || connection.connectionInProgress)
+                        .selectionDisabled(!device.canValidateAsUSB || connection.connectionInProgress)
+                    }
+                }
+                .listStyle(.inset).environment(\.defaultMinListRowHeight, 52)
+                .frame(height: min(CGFloat(connection.discoveredDevices.count) * 52 + 8, 216))
+                .accessibilityLabel("发现的 ADB 设备")
             }
         }
     }

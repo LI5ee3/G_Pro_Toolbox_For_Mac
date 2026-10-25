@@ -4,30 +4,27 @@ import SwiftUI
 import AppKit
 
 // MARK: - 主题色
-//
-// 不要用 Color(nsColor: .controlColor) 这类语义色。它们的求值会走 macOS 的 CoreUI
-// 主题系统（CUICoreThemeRenderer::CopyMeasurementsForRendition），内部是字符串哈希
-// 查找；卡片和按钮一多，每次重绘要查几十上百次，足以让切页卡好几秒。
-// 用 Color.primary 叠加透明度代替：同样是浅灰/浅白，但完全由 SwiftUI 解析，开销可忽略。
+// Canvas and both app hosts share the same Graphite Teal resources.
 
 enum Theme {
-    static let accent = adaptive(NSColor(srgbRed: 0.19, green: 0.35, blue: 0.98, alpha: 1),
-                                 NSColor(srgbRed: 0.49, green: 0.63, blue: 1, alpha: 1))
-    static let onAccent = adaptive(.white, NSColor(srgbRed: 0.06, green: 0.09, blue: 0.17, alpha: 1))
-    static let success = adaptive(NSColor(srgbRed: 0.07, green: 0.43, blue: 0.27, alpha: 1),
-                                  NSColor(srgbRed: 0.38, green: 0.84, blue: 0.64, alpha: 1))
-    static let warning = adaptive(NSColor(srgbRed: 0.65, green: 0.28, blue: 0.07, alpha: 1),
-                                  NSColor(srgbRed: 1, green: 0.68, blue: 0.36, alpha: 1))
-    private static func adaptive(_ light: NSColor, _ dark: NSColor) -> Color {
+    static let accent = Color("AccentColor", bundle: .module)
+    // Native segment labels stay white, so their selected fill uses the darker anchor.
+    static let selectedAccent = NSColor(named: "AccentSelection", bundle: .module) ?? .controlAccentColor
+    // Status text keeps the established contrast on light and dark content surfaces.
+    static let success = statusColor(NSColor(srgbRed: 0.07, green: 0.43, blue: 0.27, alpha: 1),
+                                     NSColor(srgbRed: 0.38, green: 0.84, blue: 0.64, alpha: 1))
+    static let warning = statusColor(NSColor(srgbRed: 0.65, green: 0.28, blue: 0.07, alpha: 1),
+                                     NSColor(srgbRed: 1, green: 0.68, blue: 0.36, alpha: 1))
+    private static func statusColor(_ light: NSColor, _ dark: NSColor) -> Color {
         Color(nsColor: NSColor(name: nil) { appearance in
             appearance.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua ? dark : light
         })
     }
-    static let canvas = adaptive(NSColor(white: 0.96, alpha: 1), NSColor(white: 0.10, alpha: 1))
-    static let card = adaptive(.white, NSColor(white: 0.14, alpha: 1))
-    static let control = adaptive(NSColor(white: 0.94, alpha: 1), NSColor(white: 0.21, alpha: 1))
-    static let stroke = adaptive(NSColor(white: 0.78, alpha: 1), NSColor(white: 0.36, alpha: 1))
-    static let secondaryText = adaptive(NSColor(white: 0.38, alpha: 1), NSColor(white: 0.76, alpha: 1))
+    static let canvas = Color(nsColor: .windowBackgroundColor)
+    static let card = Color(nsColor: .controlBackgroundColor)
+    static let control = Color(nsColor: .controlColor)
+    static let stroke = Color(nsColor: .separatorColor)
+    static let secondaryText = Color.secondary
     static let sectionFont = Font.system(size: 14, weight: .semibold)
     static let parameterLabelWidth: CGFloat = 112
     static let controlRadius: CGFloat = 8
@@ -73,33 +70,12 @@ private struct ToolboxGlassSurface: ViewModifier {
     }
 }
 
-struct ToolboxActionStyle: ButtonStyle {
-    @Environment(\.isEnabled) private var isEnabled
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @Environment(\.colorSchemeContrast) private var contrast
-    @Environment(\.toolboxPreviewAccessibility) private var preview
-    func makeBody(configuration: Configuration) -> some View {
-        let reducedMotion = reduceMotion || preview.reduceMotion
-        let increasedContrast = contrast == .increased || preview.increasedContrast
-        configuration.label
-            .font(.system(size: 13, weight: .medium))
-            .padding(.horizontal, 12).padding(.vertical, 7)
-            .background(configuration.isPressed ? Theme.control : Theme.card,
-                        in: RoundedRectangle(cornerRadius: Theme.controlRadius))
-            .overlay(RoundedRectangle(cornerRadius: Theme.controlRadius)
-                .stroke(increasedContrast ? Color.primary.opacity(0.55) : Theme.stroke))
-            .opacity(isEnabled ? 1 : increasedContrast ? 0.7 : 0.5)
-            .scaleEffect(configuration.isPressed && !reducedMotion ? 0.98 : 1)
-            .animation(reducedMotion ? nil : .easeOut(duration: 0.14), value: configuration.isPressed)
-    }
-}
-
 private struct ToolboxActionModifier: ViewModifier {
     let prominent: Bool
     @ViewBuilder func body(content: Content) -> some View {
         if prominent {
             content.controlSize(.large).buttonStyle(.borderedProminent).tint(Theme.accent)
-        } else { content.buttonStyle(ToolboxActionStyle()) }
+        } else { content.buttonStyle(.bordered) }
     }
 }
 
@@ -109,19 +85,6 @@ extension View {
     }
     func toolboxAction(prominent: Bool = false) -> some View {
         modifier(ToolboxActionModifier(prominent: prominent))
-    }
-}
-
-/// A small, interruptible response shared by the screen controls and navigation.
-struct ControlPressStyle: ButtonStyle {
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @Environment(\.toolboxPreviewAccessibility) private var preview
-    func makeBody(configuration: Configuration) -> some View {
-        let reducedMotion = reduceMotion || preview.reduceMotion
-        configuration.label
-            .opacity(configuration.isPressed ? 0.76 : 1)
-            .scaleEffect(configuration.isPressed && !reducedMotion ? 0.98 : 1)
-            .animation(reducedMotion ? nil : .easeOut(duration: 0.16), value: configuration.isPressed)
     }
 }
 
@@ -162,66 +125,20 @@ extension View {
 // MARK: - 卡片容器
 
 struct SectionCard<Content: View>: View {
-    @Environment(\.colorSchemeContrast) private var contrast
-    @Environment(\.toolboxPreviewAccessibility) private var preview
     let title: String
     @ViewBuilder let content: Content
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
+        GroupBox {
+            content.frame(maxWidth: .infinity, alignment: .leading)
+        } label: {
             Text(title).font(Theme.sectionFont)
-            content
         }
-        .padding(16)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(Theme.card, in: RoundedRectangle(cornerRadius: Theme.sectionRadius))
-        .overlay(RoundedRectangle(cornerRadius: Theme.sectionRadius)
-            .stroke(contrast == .increased || preview.increasedContrast ? Color.primary.opacity(0.55) : Theme.stroke))
     }
 }
 
-// MARK: - 可选中按钮（对应 ToggleButton）
-
-struct SelectableButton: View {
-    @Environment(\.isEnabled) private var isEnabled
-    @Environment(\.colorSchemeContrast) private var contrast
-    @Environment(\.toolboxPreviewAccessibility) private var preview
-    let title: String
-    let isSelected: Bool
-    let action: () -> Void
-
-    var body: some View {
-        let increasedContrast = contrast == .increased || preview.increasedContrast
-        Button(action: action) {
-            HStack(spacing: 6) {
-                Image(systemName: "checkmark")
-                    .font(.system(size: 10, weight: .bold))
-                    .opacity(isSelected ? 1 : 0)
-                    .accessibilityHidden(true)
-                Text(title)
-            }
-                .font(.system(size: 13, weight: isSelected ? .semibold : .regular))
-                .frame(minWidth: 56)
-                .padding(.horizontal, 12)
-                .padding(.vertical, 7)
-                .foregroundStyle(.primary)
-                .background(isSelected ? Theme.accent.opacity(0.12) : Theme.control)
-                .background(Theme.card)
-                .clipShape(RoundedRectangle(cornerRadius: Theme.controlRadius))
-                .overlay(RoundedRectangle(cornerRadius: Theme.controlRadius)
-                    .stroke(increasedContrast ? Color.primary.opacity(0.65) : isSelected ? Theme.accent : Theme.stroke))
-                .opacity(isEnabled ? 1 : increasedContrast ? 0.7 : 0.5)
-        }
-        .buttonStyle(ControlPressStyle())
-        .accessibilityAddTraits(isSelected ? .isSelected : [])
-    }
-}
-
-// MARK: - 轻量滑条
-//
-// 不用 SwiftUI 的 Slider：它底层是 AppKit 的 NSSlider，每创建一个都要向 CoreUI
-// 主题系统解析 rendition（字符串哈希查找）。实测画面页 6 个滑条要 500ms，
-// 切页时肉眼可见地卡。自绘一个纯 SwiftUI 的滑条，创建开销可以忽略。
+// MARK: - 共享原生滑块
+// Keep the existing call-site contract; SwiftUI owns the track, thumb and interaction effects.
 
 struct FastSlider: View {
     @Binding var value: Double
@@ -229,54 +146,35 @@ struct FastSlider: View {
     let step: Double
     let onCommit: (Double) -> Void
 
-    private let trackHeight: CGFloat = 4
-    private let knobSize: CGFloat = 17
     @Environment(\.isEnabled) private var isEnabled
     @FocusState private var focused: Bool
+    @State private var isEditing = false
+
+    private var steppedValue: Binding<Double> {
+        Binding(get: { min(max(value, range.lowerBound), range.upperBound) }, set: { newValue in
+            guard isEnabled else { return }
+            let rounded = step > 0 ? (newValue / step).rounded() * step : newValue
+            let next = min(max(rounded, range.lowerBound), range.upperBound)
+            guard next != value else { return }
+            value = next
+            // Native keyboard/accessibility changes may arrive without a mouse editing session.
+            if !isEditing { onCommit(next) }
+        })
+    }
 
     var body: some View {
-        GeometryReader { geo in
-            let width = max(geo.size.width, 1)
-            let height = geo.size.height
-            let span = range.upperBound - range.lowerBound
-            let ratio = span > 0 ? (value - range.lowerBound) / span : 0
-            let clamped = min(max(ratio, 0), 1)
-            let knobX = clamped * (width - knobSize) + knobSize / 2
-
-            ZStack(alignment: .leading) {
-                Capsule()
-                    .fill(Color.primary.opacity(0.15))
-                    .frame(height: trackHeight)
-                Capsule()
-                    .fill(Color.accentColor)
-                    .frame(width: clamped * width, height: trackHeight)
-                Circle()
-                    .fill(Color.white)
-                    .frame(width: knobSize, height: knobSize)
-                    .shadow(color: .black.opacity(0.25), radius: 1.5, y: 0.5)
-                    .position(x: knobX, y: height / 2)
-            }
-            .frame(height: height)
-            // 整条轨道都要能接收拖拽，而不只是滑块本身
-            .contentShape(Rectangle())
-            .gesture(
-                DragGesture(minimumDistance: 0)
-                    .onChanged { g in
-                        focused = true
-                        let x = min(max(g.location.x, 0), width)
-                        var v = range.lowerBound + (x / width) * span
-                        if step > 0 { v = (v / step).rounded() * step }
-                        let clampedV = min(max(v, range.lowerBound), range.upperBound)
-                        if clampedV != value { value = clampedV }
-                    }
-                    .onEnded { _ in onCommit(value) }
-            )
-        }
-        .frame(height: 28)
-        .opacity(isEnabled ? 1 : 0.4)
+        // Explicitly omit ticks; integer steps must not add 100 marks to percentage controls.
+        Slider(value: steppedValue, in: range, label: { EmptyView() }, ticks: {}, onEditingChanged: { editing in
+            let wasEditing = isEditing
+            isEditing = editing
+            if wasEditing && !editing { onCommit(value) }
+        })
+        .labelsHidden()
+        .controlSize(.regular)
+        .frame(minHeight: 28)
         .allowsHitTesting(isEnabled)
-        .focusable(isEnabled, interactions: .edit)
         .focused($focused)
+        .focusEffectDisabled()
         .onKeyPress(keys: [.leftArrow, .rightArrow, .upArrow, .downArrow]) { press in
             guard isEnabled, press.modifiers.intersection([.command, .control, .option, .shift]).isEmpty else { return .ignored }
             let delta = step > 0 ? step : 1
@@ -288,7 +186,6 @@ struct FastSlider: View {
             }
             return .handled
         }
-        .accessibilityElement(children: .ignore)
         .accessibilityLabel("调节数值")
         .accessibilityValue(String(format: "%g", value))
         .accessibilityAdjustableAction { direction in

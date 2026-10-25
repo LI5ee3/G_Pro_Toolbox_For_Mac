@@ -1,11 +1,14 @@
 import ToolboxDomain
 import ToolboxApplication
 import SwiftUI
+import Observation
 
 /// Public host API. Hardware construction remains in ToolboxMacAdapters.
 @MainActor
+@Observable
 public final class ToolboxSession {
     package let state: AppCoordinator
+    public var settingsPane = ToolboxSettingsPane.general
     public init(coordinator: AppCoordinator) { self.state = coordinator }
     public func start() { state.start() }
     public func stop() { state.stop() }
@@ -13,16 +16,12 @@ public final class ToolboxSession {
         state.finishLogs(completion)
     }
     public var closeBehavior: String { state.closeBehavior }
-    public func showSettings() {
-        state.requestedPage = .tools
-        state.showMainWindow()
-    }
 }
 
 public enum ToolboxScreen: String, CaseIterable, Identifiable {
     case home, picture, game, source, light, presets, autoTasks, remote, tools, menuBar
     public var id: String { rawValue }
-    public var title: String { page.title }
+    public var title: String { self == .tools ? "显示器工具" : page.title }
     private var page: Page { Page(rawValue: rawValue)! }
     fileprivate var initialPage: Page { page }
 }
@@ -66,12 +65,30 @@ public struct ToolboxWindowContent: View {
     public init(session: ToolboxSession, screen: ToolboxScreen = .home) { self.session = session; self.screen = screen }
     public var body: some View {
         ContentView(initialPage: screen.initialPage).modifier(ToolboxEnvironment(actions: session.state))
-            .focusedSceneValue(\.toolboxSettingsAction, { session.showSettings() })
+            .environment(session)
     }
 }
 
 public struct ToolboxMenuBarContent: View {
     private let session: ToolboxSession
     public init(session: ToolboxSession) { self.session = session }
-    public var body: some View { MenuBarPanel().modifier(ToolboxEnvironment(actions: session.state)) }
+    public var body: some View {
+        MenuBarPanel().modifier(ToolboxEnvironment(actions: session.state)).environment(session)
+    }
+}
+
+/// The native Settings scene and Canvas use the same views and the host's existing session.
+public struct ToolboxSettingsContent: View {
+    private let session: ToolboxSession
+    @Environment(\.scenePhase) private var scenePhase
+    public init(session: ToolboxSession) { self.session = session }
+    public var body: some View {
+        AppSettingsView().modifier(ToolboxEnvironment(actions: session.state)).environment(session)
+            .preferredColorScheme(session.state.isSimulation
+                ? (session.state.settings.theme == "light" ? .light
+                   : session.state.settings.theme == "dark" ? .dark : nil) : nil)
+            .onChange(of: scenePhase) { _, phase in
+                if phase == .active { session.state.refreshSystemStatus() }
+            }
+    }
 }

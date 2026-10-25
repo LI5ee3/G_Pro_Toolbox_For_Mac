@@ -20,6 +20,12 @@
 - 不为假设场景新增通用框架、抽象层、状态机、重试层、去重层或额外配置。
 - Review 聚焦实际正确性和本次改动的影响，不把每个可优化点转成后续任务。
 
+## UI 修改与预览（用户约束）
+
+- UI 修改使用当前项目源码，只在 Xcode Canvas 的 `#Preview` 中预览和验看。
+- 不另建或复制预览工程，不生成、打包、启动独立 Preview App，也不制作网页预览来代替 Canvas；不要直接 Run `ToolboxPreviews` scheme，UI 预览的构建与刷新由 Canvas 管理。
+- 现有 `ToolboxPreviews` scheme、`ToolboxPreviewHost` / `ToolboxPreviewSupport` 源码及 Canvas 自动生成的必要宿主与缓存保留，作为隔离的 Canvas 上下文；不使用真实 App 代替预览。
+
 ## 仅作必要测试
 
 - 沿用已有测试和默认 CI，不设新增测试数量目标。

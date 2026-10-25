@@ -8,6 +8,151 @@ import ToolboxDomain
 
 @MainActor
 final class PreviewRenderingTests: XCTestCase {
+    func testNativeSettingsPanesShareTheSessionWithoutQueryingTheDisplay() async {
+        let _ = NSApplication.shared
+        let runtime = PreviewRuntime(), state = runtime.makeState()
+        let session = ToolboxSession(coordinator: state)
+        defer { state.stop() }
+        let originalSession = state.adb.session().sessionID
+        let originalCommands = runtime.display.recordedCommands
+        let originalEffects = runtime.effects
+        for pane in ToolboxSettingsPane.allCases {
+            session.settingsPane = pane
+            let host = NSHostingView(rootView: ToolboxSettingsContent(session: session))
+            let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 680, height: 560),
+                                  styleMask: [.titled, .closable], backing: .buffered, defer: false)
+            window.isReleasedWhenClosed = false
+            window.contentView = host
+            defer { window.close() }
+            window.makeKeyAndOrderFront(nil)
+            host.layoutSubtreeIfNeeded()
+            await state.waitForPendingWork()
+            XCTAssertGreaterThan(host.fittingSize.width, 0, pane.rawValue)
+            XCTAssertEqual(session.settingsPane, pane)
+            XCTAssertEqual(state.adb.session().sessionID, originalSession)
+            XCTAssertEqual(runtime.display.recordedCommands, originalCommands, pane.rawValue)
+            XCTAssertEqual(runtime.effects, originalEffects, pane.rawValue)
+            XCTAssertEqual(runtime.hotkeyDriver.starts, 0)
+        }
+    }
+
+    func testNativeCandidateListOnlyEditsTheConnectionDraft() async throws {
+        let _ = NSApplication.shared
+        let runtime = PreviewRuntime(), state = runtime.makeState()
+        defer { state.stop() }
+        state.connection.scannedDevices = ["198.51.100.42", "203.0.113.7"]
+        let session = state.adb.session(), commands = runtime.display.recordedCommands
+        let originalHost = state.connection.ipInput
+        let content = ConnectionSettingsSheet(connection: state.connection)
+            .environment(\.toolboxActions, state).environment(state.connection).environment(state.logs)
+        let host = NSHostingView(rootView: content)
+        let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 620, height: 620),
+                              styleMask: [.titled], backing: .buffered, defer: false)
+        window.isReleasedWhenClosed = false
+        window.contentView = host
+        defer { window.close() }
+        window.makeKeyAndOrderFront(nil)
+        host.layoutSubtreeIfNeeded()
+        func descendants<T: NSView>(_ view: NSView, of type: T.Type) -> [T] {
+            (view as? T).map { [$0] } ?? view.subviews.flatMap { descendants($0, of: type) }
+        }
+        let table = try XCTUnwrap(descendants(host, of: NSTableView.self).first)
+        XCTAssertEqual(table.numberOfRows, 2)
+        table.selectRowIndexes(IndexSet(integer: 1), byExtendingSelection: false)
+        await Task.yield()
+        host.layoutSubtreeIfNeeded()
+        let input = try XCTUnwrap(descendants(host, of: NSTextField.self).first {
+            $0.placeholderString == "显示器地址"
+        })
+        XCTAssertEqual(input.stringValue, "203.0.113.7")
+        XCTAssertEqual(state.connection.ipInput, originalHost)
+        XCTAssertEqual(state.adb.session().sessionID, session.sessionID)
+        XCTAssertEqual(runtime.display.recordedCommands, commands)
+    }
+
+    func testNativeDisplaySegmentsKeepDomainValuesUnknownAndDisabledStates() throws {
+        let _ = NSApplication.shared
+        let modes = [14, 9, 10].map { Option(label: RegisterMap.modeNames[$0] ?? "", value: $0) }
+        for options in [modes, OptionLists.source] {
+            var value = options[0].value
+            var enabled = true
+            var commits: [Int] = []
+            func content() -> some View {
+                SegmentedOptionPicker(options: options, selectedValue: value, controlSize: .regular) {
+                    value = $0; commits.append($0)
+                }.disabled(!enabled)
+            }
+            func segmented(in view: NSView) -> NSSegmentedControl? {
+                if let control = view as? NSSegmentedControl { return control }
+                return view.subviews.lazy.compactMap { segmented(in: $0) }.first
+            }
+            let host = NSHostingView(rootView: content())
+            host.frame = NSRect(x: 0, y: 0, width: 400, height: 40)
+            host.layoutSubtreeIfNeeded()
+            let control = try XCTUnwrap(segmented(in: host))
+            XCTAssertEqual(control.selectedSegment, 0)
+            control.selectedSegment = 1
+            control.sendAction(control.action!, to: control.target)
+            XCTAssertEqual(commits, [options[1].value])
+            value = -1; host.rootView = content(); host.layoutSubtreeIfNeeded()
+            XCTAssertEqual(control.selectedSegment, -1)
+            XCTAssertEqual(commits.count, 1)
+            value = options.last!.value; host.rootView = content(); host.layoutSubtreeIfNeeded()
+            XCTAssertEqual(control.selectedSegment, options.count - 1)
+            XCTAssertEqual(commits.count, 1)
+            enabled = false; host.rootView = content(); host.layoutSubtreeIfNeeded()
+            XCTAssertFalse(control.isEnabled)
+            control.selectedSegment = 0
+            control.sendAction(control.action!, to: control.target)
+            XCTAssertEqual(commits.count, 1)
+            XCTAssertEqual(value, options.last!.value)
+        }
+    }
+
+    func testNativeSliderDragKeepsDraftSteppedAndCommitsOnlyOnRelease() throws {
+        let _ = NSApplication.shared
+        var value = 45.0
+        var commits: [Double] = []
+        var drafts: [(value: Double, commits: Int)] = []
+        let host = NSHostingView(rootView: FastSlider(value: Binding(get: { value }, set: {
+            value = $0
+            drafts.append(($0, commits.count))
+        }), range: 0...100, step: 1, onCommit: { commits.append($0) }).padding(8))
+        let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 400, height: 60),
+                              styleMask: [.titled], backing: .buffered, defer: false)
+        window.isReleasedWhenClosed = false
+        window.contentView = host
+        defer { window.close() }
+        window.makeKeyAndOrderFront(nil)
+        host.layoutSubtreeIfNeeded()
+        let start = host.convert(NSPoint(x: 8 + 384 * 0.45, y: host.bounds.midY), to: nil)
+        let middle = host.convert(NSPoint(x: 8 + 384 * 0.6, y: host.bounds.midY), to: nil)
+        let end = host.convert(NSPoint(x: 8 + 384 * 0.75, y: host.bounds.midY), to: nil)
+        func mouse(_ type: NSEvent.EventType, _ location: NSPoint, _ offset: TimeInterval) throws -> NSEvent {
+            try XCTUnwrap(NSEvent.mouseEvent(with: type, location: location, modifierFlags: [],
+                timestamp: ProcessInfo.processInfo.systemUptime + offset, windowNumber: window.windowNumber,
+                context: nil, eventNumber: 0, clickCount: 1, pressure: type == .leftMouseUp ? 0 : 1))
+        }
+        let down = try mouse(.leftMouseDown, start, 0)
+        let drag1 = try mouse(.leftMouseDragged, middle, 0.01)
+        let drag2 = try mouse(.leftMouseDragged, end, 0.02)
+        let up = try mouse(.leftMouseUp, end, 0.03)
+        // Feed the native control's tracking loop, including its release, inside this test window.
+        for event in [drag1, drag2, up] { NSApp.postEvent(event, atStart: false) }
+        window.sendEvent(down)
+        // SwiftUI can handle tracking without a nested AppKit event loop.
+        while let event = NSApp.nextEvent(matching: [.leftMouseDragged, .leftMouseUp],
+                                          until: Date(), inMode: .default, dequeue: true) {
+            window.sendEvent(event)
+        }
+        host.layoutSubtreeIfNeeded()
+        XCTAssertGreaterThan(drafts.count, 0)
+        XCTAssertTrue(drafts.allSatisfy { $0.value == $0.value.rounded() && $0.commits == 0 })
+        XCTAssertGreaterThan(value, 60)
+        XCTAssertLessThan(value, 90)
+        XCTAssertEqual(commits, [value])
+    }
+
     func testFocusedSliderKeysCommitOnceClampAndIgnoreDisabledOrExternalUpdates() async throws {
         let _ = NSApplication.shared
         let runtime = PreviewRuntime(), state = runtime.makeState()
@@ -99,8 +244,7 @@ final class PreviewRenderingTests: XCTestCase {
         let runtime = PreviewRuntime(), state = runtime.makeState()
         var controlsEnabled = true
         func content() -> some View {
-            ToolsView().environment(\.toolboxActions, state).environment(state.connection)
-                .environment(state.tools).environment(state.keyboard).environment(state.settings)
+            GeneralSettingsView().environment(\.toolboxActions, state).environment(state.settings)
                 .disabled(!controlsEnabled)
         }
         func segments(in view: NSView) -> [NSSegmentedControl] {

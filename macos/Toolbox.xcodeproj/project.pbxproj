@@ -107,6 +107,7 @@
 				);
 				"GENERATE_INFOPLIST_FILE" = "NO";
 				"ENABLE_PREVIEWS" = "YES";
+				"ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME" = "AccentColor";
 				"ENABLE_HARDENED_RUNTIME" = "NO";
 				"INFOPLIST_FILE" = "Config/App-Info.plist";
 				"CODE_SIGN_ENTITLEMENTS" = "Config/App.entitlements";
@@ -140,6 +141,7 @@
 				);
 				"GENERATE_INFOPLIST_FILE" = "NO";
 				"ENABLE_PREVIEWS" = "YES";
+				"ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME" = "AccentColor";
 				"ENABLE_HARDENED_RUNTIME" = "YES";
 				"INFOPLIST_FILE" = "Config/App-Info.plist";
 				"CODE_SIGN_ENTITLEMENTS" = "Config/App.entitlements";
@@ -163,6 +165,7 @@
 			"buildConfigurationList" = "9FEC1FF0F09E9BC5D885BDEA";
 			"buildPhases" = (
 				"2FE0ABD5EDE4D0DACDC44BEC",
+				"C9AAF2E79661393C82DDE395",
 				"F126A0F6DEEEFCAE3C58478E",
 				"EE4E687BE1DE1E9CD23A04E1",
 			);
@@ -244,6 +247,7 @@
 				);
 				"GENERATE_INFOPLIST_FILE" = "YES";
 				"ENABLE_PREVIEWS" = "YES";
+				"ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME" = "AccentColor";
 				"ENABLE_HARDENED_RUNTIME" = "NO";
 				"INFOPLIST_KEY_CFBundleDisplayName" = "ToolBox 安全预览";
 				"INFOPLIST_KEY_LSApplicationCategoryType" = "public.app-category.developer-tools";
@@ -277,6 +281,7 @@
 				);
 				"GENERATE_INFOPLIST_FILE" = "YES";
 				"ENABLE_PREVIEWS" = "YES";
+				"ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME" = "AccentColor";
 				"ENABLE_HARDENED_RUNTIME" = "NO";
 				"INFOPLIST_KEY_CFBundleDisplayName" = "ToolBox 安全预览";
 				"INFOPLIST_KEY_LSApplicationCategoryType" = "public.app-category.developer-tools";
@@ -300,6 +305,7 @@
 			"buildConfigurationList" = "ED9668041FC53187EC6B93EC";
 			"buildPhases" = (
 				"24E81729B25884C73FFDAB96",
+				"9BE329988C61DFEDC8651BD4",
 				"60F54FCECDC5B39E446A1C61",
 			);
 			"buildRules" = (
@@ -313,6 +319,36 @@
 			"productName" = "ToolboxPreviewHost";
 			"productReference" = "6EEC2461BF41DD8C5313DF04";
 			"productType" = "com.apple.product-type.application";
+		};
+		"AA1744C6036A80A38AB665D5" = {
+			"isa" = "PBXFileReference";
+			"lastKnownFileType" = "folder.assetcatalog";
+			"path" = "Sources/MimonitorToolbox/Resources/Assets.xcassets";
+			"sourceTree" = "<group>";
+		};
+		"A2E20F898D0ABE8CB2742663" = {
+			"isa" = "PBXBuildFile";
+			"fileRef" = "AA1744C6036A80A38AB665D5";
+		};
+		"C5588B7C083F0A45A33E0D36" = {
+			"isa" = "PBXBuildFile";
+			"fileRef" = "AA1744C6036A80A38AB665D5";
+		};
+		"C9AAF2E79661393C82DDE395" = {
+			"isa" = "PBXResourcesBuildPhase";
+			"buildActionMask" = 2147483647;
+			"files" = (
+				"A2E20F898D0ABE8CB2742663",
+			);
+			"runOnlyForDeploymentPostprocessing" = 0;
+		};
+		"9BE329988C61DFEDC8651BD4" = {
+			"isa" = "PBXResourcesBuildPhase";
+			"buildActionMask" = 2147483647;
+			"files" = (
+				"C5588B7C083F0A45A33E0D36",
+			);
+			"runOnlyForDeploymentPostprocessing" = 0;
 		};
 		"4EDC8BFAFC6BD936B849F38C" = {
 			"isa" = "PBXGroup";
@@ -363,6 +399,7 @@
 				"9F1C542B10A779EB6C6C5E71",
 				"A67D62E8DB1DC8FBCDAF9B63",
 				"CA4AE2466BB917951E199C3D",
+				"AA1744C6036A80A38AB665D5",
 				"4EDC8BFAFC6BD936B849F38C",
 			);
 			"sourceTree" = "<group>";

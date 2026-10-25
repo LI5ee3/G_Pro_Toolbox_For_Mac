@@ -6,6 +6,8 @@ import MimonitorPresetCore
 
 /// Content of the existing MenuBarExtra; uses its shared session and user configuration.
 struct MenuBarPanel: View {
+    @Environment(ToolboxSession.self) private var session
+    @Environment(\.openSettings) private var openSettings
     @ToolboxActions var state
     @Environment(ConnectionModel.self) private var connection
     @Environment(PresetsModel.self) private var presets
@@ -42,26 +44,21 @@ struct MenuBarPanel: View {
                 }
                 .padding(.horizontal, 14).padding(.vertical, 12)
                 .frame(maxWidth: .infinity, alignment: .leading)
-                .background {
-                    GeometryReader { geometry in
-                        Color.clear.preference(key: MenuBarContentHeightKey.self, value: geometry.size.height)
-                    }
+                .onGeometryChange(for: CGFloat.self, of: { $0.size.height.rounded(.up) }) { height in
+                    if height > 0 && height != contentHeight { contentHeight = height }
                 }
             }
             .frame(height: MenuBarPanelLayout.scrollHeight(contentHeight: contentHeight))
-            .onPreferenceChange(MenuBarContentHeightKey.self) { height in
-                let measured = height.rounded(.up)
-                if measured > 0 && measured != contentHeight { contentHeight = measured }
-            }
             Divider()
             HStack {
                 Button("打开主窗口") { showMainWindow() }.toolboxAction()
                 Spacer()
                 Menu("更多") {
                     Button("连接设置…") { navigation.showsConnectionSettings = true; showMainWindow() }
-                    Button("菜单栏配置…") { state.requestedPage = .menuBar; showMainWindow() }
+                    Button("菜单栏配置…") { session.settingsPane = .menuBar; openSettings() }
                     Button("预设管理…") { state.requestedPage = .presets; showMainWindow() }
-                    Button("工具与设置…") { state.requestedPage = .tools; showMainWindow() }
+                    Button("显示器工具…") { state.requestedPage = .tools; showMainWindow() }
+                    SettingsLink()
                     Divider()
                     if connection.isConnected || connection.connectionInProgress {
                         Button(connection.connectionInProgress ? "取消连接 / 扫描" : "断开当前连接") { state.disconnectAdb() }
@@ -83,14 +80,7 @@ struct MenuBarPanel: View {
     }
 }
 
-private struct MenuBarContentHeightKey: PreferenceKey {
-    static var defaultValue: CGFloat = 0
-    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
-        value = max(value, nextValue())
-    }
-}
-
-/// Native segmented selection, matching the close-behavior control in ToolsView.
+/// Native segmented selection, matching the close-behavior control in app settings.
 private struct MenuBarPresetPicker: View {
     @ToolboxActions var state
     @Environment(ConnectionModel.self) private var connection
@@ -215,9 +205,7 @@ private struct MenuBarPanelRow: View {
                         .font(.callout.monospacedDigit())
                         .foregroundColor(.primary)
                 }
-                // 用自绘的 FastSlider 而不是系统 Slider：
-                // 后者底层是 NSSlider，每次创建都要向 CoreUI 解析主题 rendition，
-                // 正是之前画面页切页卡 1.6 秒的根因（见 README 性能那节）。
+                // 与参数页共用原生滑块，仍只在松手时提交到原菜单动作。
                 FastSlider(
                     value: Binding(
                         get: { Double(dragging ?? current) },

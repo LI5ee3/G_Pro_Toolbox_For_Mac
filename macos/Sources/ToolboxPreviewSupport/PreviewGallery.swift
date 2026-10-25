@@ -6,22 +6,28 @@ import MimonitorToolbox
 import AppKit
 
 @MainActor @Observable
-private final class PreviewSelection {
-    var scenario = PreviewRuntime.Scenario.connected
+public final class ToolboxPreviewSelection {
+    var scenario = PreviewRuntime.Scenario.connected {
+        didSet { if scenario != oldValue { fixture = PreviewFixture(scenario: scenario) } }
+    }
     var screen = ToolboxScreen.home
     var colorScheme = ColorScheme.light
     var accessibility = ToolboxPreviewAccessibility()
     var windowSize = "默认"
+    fileprivate var fixture = PreviewFixture(scenario: .connected)
+    public init() {}
 }
 
 /// This module has no dependency on ToolboxMacAdapters and cannot launch the live runtime.
 public struct ToolboxPreviewGallery: View {
-    @State private var selection = PreviewSelection()
-    public init() {}
+    @State private var selection: ToolboxPreviewSelection
+    public init(selection: ToolboxPreviewSelection? = nil) {
+        _selection = State(initialValue: selection ?? ToolboxPreviewSelection())
+    }
     public var body: some View {
         VStack(spacing: 0) {
             @Bindable var selection = selection
-            PreviewSurface(scenario: selection.scenario, screen: selection.screen)
+            PreviewSurface(fixture: selection.fixture, screen: selection.screen)
                 .id(selection.scenario.rawValue + selection.screen.rawValue)
                 .environment(\.toolboxPreviewAccessibility, selection.accessibility)
             Divider()
@@ -77,13 +83,9 @@ private final class PreviewFixture {
 }
 
 private struct PreviewSurface: View {
+    let fixture: PreviewFixture
     let screen: ToolboxScreen
     @State private var showMenuBar = false
-    @State private var fixture: PreviewFixture
-    init(scenario: PreviewRuntime.Scenario, screen: ToolboxScreen) {
-        self.screen = screen
-        _fixture = State(initialValue: PreviewFixture(scenario: scenario))
-    }
     var body: some View {
         let session = fixture.session
         VStack(spacing: 0) {
@@ -104,6 +106,42 @@ private struct PreviewSurface: View {
     }
 }
 
+/// The safe host's Settings scene shares the gallery's current in-memory session.
+public struct ToolboxPreviewSettingsContent: View {
+    private let selection: ToolboxPreviewSelection
+    public init(selection: ToolboxPreviewSelection) { self.selection = selection }
+    public var body: some View {
+        ToolboxSettingsContent(session: selection.fixture.session)
+    }
+}
+
+private struct SettingsCanvasPreview: View {
+    private let pane: ToolboxSettingsPane
+    @State private var selection: ToolboxPreviewSelection
+    init(pane: ToolboxSettingsPane = .general) {
+        self.pane = pane
+        let selection = ToolboxPreviewSelection()
+        selection.fixture.session.settingsPane = pane
+        _selection = State(initialValue: selection)
+    }
+    var body: some View {
+        ToolboxPreviewSettingsContent(selection: selection)
+            .onAppear { selection.fixture.session.settingsPane = pane }
+    }
+}
+
 #Preview("安全交互画廊") {
     ToolboxPreviewGallery()
+}
+
+#Preview("应用设置 · 原生") {
+    SettingsCanvasPreview().id(ToolboxSettingsPane.general)
+}
+
+#Preview("键盘控制 · 原生") {
+    SettingsCanvasPreview(pane: .keyboard).id(ToolboxSettingsPane.keyboard)
+}
+
+#Preview("菜单栏设置 · 原生") {
+    SettingsCanvasPreview(pane: .menuBar).id(ToolboxSettingsPane.menuBar)
 }

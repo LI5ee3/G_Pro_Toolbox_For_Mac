@@ -6,6 +6,8 @@ Redmi G Pro 27U / 32U 显示器的原生 macOS 控制应用，使用 SwiftUI、A
 
 当前界面采用「控制优先的原生工作区」布局：首页集中控制音量、背光和画面模式，其余功能通过分组侧栏进入；窗口工具栏提供连接设置和日志入口。
 
+界面使用「石墨青」配色、系统原生滑块与分段控件。应用偏好通过“设置…”（⌘,）打开，分为通用、键盘控制和菜单栏；保活、设备记忆与调试操作位于“显示器工具”。
+
 ## 功能
 
 - **ADB 键盘音量控制**：音量加减与静音通过当前 USB/TCP ADB 会话操作显示器，保留步长、原生 OSD 及默认音频输出限制。
@@ -16,7 +18,9 @@ Redmi G Pro 27U / 32U 显示器的原生 macOS 控制应用，使用 SwiftUI、A
 - **所选传输恢复**：Mac 唤醒后检查实际连接并在所选 USB/TCP 传输内恢复，遵守显式断开抑制，不自动跨传输切换。
 - **AdbGuardian 部署与回读验证**：安装显示器端保活组件后确认实际运行、端口和权限状态。
 
-<img src="docs/design/S3-03/home-light.jpg" width="700" alt="当前生产界面的安全 Preview：控制台">
+<img src="docs/design/2026-10-25/console-light.png" width="700" alt="石墨青控制台的 Xcode Canvas 安全预览">
+
+截图为当前源码在 Xcode Canvas 中的内存模拟状态；本轮更新源码与文档，尚未替换已安装的正式 App。
 
 更多截图、配置和实测范围见 [Mac 使用与开发说明](macos/README.md)。
 
@@ -43,7 +47,7 @@ PR #4 已合并；源码 `839186f` 的候选 `0.1.0 (20261024.1)` 曾完成真�
 
 ## 从源码构建
 
-使用 macOS 27 与 Xcode 27.1，在 `macos/Toolbox.xcodeproj` 选择 `ToolboxApp`（真实应用）或 `ToolboxPreviews`（安全预览）。详细隔离规则见 [开发说明](macos/README.md)。
+使用 macOS 27 与 Xcode 27.1，打开 `macos/Toolbox.xcodeproj`。构建真实应用选择 `ToolboxApp`；UI 验看选择 `ToolboxPreviews`，打开 `Sources/ToolboxPreviewSupport/PreviewGallery.swift`，使用 Xcode Canvas 的 `#Preview`，不要直接 Run 预览 scheme。详细隔离规则见 [开发说明](macos/README.md)。
 
 命令行入口继续可用，在仓库根目录运行：
 

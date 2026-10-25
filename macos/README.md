@@ -59,9 +59,11 @@ Redmi G Pro 27U / 32U 显示器的原生 macOS 控制工具，使用 SwiftUI、A
 | --- | --- |
 | USB 等待授权 / 离线 | 在显示器允许 ADB；检查数据线和显示器状态，再在“连接设置”刷新设备并重新连接目标。枚举结果不能代替连接验证。 |
 | TCP 连接失败 | 核对填写的设备地址/端口，用“诊断填写地址”查看日志；检查设备 ADB、网络互通及系统授权。旧 server 的受控处理条件见 [首次使用注意](#首次使用注意)，不要每次失败就重启 server。 |
-| 需要检查本地网络授权 | 在“工具与设置”点击“打开隐私设置”，进入“隐私与安全”后选择“本地网络”检查当前 App 开关。连接失败本身不能证明权限被拒绝。 |
+| 需要检查本地网络授权 | 在“设置…”→“通用”点击“打开隐私设置”，进入“隐私与安全”后选择“本地网络”检查当前 App 开关。连接失败本身不能证明权限被拒绝。 |
 
-外部 Terminal 位于“工具与设置”→“高级工具”→展开“显示器系统、应用安装与 ADB 调试”。“打开 ADB 命令行”只配置内嵌 adb 的 PATH 和 Mac 侧 server 端口，可离线使用，不绑定设备；“进入 ADB Shell”需已连接，并固定打开时的目标 serial/地址。已打开的 Shell 不随 App 后续切换或断开自动改目标/关闭；Terminal 自动化授权被拒绝时使用同处的“自动化权限设置”处理。
+外部 Terminal 位于“显示器工具”→“高级工具”→展开“显示器系统、应用安装与 ADB 调试”。“打开 ADB 命令行”只配置内嵌 adb 的 PATH 和 Mac 侧 server 端口，可离线使用，不绑定设备；“进入 ADB Shell”需已连接，并固定打开时的目标 serial/地址。已打开的 Shell 不随 App 后续切换或断开自动改目标/关闭；Terminal 自动化授权被拒绝时使用同处的“自动化权限设置”处理。
+
+应用菜单或侧栏的“设置…”（⌘,）打开原生独立设置窗口，包含通用、键盘控制、菜单栏三个标签。首页键盘入口及菜单栏“菜单栏配置…”直接打开对应标签；显示器工具继续留在主窗口，设置窗口复用原有配置与操作接口。
 
 ## Xcode 开发与安全 Preview
 
@@ -72,15 +74,16 @@ Redmi G Pro 27U / 32U 显示器的原生 macOS 控制工具，使用 SwiftUI、A
 - **ToolboxApp**：真实应用；运行会启动现有 ADB 连接、快捷键和后台任务。
 - **ToolboxPreviews**：隔离的 App Target；不链接 `ToolboxMacAdapters` / `ToolboxProcessExecution`，不包含 adb/JAR/APK。
 
-选 **ToolboxPreviews**，打开 `Sources/ToolboxPreviewSupport/PreviewGallery.swift`，刷新 Canvas。也可以直接运行该 scheme 得到独立预览窗口。顶部选择页面与场景，底部按钮推进虚拟时间；所有权限、文件、终端、登录项和设备动作均为内存模拟。不要用真实 App scheme 预览：生产组合根会检测并拒绝 Xcode Preview 运行上下文。
+选 **ToolboxPreviews**，打开 `Sources/ToolboxPreviewSupport/PreviewGallery.swift`，仅在 Xcode Canvas 中刷新、修改和验看 UI。不要直接 Run 该 scheme，也不另建、复制、打包或启动独立 Preview App、预览工程或网页。页面、场景、外观与虚拟时间均在 Canvas 的既有画廊中选择；所有权限、文件、终端、登录项和设备动作均为内存模拟。不要用真实 App scheme 预览：生产组合根会检测并拒绝 Xcode Preview 运行上下文。
 
-Preview 窗口显式关闭恢复行为，避免窗口位置/尺寸写入用户偏好。依赖/源码与二进制/资源检查仍须配合实际交互和偏好前后比对，不能只靠内存偏好实现推断整个宿主无写入。
+同文件的“应用设置 · 原生”“键盘控制 · 原生”“菜单栏设置 · 原生”三个 Canvas 预览使用实际设置视图和内存配置。安全宿主只作为 Canvas 的隔离上下文保留；Canvas 中不申请真实权限、不改正式 App 配置。
+
+UI 预览的构建与刷新由 Canvas 管理，不另外创建预览构建目录。既有依赖/源码与二进制/资源检查继续保留；下列为按任务需要使用的工程检查及生产构建入口，不是 UI 验看的默认步骤。
 
 ```sh
 swift test
 python3 scripts/validate_architecture.py
 python3 scripts/validate_preview_boundary.py
-xcodebuild -project Toolbox.xcodeproj -scheme ToolboxPreviews -configuration Debug -destination 'platform=macOS,arch=arm64' build
 xcodebuild -project Toolbox.xcodeproj -scheme ToolboxApp -configuration Release -destination 'platform=macOS,arch=arm64' build
 ```
 
@@ -289,7 +292,8 @@ macos/
 
 **界面**
 
-- **不要用 SwiftUI 的 `Slider`**：底层 `NSSlider` 每次创建都要向 CoreUI 解析主题 rendition，6 个滑条就是 500ms。用自绘的 `FastSlider`。`Color(nsColor:)` 这类 AppKit 语义色同理，改用 `Theme.card` / `Theme.control`。
+- **滑块使用系统原生样式（2026-10-25 用户要求）**：共享 `FastSlider` 保留调用接口，内部使用 SwiftUI `Slider`；轨道、滑块及按下反馈交由系统绘制。局部 Binding 保留原范围和离散步长，`ticks: {}` 不生成密集刻度，拖动只更新草稿、松手调用原提交动作；键盘、辅助功能与禁用门控继续保留。早期自绘方案的 CoreUI 性能记录属于历史依据，不能据此断言当前系统控件的性能；后续只针对实际回退测量。
+- **UI 复用系统控件（2026-10-25）**：普通按钮使用 `.bordered`，主动作使用 `.borderedProminent`；模式与信号源复用现有 `NSSegmentedControl` 包装，候选设备使用原生单选 `List`，控制台分组使用 `GroupBox`，空列表使用 `ContentUnavailableView`。窗口/控件背景、分隔线、次级文字与强调色由系统提供；连接成功、警告文字保留既有浅深色对比度。HUD 倒计时使用 `ProgressView(timerInterval:)`，菜单高度通过 `onGeometryChange` 测量。业务动作、未知与禁用态、连接草稿、窗口及日志滚动行为保留。
 - **改动后的刷新必须合并**：改画面模式会连带换掉一整套参数，需要延迟重读，但每次改动都排一次刷新会让连按 10 次 = 10 次全文刷新，ADB 通道被占满。用 `scheduleCoalescedRefresh` 取消上一次未执行的刷新。
 - **Dock 图标按需显隐**：不设 `LSUIElement`（设了会被当成后台型 app，启动台 / Dock / Cmd+Tab 全都看不到），由 `DockVisibility` 按「有没有可见窗口」运行时切 `.regular` / `.accessory`。判定窗口时要认标题栏 —— 菜单栏图标自己也是一个可见窗口。
 - **快捷键防抖是「前沿 + 尾部」**：450ms 窗口内单按立刻生效，连按只推进预览、停手后补发最终值。纯尾部防抖会让单按也白等 450ms，手感是「迟滞」。

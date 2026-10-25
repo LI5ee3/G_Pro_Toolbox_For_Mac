@@ -40,12 +40,12 @@ struct PictureView: View {
                     HStack(spacing: 10) {
                         Text("画面模式").font(Theme.sectionFont)
                             .frame(width: Theme.parameterLabelWidth, alignment: .leading)
-                        ForEach([14, 9, 10], id: \.self) { v in
-                            SelectableButton(title: RegisterMap.modeNames[v] ?? "\(v)",
-                                             isSelected: picture.intValue("picture_mode", default: -1) == v) {
-                                state.setMode(v)
-                            }
+                        SegmentedOptionPicker(options: [14, 9, 10].map {
+                            Option(label: RegisterMap.modeNames[$0] ?? "\($0)", value: $0)
+                        }, selectedValue: picture.intValue("picture_mode", default: -1), controlSize: .regular) {
+                            state.setMode($0)
                         }
+                        .frame(width: 252).accessibilityLabel("画面模式")
                         Spacer(minLength: 12)
                         Button("恢复默认") { state.resetCurrentMode() }
                             .toolboxAction()

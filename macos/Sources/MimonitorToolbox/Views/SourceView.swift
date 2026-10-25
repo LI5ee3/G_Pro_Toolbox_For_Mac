@@ -26,14 +26,9 @@ struct SourceView: View {
 
                 VStack(alignment: .leading, spacing: 12) {
                     Text("选择视频输入").font(Theme.sectionFont)
-                    HStack(spacing: 8) {
-                        ForEach(OptionLists.source) { option in
-                            SelectableButton(title: option.label, isSelected: selectedSource == option.value) {
-                                state.setSource(option.value)
-                            }
-                            .accessibilityLabel("切换到 \(option.label)")
-                        }
-                    }
+                    SegmentedOptionPicker(options: OptionLists.source, selectedValue: selectedSource,
+                                          controlSize: .regular) { state.setSource($0) }
+                        .frame(width: 360).accessibilityLabel("选择视频输入")
                 }
 
                 Divider()

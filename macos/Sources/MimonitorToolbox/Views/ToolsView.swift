@@ -7,29 +7,18 @@ struct ToolsView: View {
     @ToolboxActions var state
     @Environment(ConnectionModel.self) private var connection
     @Environment(ToolsModel.self) private var tools
-    @Environment(HotkeysModel.self) private var keyboard
     @Environment(SettingsModel.self) private var settings
     @State private var pending4K = false
     @State private var show4KConfirm = false
-    @State private var showHotkeySheet = false
     @State private var showAdvancedTools = false
     @State private var showGuardianConfirm = false
-
-    private var configuredHotkeyCount: Int {
-        keyboard.hotkeys.values.filter { $0.isEnabled }.count
-            + keyboard.adjustHotkeys.filter { $0.isEnabled }.count
-    }
 
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 24) {
                 VStack(alignment: .leading, spacing: 6) {
-                    Text("工具与设置").font(.system(size: 22, weight: .semibold))
+                    Text("显示器工具").font(.system(size: 22, weight: .semibold))
                 }
-                keyboardSettings
-                Divider()
-                appSettings
-                Divider()
                 memorySettings
                 Divider()
                 guardianSettings
@@ -68,9 +57,6 @@ struct ToolsView: View {
         .font(.system(size: 14))
         .tint(Theme.accent)
         .onAppear { state.check4KState() }
-        .sheet(isPresented: $showHotkeySheet) {
-            HotkeyConfigSheet().environment(\.toolboxActions, state)
-        }
         .alert("切换 4K UI 会重启显示器，继续？", isPresented: $show4KConfirm) {
             Button("取消", role: .cancel) { }
             Button("确认并重启") { state.toggle4K(pending4K) }
@@ -86,108 +72,6 @@ struct ToolsView: View {
             Text("将安装项目自带 APK，授予修改调试设置和无障碍权限，并开启网络 ADB 5555。完成后会回读实际状态。")
         }
 
-    }
-
-    private var keyboardSettings: some View {
-        SettingsTaskSection(title: "键盘控制") {
-            HStack(alignment: .top, spacing: 18) {
-                VStack(alignment: .leading, spacing: 8) {
-                    Text("用组合键、系统音量键与亮度键控制显示器。")
-                        .foregroundStyle(Theme.secondaryText)
-                    Label(keyboard.accessibilityTrusted ? "辅助功能权限已授予" : "尚未授权，键盘控制暂不生效",
-                          systemImage: keyboard.accessibilityTrusted ? "checkmark.seal" : "exclamationmark.triangle")
-                        .foregroundStyle(keyboard.accessibilityTrusted ? Theme.success : Theme.warning)
-                }
-                Spacer(minLength: 12)
-                VStack(alignment: .trailing, spacing: 8) {
-                    Button("配置快捷键…") { showHotkeySheet = true }
-                        .toolboxAction(prominent: true)
-                    Text("已配置 \(configuredHotkeyCount) 个")
-                        .font(.system(size: 13)).foregroundStyle(Theme.secondaryText)
-                }
-            }
-            if !keyboard.accessibilityTrusted {
-                HStack(spacing: 10) {
-                    Button("前往授权") { state.requestAccessibilityPermission() }
-                        .toolboxAction()
-                    Button("重新检测") { state.refreshAccessibilityStatus() }
-                        .toolboxAction()
-                    Text("授权后返回应用会自动重新检测。")
-                        .font(.system(size: 13)).foregroundStyle(Theme.secondaryText)
-                }
-            }
-            if keyboard.listenerStatus == .failed {
-                Text("辅助功能已允许，但监听尚未启动。请重新检测权限或重启应用。")
-                    .font(.system(size: 13)).foregroundStyle(Theme.warning)
-            }
-            Divider().padding(.vertical, 2)
-            Toggle("快捷键松手后生效", isOn: Binding(
-                get: { keyboard.hotkeyCountdownEnabled },
-                set: { state.hotkeyCountdownEnabled = $0 }
-            ))
-            HStack(spacing: 16) {
-                Text("等待时长").frame(width: Theme.parameterLabelWidth, alignment: .leading)
-                FastSlider(value: Binding(
-                    get: { keyboard.hotkeyCountdownSeconds },
-                    set: { state.hotkeyCountdownSeconds = $0 }
-                ), range: 0.2...3.0, step: 0.1) { _ in }
-                .disabled(!keyboard.hotkeyCountdownEnabled)
-                .accessibilityLabel("快捷键等待时长")
-                .accessibilityValue(String(format: "%.1f 秒", keyboard.hotkeyCountdownSeconds))
-                Text(String(format: "%.1f 秒", keyboard.hotkeyCountdownSeconds))
-                    .monospacedDigit().frame(width: 60, alignment: .trailing)
-            }
-            Text(keyboard.hotkeyCountdownEnabled
-                 ? "倒计时结束后提交，连续按键只保留最后一个值。"
-                 : "每次按键立即提交；连续按键可能使 ADB 命令排队。")
-                .font(.system(size: 13)).foregroundStyle(Theme.secondaryText)
-        }
-    }
-
-    private var appSettings: some View {
-        SettingsTaskSection(title: "应用偏好") {
-            HStack(spacing: 16) {
-                Text("关闭窗口时").frame(width: Theme.parameterLabelWidth, alignment: .leading)
-                SegmentedOptionPicker(options: [.init(label: "在菜单栏继续运行", value: 0), .init(label: "退出应用", value: 1)],
-                                      selectedValue: ["tray": 0, "exit": 1][settings.closeBehavior] ?? -1,
-                                      distribution: .fillProportionally, controlSize: .regular) {
-                    settings.closeBehavior = $0 == 1 ? "exit" : "tray"
-                }
-                .frame(width: 360).accessibilityLabel("关闭窗口时")
-                Spacer(minLength: 0)
-            }
-            HStack(spacing: 16) {
-                Text("外观").frame(width: Theme.parameterLabelWidth, alignment: .leading)
-                SegmentedOptionPicker(options: [.init(label: "跟随系统", value: 0), .init(label: "深色", value: 1), .init(label: "浅色", value: 2)],
-                                      selectedValue: ["auto": 0, "dark": 1, "light": 2][settings.theme] ?? -1,
-                                      distribution: .fillProportionally, controlSize: .regular) {
-                    if let value = [0: "auto", 1: "dark", 2: "light"][$0] { settings.theme = value }
-                }
-                .frame(width: 360).accessibilityLabel("外观")
-                Spacer(minLength: 0)
-            }
-            Divider().padding(.vertical, 2)
-            Toggle("登录后自动启动，仅显示菜单栏图标", isOn: Binding(get: { settings.autostartEnabled }, set: { state.setAutostart($0) }))
-                .disabled(settings.loginItemBusy)
-            HStack(spacing: 12) {
-                Text(settings.loginItemBusy ? "正在读取系统登录项…" : settings.loginItem.detail)
-                    .font(.system(size: 13)).foregroundStyle(settings.loginItem.needsAttention ? Theme.warning : Theme.secondaryText)
-                Spacer()
-                Button("登录项设置") { state.openLoginItemSettings() }.toolboxAction()
-                Button("重新检测") { state.refreshLoginItem() }.toolboxAction()
-                    .disabled(settings.loginItemBusy)
-            }
-            HStack {
-                VStack(alignment: .leading, spacing: 4) {
-                    Text("打开后选择“本地网络”，检查本应用开关。")
-                    Text("连接失败也可能来自网络或设备，不能据此判断权限被拒绝。")
-                }
-                .font(.system(size: 13)).foregroundStyle(Theme.secondaryText)
-                Spacer()
-                Button("打开隐私设置") { state.openLocalNetworkSettings() }.toolboxAction()
-                    .help("系统设置 → 隐私与安全 → 本地网络")
-            }
-        }
     }
 
     private var guardianSettings: some View {
