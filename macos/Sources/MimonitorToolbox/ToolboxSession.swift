@@ -13,6 +13,10 @@ public final class ToolboxSession {
         state.finishLogs(completion)
     }
     public var closeBehavior: String { state.closeBehavior }
+    public func showSettings() {
+        state.requestedPage = .tools
+        state.showMainWindow()
+    }
 }
 
 public enum ToolboxScreen: String, CaseIterable, Identifiable {
@@ -62,6 +66,7 @@ public struct ToolboxWindowContent: View {
     public init(session: ToolboxSession, screen: ToolboxScreen = .home) { self.session = session; self.screen = screen }
     public var body: some View {
         ContentView(initialPage: screen.initialPage).modifier(ToolboxEnvironment(actions: session.state))
+            .focusedSceneValue(\.toolboxSettingsAction, { session.showSettings() })
     }
 }
 

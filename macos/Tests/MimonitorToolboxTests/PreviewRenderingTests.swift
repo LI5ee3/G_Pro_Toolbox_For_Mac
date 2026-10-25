@@ -8,6 +8,55 @@ import ToolboxDomain
 
 @MainActor
 final class PreviewRenderingTests: XCTestCase {
+    func testFocusedSliderKeysCommitOnceClampAndIgnoreDisabledOrExternalUpdates() async throws {
+        let _ = NSApplication.shared
+        let runtime = PreviewRuntime(), state = runtime.makeState()
+        defer { state.stop() }
+        var commits: [Double] = []
+        let focused = expectation(description: "Slider focused")
+        func content(enabled: Bool) -> KeyboardSliderFixture {
+            KeyboardSliderFixture(value: Binding(get: { state.keyboard.hotkeyCountdownSeconds }, set: { state.hotkeyCountdownSeconds = $0 }),
+                                  enabled: enabled, onCommit: { commits.append($0) },
+                                  onFocus: { focused.fulfill() })
+        }
+        let host = NSHostingView(rootView: content(enabled: true))
+        let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 320, height: 60),
+                              styleMask: [.titled], backing: .buffered, defer: false)
+        window.isReleasedWhenClosed = false
+        window.contentView = host
+        defer { window.close() }
+        window.makeKeyAndOrderFront(nil)
+        await fulfillment(of: [focused], timeout: 2)
+        func key(_ character: Int, _ code: UInt16) throws {
+            let text = String(try XCTUnwrap(UnicodeScalar(character)))
+            let event = try XCTUnwrap(NSEvent.keyEvent(with: .keyDown, location: .zero, modifierFlags: [],
+                timestamp: 0, windowNumber: window.windowNumber, context: nil,
+                characters: text, charactersIgnoringModifiers: text, isARepeat: false, keyCode: code))
+            window.sendEvent(event)
+            host.layoutSubtreeIfNeeded()
+        }
+        try key(NSRightArrowFunctionKey, 124)
+        XCTAssertEqual(state.keyboard.hotkeyCountdownSeconds, 0.9, accuracy: 0.00001)
+        XCTAssertEqual(commits.count, 1)
+        try key(NSLeftArrowFunctionKey, 123)
+        XCTAssertEqual(state.keyboard.hotkeyCountdownSeconds, 0.8, accuracy: 0.00001)
+        XCTAssertEqual(commits.count, 2)
+        state.hotkeyCountdownSeconds = 2.9; host.rootView = content(enabled: true); host.layoutSubtreeIfNeeded()
+        XCTAssertEqual(commits.count, 2)
+        try key(NSUpArrowFunctionKey, 126)
+        try key(NSUpArrowFunctionKey, 126)
+        XCTAssertEqual(state.keyboard.hotkeyCountdownSeconds, 3, accuracy: 0.00001)
+        XCTAssertEqual(commits.count, 3)
+        state.hotkeyCountdownSeconds = 0.2; host.rootView = content(enabled: true); host.layoutSubtreeIfNeeded()
+        try key(NSDownArrowFunctionKey, 125)
+        XCTAssertEqual(state.keyboard.hotkeyCountdownSeconds, 0.2)
+        XCTAssertEqual(commits.count, 3)
+        host.rootView = content(enabled: false); host.layoutSubtreeIfNeeded()
+        try key(NSRightArrowFunctionKey, 124)
+        XCTAssertEqual(state.keyboard.hotkeyCountdownSeconds, 0.2)
+        XCTAssertEqual(commits.count, 3)
+    }
+
     func testParameterPopupUsesDomainTagsAndExternalUpdatesDoNotWrite() async throws {
         let runtime = PreviewRuntime(), state = runtime.makeState()
         var commits = 0
@@ -48,9 +97,11 @@ final class PreviewRenderingTests: XCTestCase {
 
     func testNativeAppPreferenceSegmentsKeepExistingStoredValues() throws {
         let runtime = PreviewRuntime(), state = runtime.makeState()
+        var controlsEnabled = true
         func content() -> some View {
             ToolsView().environment(\.toolboxActions, state).environment(state.connection)
                 .environment(state.tools).environment(state.keyboard).environment(state.settings)
+                .disabled(!controlsEnabled)
         }
         func segments(in view: NSView) -> [NSSegmentedControl] {
             (view as? NSSegmentedControl).map { [$0] } ?? view.subviews.flatMap { segments(in: $0) }
@@ -74,6 +125,10 @@ final class PreviewRenderingTests: XCTestCase {
         XCTAssertEqual(theme.selectedSegment, 2)
         XCTAssertEqual(runtime.preferences.string(forKey: "theme"), "light")
         XCTAssertEqual(runtime.effects, effects) // External selection updates must not reapply preferences.
+        controlsEnabled = false
+        host.rootView = content(); host.layoutSubtreeIfNeeded()
+        XCTAssertFalse(close.isEnabled)
+        XCTAssertFalse(theme.isEnabled)
         state.stop()
     }
 
@@ -104,5 +159,20 @@ final class PreviewRenderingTests: XCTestCase {
         host.layoutSubtreeIfNeeded()
         XCTAssertGreaterThan(host.fittingSize.height, 0)
         XCTAssertEqual(runtime.hotkeyDriver.starts, 0)
+    }
+}
+
+private struct KeyboardSliderFixture: View {
+    @Binding var value: Double
+    let enabled: Bool
+    let onCommit: (Double) -> Void
+    let onFocus: () -> Void
+    @FocusState private var focused: Bool
+    var body: some View {
+        FastSlider(value: $value, range: 0.2...3, step: 0.1, onCommit: onCommit)
+            .disabled(!enabled).focused($focused)
+            .onAppear { focused = true }
+            .onChange(of: focused) { _, value in if value { onFocus() } }
+            .padding(8)
     }
 }

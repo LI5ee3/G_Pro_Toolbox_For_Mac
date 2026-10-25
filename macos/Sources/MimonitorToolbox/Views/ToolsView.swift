@@ -132,6 +132,8 @@ struct ToolsView: View {
                     set: { state.hotkeyCountdownSeconds = $0 }
                 ), range: 0.2...3.0, step: 0.1) { _ in }
                 .disabled(!keyboard.hotkeyCountdownEnabled)
+                .accessibilityLabel("快捷键等待时长")
+                .accessibilityValue(String(format: "%.1f 秒", keyboard.hotkeyCountdownSeconds))
                 Text(String(format: "%.1f 秒", keyboard.hotkeyCountdownSeconds))
                     .monospacedDigit().frame(width: 60, alignment: .trailing)
             }
@@ -465,6 +467,7 @@ struct HotkeyConfigSheet: View {
                         dismiss()
                     }
                     .toolboxAction(prominent: true)
+                    .keyboardShortcut(.defaultAction)
                 }
             }
             .padding(24)
@@ -503,6 +506,7 @@ struct KeyRecorderButton: View {
     @Binding var modifier: String
     @Binding var key: String
     var width: CGFloat = 150
+    var title = "快捷键"
 
     @State private var recording = false
     @State private var monitor: Any?
@@ -518,6 +522,8 @@ struct KeyRecorderButton: View {
             }
             .toolboxAction()
             .tint(recording ? .accentColor : nil)
+            .accessibilityLabel("录制\(title)")
+            .accessibilityValue(recording ? "录制中，按 Escape 取消" : displayText)
 
             if let hint {
                 Text(hint).font(.system(size: 13)).foregroundStyle(Theme.warning)
@@ -571,7 +577,7 @@ struct HotkeyRow: View {
     var body: some View {
         HStack(spacing: 10) {
             Text(label).frame(width: 150, alignment: .leading)
-            KeyRecorderButton(modifier: $config.modifier, key: $config.key)
+            KeyRecorderButton(modifier: $config.modifier, key: $config.key, title: label)
             Spacer()
         }
     }
@@ -583,22 +589,23 @@ struct AdjustHotkeyRow: View {
 
     var body: some View {
         HStack(spacing: 8) {
-            Picker("", selection: $config.param) {
+            Picker("调整参数", selection: $config.param) {
                 ForEach(adjustableParams, id: \.id) { Text($0.label).tag($0.id) }
             }
-            .frame(width: 100)
-            Picker("", selection: $config.direction) {
+            .labelsHidden().frame(width: 100)
+            Picker("调整方向", selection: $config.direction) {
                 Text("增大").tag("increase")
                 Text("减小").tag("decrease")
             }
-            .frame(width: 70)
+            .labelsHidden().frame(width: 70)
             Stepper("步长 \(config.step)", value: $config.step, in: 1...100)
                 .frame(width: 140)
-            KeyRecorderButton(modifier: $config.modifier, key: $config.key, width: 130)
+            KeyRecorderButton(modifier: $config.modifier, key: $config.key, width: 130, title: "可调快捷键")
             Button(action: onDelete) {
                 Image(systemName: "trash")
             }
             .toolboxAction()
+            .accessibilityLabel("删除可调快捷键")
         }
     }
 }

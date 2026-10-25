@@ -50,7 +50,7 @@ public struct ToolboxPreviewGallery: View {
         .preferredColorScheme(selection.colorScheme)
         .frame(minWidth: 1020, minHeight: 688)
         .onChange(of: selection.compact) { _, small in
-            guard let window = NSApp.windows.first(where: { $0.title == "S3-05 工作流与设置 · 安全 Preview" }) else { return }
+            guard let window = NSApp.windows.first(where: { $0.title == "S3-06 键盘与焦点 · 安全 Preview" }) else { return }
             var frame = window.frame
             let size = NSSize(width: small ? 1020 : 1120, height: small ? 740 : 820)
             frame.origin.y += frame.height - size.height; frame.size = size

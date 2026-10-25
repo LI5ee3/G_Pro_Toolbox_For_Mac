@@ -134,22 +134,21 @@ struct AutomaticTasksView: View {
                     }
                     .toolboxAction()
                     .help("上移，降低重叠时的优先级")
-                    .accessibilityLabel("上移任务")
+                    .accessibilityLabel("上移 \(task.start)–\(task.end) 任务")
                     .disabled(index == 0)
                     Button { state.moveAutomaticTask(id: task.id, offset: 1) } label: {
                         Image(systemName: "arrow.down")
                     }
                     .toolboxAction()
                     .help("下移，提高重叠时的优先级")
-                    .accessibilityLabel("下移任务")
+                    .accessibilityLabel("下移 \(task.start)–\(task.end) 任务")
                     .disabled(index == presets.presetConfiguration.tasks.count - 1)
                 }
                 Button("编辑") { editing = task }.toolboxAction()
                 Menu {
                     Button("删除…", role: .destructive) { deleting = task; showDelete = true }
-                } label: { Image(systemName: "ellipsis").frame(width: 24, height: 24) }
+                } label: { Label("管理任务 \(task.start)–\(task.end)", systemImage: "ellipsis").labelStyle(.iconOnly).frame(width: 24, height: 24) }
                     .menuStyle(.borderlessButton).menuIndicator(.hidden).fixedSize()
-                    .accessibilityLabel("管理任务 \(task.start)–\(task.end)")
             }
         }
         .padding(16)

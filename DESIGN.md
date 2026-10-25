@@ -1,6 +1,6 @@
 # 红米 G Pro ToolBox 设计规范
 
-更新：2026-10-25 · **方向已采用；S3-04 已 review 合并；S3-05 工作流与设置一致化待 review**。
+更新：2026-10-25 · **方向已采用；S3-05 已 review 合并；S3-06 键盘与焦点待 review**。
 
 用户已采用 PR #5 的“控制优先的原生工作区”。S3-01 复核 HEAD `c71f799` 经默认 CI #33 通过，以 merge commit `b6648bccf47117b3619a465af98ffc435704f323` 合入 master，合并 CI #34 通过。S3-02 的 PR #6 HEAD 与已复核的 `e9b8574fc218c17b422e1c0c95d6e1a523dc39de` 完全一致，沿用已通过的默认 CI [#35](https://github.com/LI5ee3/G_Pro_Toolbox_For_Mac/actions/runs/40098121445)，标记 ready 后以 merge commit `ea8f7b608cf044ec7b9cf9274a8ef55f9a55d2c0` 合入 master；自然触发的合并 CI [#36](https://github.com/LI5ee3/G_Pro_Toolbox_For_Mac/actions/runs/40099394801) 通过。确认包含关系后正常删除已合并分支引用，原工作树与内容保留。
 
@@ -8,9 +8,40 @@ PR #7 的复核 HEAD `ae3e8750ebdee695cc52800179cceaea556c712c` 与远端一致�
 
 PR #8 的复核 HEAD `31bf91fc16276b2ccef6b81a525d98c3e8903973` 与远端一致，直接沿用已通过的默认 CI [#39](https://github.com/LI5ee3/G_Pro_Toolbox_For_Mac/actions/runs/40132640326)，标记 ready 后以 merge commit `c5cf2e15235eefa63ae28e6fc5e379bbdbc0af60` 合入 master；自然合并 CI [#40](https://github.com/LI5ee3/G_Pro_Toolbox_For_Mac/actions/runs/40155370724) 通过。包含关系已验证，S3-04 本地/远端分支引用正常删除，原工作树 detached 于同一复核 HEAD，目录内容保留。
 
-本轮由用户单独授权 S3-05，止于新草稿 PR review，不开始 S3-06。M2/G2 NOT_PASSED、Auto DEFERRED、G3 未通过；现用 App 不替换。下文 S3-01/02/03/04 与 Pro B 记录保留为各自当时范围，历史停止点由最新授权取代。平台及业务边界见 [ARCHITECTURE](docs/ARCHITECTURE.md)，进度以 [ROADMAP](docs/ROADMAP.md) 为准。
+PR #9 的复核 HEAD `5f7593cf37f7bf7a7be521318c833f8f11f48ef5` 与远端一致，沿用已通过的默认 CI [#41](https://github.com/LI5ee3/G_Pro_Toolbox_For_Mac/actions/runs/40158374786)，标记 ready 后以 merge commit `d06a6797645af7c9eac77053e5a0bdb139659b88` 合入 master；自然合并 CI [#42](https://github.com/LI5ee3/G_Pro_Toolbox_For_Mac/actions/runs/40159403802) 通过。确认包含关系后正常删除 S3-05 本地/远端分支引用，原工作树 detached 于同一复核 HEAD，内容保留。
 
-## S3-05：预设、自动任务、遥控器、工具与菜单配置（实现待 review）
+本轮由用户单独授权 S3-06，止于新草稿 PR review，不开始 S3-07。M2/G2 NOT_PASSED、Auto DEFERRED、G3 未通过；现用 App 不替换。下文 S3-01 至 S3-05 与 Pro B 保留为各自当时范围，历史停止点由最新授权取代。平台及业务边界见 [ARCHITECTURE](docs/ARCHITECTURE.md)，进度以 [ROADMAP](docs/ROADMAP.md) 为准。
+
+## S3-06：原生键盘、焦点、窗口与辅助功能（实现待 review）
+
+独立分支 `ui/s3-06-native-interaction` 基于合并后的 `d06a679`。沿用已采用方向、现有组件及 Apple HIG；实际读取本机 **oil-ui-pro 0.24.2** 的 SKILL、存量项目、组件、交互/状态及轻量 UX 规则，不升级、不重做页面或评分。对照上游 `56fa67e8` 后保留当前 FastSlider；上游仍只有拖拽，没有可直接复用的普通键盘支持。本机仍为 macOS 27.0.1、Xcode 27.1 / SDK 27.0；核对 SDK 与 Apple [onKeyPress](https://developer.apple.com/documentation/swiftui/view/onkeypress(keys:phases:action:))，只使用公开 API。
+
+- **滑块**：原 FastSlider 局部增加 `.focusable(interactions: .edit)`、系统焦点效果和焦点内的方向键；右/上增加、左/下减少，沿既有 step 夹取范围，有变化才调用一次原 onCommit。按住沿系统 down/repeat 事件处理；带 Command/Control/Option/Shift 的组合继续传递。鼠标开始拖动时取得焦点，原拖动、松手、辅助功能增减、Binding、外部同步及业务节流保持，没有全局键盘监听或 NSSlider 替换。
+- **设置入口与窗口**：共享的原生 `ToolboxSettingsCommands` 提供 ⌘,，复用同一 session 的 `.tools` 导航及 showMainWindow；生产宿主的无窗口入口继续调用原 AppLaunchState.requestWindow。安全 Preview 使用同一命令与窗口的 focused scene action。存在 sheet 时禁用/忽略设置命令，避免变更弹层背后的页面或丢草稿；⌘K、关窗驻留/退出、Dock、MenuBarExtra 与 session 生命周期保持，不新增设置运行时。
+- **表单与录制**：实测连接、名称、任务、快捷键弹层原初始焦点与键盘打开后的 Escape 返回已正常，继续复用。仅名称保存失败后原本落到整个 sheet 的焦点改为回到名称输入；真实错误与输入保留。快捷键“完成”增加 Return，仍调用原 saveHotkeys/dismiss；原局部录制监听不改，录制期间先吞掉 Return/⌘,，Escape 先取消录制，未录制时才按原方式关闭。
+- **可访问名称**：等待时长给出具体名称及秒数；录制按钮分别提供动作名称和当前值/录制状态，可调快捷键的参数/方向/删除入口有名字。预设/任务“更多”使用原生 Label，修复采集器原先只显示 More；任务上下移名称包含时段。原生选项、分段、选中与禁用语义已正常，不增加包装或新的禁用规则；未知/记忆值仍从原模型显示。
+
+仅构建现有安全 Preview（`ToolboxPreviews`，独立输出 `/tmp/s306-preview`），依赖/源码副作用/二进制资源隔离通过。新增一个实际 NSHostingView/NSWindow 键盘检查，使用既有内存运行时验证四个方向、0.1 步长、上下界、一次提交、禁用不写入及外部同步不提交；另复用原生偏好检查补核对禁用，二者通过。原生分段已自动遵守禁用，未改其实现。未在本机重复完整 Swift/Python 回归、三种构建、全页矩阵或 Instruments，默认 CI 自然触发，不启用打包。
+
+实际 Preview 操作覆盖侧栏 Tab 后方向键切页、工具栏/正文 Tab/Shift-Tab、画面滑块键盘与既有辅助功能增减、原生菜单不被滑块方向键抢走、⌘K/⌘, 与模态保护、名称 Return 失败留稿及焦点、任务失败焦点、快捷键录制/完成及返回触发器。本机键盘导航偏好原值 `AppleKeyboardUIMode=2`，只读取，不更改全局设置。焦点在默认浅色、最小深色下已实际看图：[滑块浅色焦点](docs/design/S3-06/slider-focus-light.jpg) · [最小深色焦点](docs/design/S3-06/slider-focus-min-dark.jpg) · [名称失败焦点](docs/design/S3-06/name-failure-focus-light.jpg)。这些是生产 View 的内存安全 Preview，不是真机效果或整套视觉矩阵。
+
+独立键盘走查（`/root/s306_ux_walk`，全新上下文，不评分）自选画面背光 45→48，Tab 到黑色级别 50，主路径完成；[风险探针焦点记录](docs/design/S3-06/keyboard-walk-restore.jpg)。评审者对“恢复默认”没有可见结果提出疑问，主 Agent 只核对这一入口：原日志已有“恢复 标准 模式默认设置…”；原动作本来直接执行，没有确认/取消弹窗，内存 fake 未模拟 JNI 重置后的默认参数，虚拟时钟也不自行推进。因此键盘已派发，不能据此新增确认或重写恢复动作；该探针不作为恢复默认读回验收。未追加评分或全页探索。
+
+未实测：VoiceOver 实际朗读、角色提示与连续阅读顺序；当前只检查可用 AX 树的名称/值/选中/禁用和实际增减动作，采集器把自绘滑块列为 unknown 类型，不能据此声称完整 VoiceOver 体验通过。也未更改并穷举系统键盘/全键盘访问设置，未启动生产 App 重验关窗/Dock/真实菜单栏生命周期。S3-07 完整视觉状态与 S3-08 性能验收留待后续，G3 未通过。
+
+复现只构建安全宿主：
+
+```sh
+xcodebuild -project macos/Toolbox.xcodeproj -scheme ToolboxPreviews -configuration Debug \
+  -derivedDataPath /tmp/s3-06-review-preview -destination 'platform=macOS,arch=arm64' \
+  CODE_SIGN_IDENTITY=- build
+```
+
+打开 `/tmp/s3-06-review-preview/Build/Products/Debug/ToolboxPreviewHost.app`（“S3-06 键盘与焦点 · 安全 Preview”）。底栏场景/尺寸/外观只属于 Preview；全部设备、系统和存储操作仍使用内存 fake。
+
+## S3-05：预设、自动任务、遥控器、工具与菜单配置（已 review 合并）
+
+以下保留 S3-05 当时的实现与检查记录；该节“待 review”和停止点描述当时范围，当前合并结果见页首。
 
 独立分支 `ui/s3-05-workflow-pages` 基于合并后的 `c5cf2e1`。本轮是在已采用方向内迁移存量页面；实际使用已安装 **oil-ui-pro 0.24.2** 的现有项目、组件、交互/状态、布局和视觉精修规则，继续遵循下文 Apple HIG。平台仍为 macOS 27.0.1、Xcode 27.1 / SDK 27.0；不升级技能、不重新探索方向或评分。（当前范围由用户授权；下列局部实现待 review）
 
