@@ -23,10 +23,9 @@ struct AppSettingsView: View {
             Tab("键盘控制", systemImage: "keyboard", value: .keyboard) { KeyboardSettingsView() }
             Tab("菜单栏", systemImage: "menubar.rectangle", value: .menuBar) { MenuBarSettingsView() }
         }
-        .frame(width: 680, height: 560)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
         .tint(Theme.accent)
         .accentColor(Theme.accent)
-        .navigationTitle(session.settingsPane.title)
     }
 }
 

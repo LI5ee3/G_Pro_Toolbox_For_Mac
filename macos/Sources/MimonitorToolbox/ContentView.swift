@@ -53,12 +53,7 @@ struct ContentView: View {
                 Divider().padding(.horizontal, 16)
                 List(selection: Binding<Page?>(get: { selection }, set: { if let page = $0 { selection = page } })) {
                     navigationSection("工具", pages: [.tools])
-                    Section("应用") {
-                        SettingsLink { Label("设置…", systemImage: "gearshape") }
-                            .buttonStyle(.plain)
-                            .focusEffectDisabled()
-                            .listItemTint(Theme.accent)
-                    }
+                    navigationSection("应用", pages: [.settings])
                 }
                 .listStyle(.sidebar).frame(height: 158).accessibilityLabel("工具与应用")
 
@@ -149,6 +144,7 @@ struct ContentView: View {
         case .light: LightView()
         case .menuBar: MenuBarSettingsView()
         case .tools: ToolsView()
+        case .settings: AppSettingsView()
         case .remote: RemoteView()
         }
     }

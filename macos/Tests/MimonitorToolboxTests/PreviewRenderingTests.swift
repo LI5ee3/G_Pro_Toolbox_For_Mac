@@ -8,18 +8,21 @@ import ToolboxDomain
 
 @MainActor
 final class PreviewRenderingTests: XCTestCase {
-    func testNativeSettingsPanesShareTheSessionWithoutQueryingTheDisplay() async {
+    func testIntegratedSettingsPanesShareTheSessionWithoutQueryingTheDisplay() async {
         let _ = NSApplication.shared
         let runtime = PreviewRuntime(), state = runtime.makeState()
         let session = ToolboxSession(coordinator: state)
         defer { state.stop() }
         let originalSession = state.adb.session().sessionID
         let originalCommands = runtime.display.recordedCommands
-        let originalEffects = runtime.effects
+        XCTAssertFalse(state.needsConnection(.settings))
         for pane in ToolboxSettingsPane.allCases {
             session.settingsPane = pane
-            let host = NSHostingView(rootView: ToolboxSettingsContent(session: session))
-            let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 680, height: 560),
+            session.showSettings()
+            XCTAssertEqual(state.requestedPage, .settings)
+            let originalEffects = runtime.effects
+            let host = NSHostingView(rootView: ToolboxWindowContent(session: session))
+            let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 1120, height: 820),
                                   styleMask: [.titled, .closable], backing: .buffered, defer: false)
             window.isReleasedWhenClosed = false
             window.contentView = host
@@ -28,6 +31,7 @@ final class PreviewRenderingTests: XCTestCase {
             host.layoutSubtreeIfNeeded()
             await state.waitForPendingWork()
             XCTAssertGreaterThan(host.fittingSize.width, 0, pane.rawValue)
+            XCTAssertNil(state.requestedPage)
             XCTAssertEqual(session.settingsPane, pane)
             XCTAssertEqual(state.adb.session().sessionID, originalSession)
             XCTAssertEqual(runtime.display.recordedCommands, originalCommands, pane.rawValue)

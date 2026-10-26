@@ -196,7 +196,7 @@ package enum OptionLists {
 // MARK: - 侧边栏页面
 
 package enum Page: String, CaseIterable, Identifiable, Hashable, Sendable {
-    case home, picture, game, source, light, menuBar, presets, tools, remote
+    case home, picture, game, source, light, menuBar, presets, tools, remote, settings
 
     package var id: String { rawValue }
 
@@ -211,6 +211,7 @@ package enum Page: String, CaseIterable, Identifiable, Hashable, Sendable {
         // 菜单栏快捷项的独立配置页
         case .menuBar: return "菜单栏"
         case .tools: return "工具与设置"
+        case .settings: return "设置"
         case .remote: return "遥控器"
         }
     }
@@ -225,6 +226,7 @@ package enum Page: String, CaseIterable, Identifiable, Hashable, Sendable {
         case .light: return "lightbulb"
         case .menuBar: return "menubar.rectangle"
         case .tools: return "wrench.and.screwdriver"
+        case .settings: return "gearshape"
         case .remote: return "tv"
         }
     }

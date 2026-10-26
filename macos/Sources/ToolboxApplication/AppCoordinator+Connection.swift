@@ -90,8 +90,8 @@ extension AppCoordinator {
     package func needsConnection(_ page: Page) -> Bool {
         switch page {
         case .picture, .game, .source, .light, .remote: return true
-        // 菜单栏配置页只改本地配置，没连显示器也能用
-        case .home, .tools, .menuBar, .presets: return false
+        // 应用及菜单栏设置只改本地配置，没连显示器也能用
+        case .home, .tools, .menuBar, .presets, .settings: return false
         }
     }
 

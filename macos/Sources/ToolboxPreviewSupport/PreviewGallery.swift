@@ -106,26 +106,18 @@ private struct PreviewSurface: View {
     }
 }
 
-/// The safe host's Settings scene shares the gallery's current in-memory session.
-public struct ToolboxPreviewSettingsContent: View {
-    private let selection: ToolboxPreviewSelection
-    public init(selection: ToolboxPreviewSelection) { self.selection = selection }
-    public var body: some View {
-        ToolboxSettingsContent(session: selection.fixture.session)
-    }
-}
-
 private struct SettingsCanvasPreview: View {
     private let pane: ToolboxSettingsPane
     @State private var selection: ToolboxPreviewSelection
     init(pane: ToolboxSettingsPane = .general) {
         self.pane = pane
         let selection = ToolboxPreviewSelection()
+        selection.screen = .settings
         selection.fixture.session.settingsPane = pane
         _selection = State(initialValue: selection)
     }
     var body: some View {
-        ToolboxPreviewSettingsContent(selection: selection)
+        ToolboxPreviewGallery(selection: selection)
             .onAppear { selection.fixture.session.settingsPane = pane }
     }
 }

@@ -7,7 +7,6 @@ import MimonitorPresetCore
 /// Content of the existing MenuBarExtra; uses its shared session and user configuration.
 struct MenuBarPanel: View {
     @Environment(ToolboxSession.self) private var session
-    @Environment(\.openSettings) private var openSettings
     @ToolboxActions var state
     @Environment(ConnectionModel.self) private var connection
     @Environment(PresetsModel.self) private var presets
@@ -55,10 +54,10 @@ struct MenuBarPanel: View {
                 Spacer()
                 Menu("更多") {
                     Button("连接设置…") { navigation.showsConnectionSettings = true; showMainWindow() }
-                    Button("菜单栏配置…") { session.settingsPane = .menuBar; openSettings() }
+                    Button("菜单栏配置…") { session.settingsPane = .menuBar; state.requestedPage = .settings; showMainWindow() }
                     Button("预设管理…") { state.requestedPage = .presets; showMainWindow() }
                     Button("显示器工具…") { state.requestedPage = .tools; showMainWindow() }
-                    SettingsLink()
+                    Button("设置…") { state.requestedPage = .settings; showMainWindow() }
                     Divider()
                     if connection.isConnected || connection.connectionInProgress {
                         Button(connection.connectionInProgress ? "取消连接 / 扫描" : "断开当前连接") { state.disconnectAdb() }

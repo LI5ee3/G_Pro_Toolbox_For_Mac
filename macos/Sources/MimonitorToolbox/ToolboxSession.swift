@@ -16,10 +16,14 @@ public final class ToolboxSession {
         state.finishLogs(completion)
     }
     public var closeBehavior: String { state.closeBehavior }
+    public func showSettings() {
+        state.requestedPage = .settings
+        state.showMainWindow()
+    }
 }
 
 public enum ToolboxScreen: String, CaseIterable, Identifiable {
-    case home, picture, game, source, light, presets, remote, tools, menuBar
+    case home, picture, game, source, light, presets, remote, tools, menuBar, settings
     public var id: String { rawValue }
     public var title: String { self == .tools ? "显示器工具" : page.title }
     private var page: Page { Page(rawValue: rawValue)! }
@@ -65,8 +69,10 @@ public struct ToolboxWindowContent: View {
     private let screen: ToolboxScreen
     public init(session: ToolboxSession, screen: ToolboxScreen = .home) { self.session = session; self.screen = screen }
     public var body: some View {
-        ContentView(initialPage: screen.initialPage).modifier(ToolboxEnvironment(actions: session.state))
+        ContentView(initialPage: session.state.requestedPage ?? screen.initialPage)
+            .modifier(ToolboxEnvironment(actions: session.state))
             .environment(session)
+            .focusedSceneValue(\.toolboxSettingsAction, { session.showSettings() })
     }
 }
 
@@ -75,21 +81,5 @@ public struct ToolboxMenuBarContent: View {
     public init(session: ToolboxSession) { self.session = session }
     public var body: some View {
         MenuBarPanel().modifier(ToolboxEnvironment(actions: session.state)).environment(session)
-    }
-}
-
-/// The native Settings scene and Canvas use the same views and the host's existing session.
-public struct ToolboxSettingsContent: View {
-    private let session: ToolboxSession
-    @Environment(\.scenePhase) private var scenePhase
-    public init(session: ToolboxSession) { self.session = session }
-    public var body: some View {
-        AppSettingsView().modifier(ToolboxEnvironment(actions: session.state)).environment(session)
-            .preferredColorScheme(session.state.isSimulation
-                ? (session.state.settings.theme == "light" ? .light
-                   : session.state.settings.theme == "dark" ? .dark : nil) : nil)
-            .onChange(of: scenePhase) { _, phase in
-                if phase == .active { session.state.refreshSystemStatus() }
-            }
     }
 }

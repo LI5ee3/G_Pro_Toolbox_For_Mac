@@ -4,7 +4,6 @@ import SwiftUI
 
 struct HomeView: View {
     @Environment(ToolboxSession.self) private var session
-    @Environment(\.openSettings) private var openSettings
     @ToolboxActions var state
     @Environment(ConnectionModel.self) private var connection
     @Environment(PictureModel.self) private var picture
@@ -90,7 +89,7 @@ struct HomeView: View {
                 presetRow
                 VStack(alignment: .leading, spacing: 10) {
                     HStack(spacing: 12) {
-                        Button { session.settingsPane = .keyboard; openSettings() } label: {
+                        Button { session.settingsPane = .keyboard; state.requestedPage = .settings } label: {
                             Label(keyboard.mediaVolumeKeysEnabled ? (keyboard.accessibilityTrusted ? "键盘音量控制已开启" : "键盘控制需要授权") : "键盘音量设置", systemImage: "keyboard")
                         }.toolboxAction()
                         Spacer()

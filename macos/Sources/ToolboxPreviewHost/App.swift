@@ -12,8 +12,6 @@ struct ToolboxPreviewHostApp: App {
         }
             .defaultSize(width: 1120, height: 820)
             .restorationBehavior(.disabled)
-        Settings { ToolboxPreviewSettingsContent(selection: selection) }
-            .windowResizability(.contentSize)
-            .restorationBehavior(.disabled)
+            .commands { ToolboxSettingsCommands() }
     }
 }
