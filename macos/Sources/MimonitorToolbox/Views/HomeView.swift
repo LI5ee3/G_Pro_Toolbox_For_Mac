@@ -10,7 +10,6 @@ struct HomeView: View {
     @Environment(PresetsModel.self) private var presets
     @Environment(ToolsModel.self) private var tools
     @Environment(HotkeysModel.self) private var keyboard
-    @Environment(NavigationModel.self) private var navigation
     @State private var backlight = 1.0
     @State private var showsNewPreset = false
 
@@ -52,23 +51,8 @@ struct HomeView: View {
                         VStack(alignment: .leading, spacing: 8) {
                             HStack(spacing: 20) {
                                 Text("画面模式").font(Theme.sectionFont)
-                                GlassEffectContainer(spacing: 8) {
-                                    HStack(spacing: 8) {
-                                        ForEach([14, 9, 10], id: \.self) { mode in
-                                            Button { state.setMode(mode) } label: {
-                                                Text(RegisterMap.modeNames[mode] ?? "")
-                                                    .frame(maxWidth: .infinity)
-                                            }
-                                            .font(Theme.controlFont).controlSize(.large)
-                                            .buttonBorderShape(.capsule)
-                                            .modifier(ToolboxSelectionButtonSurface(selected: selectedMode == mode))
-                                            .accessibilityValue(selectedMode == mode ? "当前模式" : "未选中")
-                                            .accessibilityAddTraits(selectedMode == mode ? .isSelected : [])
-                                        }
-                                    }
-                                }
+                                PictureModePicker(selectedValue: selectedMode) { state.setMode($0) }
                                     .frame(width: 252)
-                                    .accessibilityElement(children: .contain).accessibilityLabel("画面模式")
                                     .disabled(!connection.isConnected || presets.presetConfiguration.applicationIncomplete)
                                 Spacer(minLength: 0)
                             }
@@ -131,7 +115,7 @@ struct HomeView: View {
                 }
                 Spacer(minLength: 8)
                 if !connection.isConnected {
-                    Button("连接显示器…") { navigation.showsConnectionSettings = true }.toolboxAction(prominent: true)
+                    Button("连接显示器…") { session.showSettings(.connection) }.toolboxAction(prominent: true)
                 }
             }
             if !connection.identityNotice.isEmpty {
@@ -139,7 +123,7 @@ struct HomeView: View {
                     Label(connection.identityNotice, systemImage: "person.crop.circle.badge.questionmark")
                         .foregroundStyle(Theme.warning).fixedSize(horizontal: false, vertical: true)
                     Spacer(minLength: 0)
-                    Button("确认归属…") { navigation.showsConnectionSettings = true }.toolboxAction().fixedSize()
+                    Button("确认归属…") { session.showSettings(.connection) }.toolboxAction().fixedSize()
                 }.font(Theme.detailFont)
             }
         }

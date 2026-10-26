@@ -35,7 +35,7 @@ struct LightView: View {
 
     var body: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 24) {
+            GlassEffectContainer { VStack(alignment: .leading, spacing: 24) {
                 PageHeader(title: "屏幕灯") { state.forceRefreshPage("light") }
 
                 VStack(alignment: .leading, spacing: 8) {
@@ -81,6 +81,7 @@ struct LightView: View {
             .frame(maxWidth: 970, alignment: .leading)
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(24).font(Theme.bodyFont)
+            }
         }
         .onAppear { state.refreshPage("light") }
     }

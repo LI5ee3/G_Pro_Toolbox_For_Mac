@@ -8,6 +8,87 @@ import ToolboxDomain
 
 @MainActor
 final class PreviewRenderingTests: XCTestCase {
+    func testSidebarWidthAndNativeCollapseRecovery() async throws {
+        let _ = NSApplication.shared
+        let controller = NSHostingController(rootView: ToolboxPreviewGallery())
+        let host = controller.view
+        let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 1120, height: 820),
+                              styleMask: [.titled, .closable, .resizable], backing: .buffered, defer: false)
+        window.isReleasedWhenClosed = false
+        window.contentViewController = controller
+        defer { window.close() }
+        window.makeKeyAndOrderFront(nil)
+        await Task.yield()
+        host.layoutSubtreeIfNeeded()
+        func descendants<T: NSView>(_ view: NSView, of type: T.Type) -> [T] {
+            (view as? T).map { [$0] } ?? view.subviews.flatMap { descendants($0, of: type) }
+        }
+        let split = try XCTUnwrap(descendants(host, of: NSSplitView.self).first { $0.isVertical })
+        let sidebar = try XCTUnwrap(split.arrangedSubviews.first)
+        let splitController = try XCTUnwrap(split.delegate as? NSSplitViewController)
+        let sidebarItem = try XCTUnwrap(splitController.splitViewItems.first)
+        func toggleSidebar(collapsed: Bool) async {
+            let originalFrame = window.frame
+            splitController.toggleSidebar(nil)
+            let settled = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in
+                MainActor.assumeIsolated { sidebarItem.isCollapsed == collapsed && sidebar.isHidden == collapsed }
+            }, object: nil)
+            await fulfillment(of: [settled], timeout: 2)
+            host.layoutSubtreeIfNeeded()
+            XCTAssertEqual(window.frame.width, originalFrame.width, accuracy: 0.5)
+            XCTAssertEqual(window.frame.minX, originalFrame.minX, accuracy: 0.5)
+        }
+        XCTAssertGreaterThanOrEqual(sidebar.frame.width, 184)
+        XCTAssertLessThanOrEqual(sidebar.frame.width, 220)
+        for width in [1020.0, 1440.0] {
+            window.setContentSize(NSSize(width: width, height: 820))
+            host.layoutSubtreeIfNeeded()
+            split.setPosition(196, ofDividerAt: 0)
+            await Task.yield()
+            host.layoutSubtreeIfNeeded()
+            let frameBeforeDrag = window.frame
+            let detailWidthBeforeDrag = split.arrangedSubviews[1].frame.width
+            split.setPosition(0, ofDividerAt: 0)
+            await Task.yield()
+            host.layoutSubtreeIfNeeded()
+            XCTAssertTrue(sidebarItem.isCollapsed)
+            split.setPosition(196, ofDividerAt: 0)
+            await Task.yield()
+            host.layoutSubtreeIfNeeded()
+            XCTAssertEqual(window.frame.width, frameBeforeDrag.width, accuracy: 0.5)
+            XCTAssertEqual(window.frame.minX, frameBeforeDrag.minX, accuracy: 0.5)
+            XCTAssertEqual(split.arrangedSubviews[1].frame.width, detailWidthBeforeDrag, accuracy: 0.5)
+            XCTAssertEqual(sidebar.frame.width, 196, accuracy: 0.5)
+            XCTAssertFalse(sidebarItem.isCollapsed)
+            XCTAssertFalse(sidebar.isHidden)
+            for position in [900.0, 196.0, 160.0] {
+                split.setPosition(position, ofDividerAt: 0)
+                await Task.yield()
+                host.layoutSubtreeIfNeeded()
+                XCTAssertEqual(sidebar.frame.width, min(220, max(184, position)), accuracy: 0.5)
+                XCTAssertFalse(sidebarItem.isCollapsed)
+                XCTAssertFalse(sidebar.isHidden)
+            }
+            for position in [0.0, -300.0] {
+                split.setPosition(position, ofDividerAt: 0)
+                await Task.yield()
+                host.layoutSubtreeIfNeeded()
+                XCTAssertTrue(sidebarItem.isCollapsed)
+                window.setContentSize(NSSize(width: width == 1020 ? 1440 : 1020, height: 820))
+                await toggleSidebar(collapsed: false)
+                XCTAssertFalse(sidebarItem.isCollapsed)
+                XCTAssertFalse(sidebar.isHidden)
+                XCTAssertGreaterThanOrEqual(sidebar.frame.width, 184)
+                XCTAssertLessThanOrEqual(sidebar.frame.width, 220)
+            }
+            await toggleSidebar(collapsed: true)
+            XCTAssertTrue(sidebarItem.isCollapsed)
+            await toggleSidebar(collapsed: false)
+            XCTAssertFalse(sidebarItem.isCollapsed)
+            XCTAssertFalse(sidebar.isHidden)
+        }
+    }
+
     func testIntegratedSettingsPanesShareTheSessionWithoutQueryingTheDisplay() async {
         let _ = NSApplication.shared
         let runtime = PreviewRuntime(), state = runtime.makeState()
@@ -17,8 +98,7 @@ final class PreviewRenderingTests: XCTestCase {
         let originalCommands = runtime.display.recordedCommands
         XCTAssertFalse(state.needsConnection(.settings))
         for pane in ToolboxSettingsPane.allCases {
-            session.settingsPane = pane
-            session.showSettings()
+            session.showSettings(pane)
             XCTAssertEqual(state.requestedPage, .settings)
             let originalEffects = runtime.effects
             let host = NSHostingView(rootView: ToolboxWindowContent(session: session))
@@ -37,7 +117,11 @@ final class PreviewRenderingTests: XCTestCase {
             XCTAssertEqual(runtime.display.recordedCommands, originalCommands, pane.rawValue)
             XCTAssertEqual(runtime.effects, originalEffects, pane.rawValue)
             XCTAssertEqual(runtime.hotkeyDriver.starts, 0)
+            XCTAssertNil(window.attachedSheet)
         }
+        let selectedPane = session.settingsPane
+        session.showSettings()
+        XCTAssertEqual(session.settingsPane, selectedPane)
     }
 
     func testNativeCandidateListOnlyEditsTheConnectionDraft() async throws {
@@ -47,7 +131,7 @@ final class PreviewRenderingTests: XCTestCase {
         state.connection.scannedDevices = ["198.51.100.42", "203.0.113.7"]
         let session = state.adb.session(), commands = runtime.display.recordedCommands
         let originalHost = state.connection.ipInput
-        let content = ConnectionSettingsSheet(connection: state.connection)
+        let content = ConnectionSettingsView(connection: state.connection)
             .environment(\.toolboxActions, state).environment(state.connection).environment(state.logs)
         let host = NSHostingView(rootView: content)
         let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 620, height: 620),
@@ -72,45 +156,6 @@ final class PreviewRenderingTests: XCTestCase {
         XCTAssertEqual(state.connection.ipInput, originalHost)
         XCTAssertEqual(state.adb.session().sessionID, session.sessionID)
         XCTAssertEqual(runtime.display.recordedCommands, commands)
-    }
-
-    func testNativeDisplaySegmentsKeepDomainValuesUnknownAndDisabledStates() throws {
-        let _ = NSApplication.shared
-        let modes = [14, 9, 10].map { Option(label: RegisterMap.modeNames[$0] ?? "", value: $0) }
-        for options in [modes, OptionLists.source] {
-            var value = options[0].value
-            var enabled = true
-            var commits: [Int] = []
-            func content() -> some View {
-                SegmentedOptionPicker(options: options, selectedValue: value, controlSize: .regular) {
-                    value = $0; commits.append($0)
-                }.disabled(!enabled)
-            }
-            func segmented(in view: NSView) -> NSSegmentedControl? {
-                if let control = view as? NSSegmentedControl { return control }
-                return view.subviews.lazy.compactMap { segmented(in: $0) }.first
-            }
-            let host = NSHostingView(rootView: content())
-            host.frame = NSRect(x: 0, y: 0, width: 400, height: 40)
-            host.layoutSubtreeIfNeeded()
-            let control = try XCTUnwrap(segmented(in: host))
-            XCTAssertEqual(control.selectedSegment, 0)
-            control.selectedSegment = 1
-            control.sendAction(control.action!, to: control.target)
-            XCTAssertEqual(commits, [options[1].value])
-            value = -1; host.rootView = content(); host.layoutSubtreeIfNeeded()
-            XCTAssertEqual(control.selectedSegment, -1)
-            XCTAssertEqual(commits.count, 1)
-            value = options.last!.value; host.rootView = content(); host.layoutSubtreeIfNeeded()
-            XCTAssertEqual(control.selectedSegment, options.count - 1)
-            XCTAssertEqual(commits.count, 1)
-            enabled = false; host.rootView = content(); host.layoutSubtreeIfNeeded()
-            XCTAssertFalse(control.isEnabled)
-            control.selectedSegment = 0
-            control.sendAction(control.action!, to: control.target)
-            XCTAssertEqual(commits.count, 1)
-            XCTAssertEqual(value, options.last!.value)
-        }
     }
 
     func testNativeSliderDragKeepsDraftSteppedAndCommitsOnlyOnRelease() throws {
@@ -206,78 +251,82 @@ final class PreviewRenderingTests: XCTestCase {
         XCTAssertEqual(commits.count, 3)
     }
 
-    func testParameterPopupUsesDomainTagsAndExternalUpdatesDoNotWrite() async throws {
+    func testParameterMenuUsesDomainValuesAndExternalUpdatesDoNotWrite() async {
         let runtime = PreviewRuntime(), state = runtime.makeState()
         var commits = 0
-        func row(_ value: Int) -> ParameterPickerRow {
-            ParameterPickerRow(title: "色域", options: OptionLists.gamut, selectedValue: value) {
+        func menu(_ value: Int, enabled: Bool = true) -> ParameterMenu {
+            ParameterMenu(title: "色域", options: OptionLists.gamut, selectedValue: value, isEnabled: enabled) {
                 commits += 1
                 state.setGamut($0)
             }
         }
-        func popup(in view: NSView) -> NSPopUpButton? {
-            if let popup = view as? NSPopUpButton { return popup }
-            return view.subviews.lazy.compactMap { popup(in: $0) }.first
-        }
-        let host = NSHostingView(rootView: row(6))
-        host.frame = NSRect(x: 0, y: 0, width: 600, height: 50)
-        host.layoutSubtreeIfNeeded()
-        let control = try XCTUnwrap(popup(in: host))
-        XCTAssertEqual(control.titleOfSelectedItem, "DCI-P3")
+        let control = menu(6)
+        XCTAssertEqual(control.selection.wrappedValue, 6)
         XCTAssertEqual(commits, 0)
-        control.selectItem(withTag: 4) // AdobeRGB's domain value differs from its menu index.
-        control.sendAction(control.action!, to: control.target)
+        control.selection.wrappedValue = 4 // AdobeRGB's domain value differs from its menu index.
         await state.waitForPendingWork()
         XCTAssertEqual(state.currentValues["tv_picture_advanced_video_color_space"], "4")
         XCTAssertEqual(commits, 1)
         let commands = runtime.display.recordedCommands
-        host.rootView = row(5)
-        host.layoutSubtreeIfNeeded()
-        XCTAssertEqual(control.titleOfSelectedItem, "BT2020")
-        host.rootView = row(-1)
-        host.layoutSubtreeIfNeeded()
-        XCTAssertEqual(control.titleOfSelectedItem, "未知")
-        XCTAssertEqual(control.selectedItem?.tag, -1)
-        control.sendAction(control.action!, to: control.target) // A readable placeholder cannot submit.
+        XCTAssertEqual(menu(5).selection.wrappedValue, 5)
+        XCTAssertEqual(menu(-1).selection.wrappedValue, -1)
+        menu(-1).selection.wrappedValue = -1
+        menu(6).selection.wrappedValue = 999
+        menu(6, enabled: false).selection.wrappedValue = 4
         XCTAssertEqual(commits, 1)
         XCTAssertEqual(runtime.display.recordedCommands, commands)
         state.stop()
     }
 
-    func testNativeAppPreferenceSegmentsKeepExistingStoredValues() throws {
-        let runtime = PreviewRuntime(), state = runtime.makeState()
-        var controlsEnabled = true
+    func testGlassMenuUsesNativeButtonAndPreservesSelectionAcrossUpdates() throws {
+        let _ = NSApplication.shared
+        var value = "increase", enabled = true, commits = 0
         func content() -> some View {
-            GeneralSettingsView().environment(\.toolboxActions, state).environment(state.settings)
-                .disabled(!controlsEnabled)
+            ToolboxGlassMenu(value, accessibilityLabel: "调整方向") {
+                Picker("调整方向", selection: Binding(get: { value }, set: { value = $0; commits += 1 })) {
+                    Text("增大").tag("increase")
+                    Text("减小").tag("decrease")
+                }.pickerStyle(.inline).labelsHidden()
+            }.disabled(!enabled)
         }
-        func segments(in view: NSView) -> [NSSegmentedControl] {
-            (view as? NSSegmentedControl).map { [$0] } ?? view.subviews.flatMap { segments(in: $0) }
+        func findButton(in view: NSView) -> NSButton? {
+            if let button = view as? NSButton { return button }
+            return view.subviews.lazy.compactMap { findButton(in: $0) }.first
         }
         let host = NSHostingView(rootView: content())
-        host.frame = NSRect(x: 0, y: 0, width: 800, height: 800)
+        host.frame = NSRect(x: 0, y: 0, width: 180, height: 40)
         host.layoutSubtreeIfNeeded()
-        let controls = segments(in: host)
-        let close = try XCTUnwrap(controls.first { $0.label(forSegment: 0) == "在菜单栏继续运行" })
-        let theme = try XCTUnwrap(controls.first { $0.label(forSegment: 0) == "跟随系统" })
-        close.selectedSegment = 1; close.sendAction(close.action!, to: close.target)
-        theme.selectedSegment = 1; theme.sendAction(theme.action!, to: theme.target)
-        XCTAssertEqual(state.settings.closeBehavior, "exit")
-        XCTAssertEqual(state.settings.theme, "dark")
-        XCTAssertEqual(runtime.preferences.string(forKey: "close_behavior"), "exit")
-        XCTAssertEqual(runtime.preferences.string(forKey: "theme"), "dark")
-        state.settings.closeBehavior = "tray"; state.settings.theme = "light"
-        let effects = runtime.effects
+        let button = try XCTUnwrap(findButton(in: host))
+        XCTAssertEqual(button.bezelStyle, .glass)
+        XCTAssertEqual(button.borderShape, .capsule)
+        XCTAssertEqual(button.focusRingType, .none)
+        XCTAssertEqual(button.accessibilityRole(), .popUpButton)
+        let item = try XCTUnwrap(button.menu?.items.first { $0.title == "减小" })
+        XCTAssertTrue(NSApp.sendAction(try XCTUnwrap(item.action), to: item.target, from: item))
+        XCTAssertEqual(value, "decrease")
+        XCTAssertEqual(commits, 1)
+        value = "increase"
         host.rootView = content(); host.layoutSubtreeIfNeeded()
-        XCTAssertEqual(close.selectedSegment, 0)
-        XCTAssertEqual(theme.selectedSegment, 2)
-        XCTAssertEqual(runtime.preferences.string(forKey: "theme"), "light")
-        XCTAssertEqual(runtime.effects, effects) // External selection updates must not reapply preferences.
-        controlsEnabled = false
+        XCTAssertEqual(button.title, "increase")
+        XCTAssertEqual(commits, 1)
+        XCTAssertEqual(button.menu?.items.first { $0.title == "增大" }?.state, .on)
+        let popup = CapturingPopupMenu()
+        let checked = NSMenuItem(title: "增大", action: nil, keyEquivalent: "")
+        checked.state = .on
+        popup.addItem(checked)
+        button.menu = popup; button.title = "增大"
+        XCTAssertTrue(NSApp.sendAction(try XCTUnwrap(button.action), to: button.target, from: button))
+        XCTAssertTrue(popup.positionedItem === checked)
+        XCTAssertEqual(popup.location?.y, button.isFlipped ? button.bounds.minY : button.bounds.maxY)
+        button.title = "更多"
+        XCTAssertTrue(NSApp.sendAction(try XCTUnwrap(button.action), to: button.target, from: button))
+        XCTAssertNil(popup.positionedItem)
+        XCTAssertEqual(popup.location?.y, button.isFlipped ? button.bounds.maxY + 4 : button.bounds.minY - 4)
+        enabled = false
         host.rootView = content(); host.layoutSubtreeIfNeeded()
-        XCTAssertFalse(close.isEnabled)
-        XCTAssertFalse(theme.isEnabled)
-        state.stop()
+        XCTAssertFalse(button.isEnabled)
+        XCTAssertFalse(try XCTUnwrap(button.menu?.items.first { $0.title == "减小" }).isEnabled)
+        XCTAssertEqual(commits, 1)
     }
 
     func testEnvironmentKeyPathCanBeSetBeforeAnActionConsumerExists() {
@@ -307,6 +356,16 @@ final class PreviewRenderingTests: XCTestCase {
         host.layoutSubtreeIfNeeded()
         XCTAssertGreaterThan(host.fittingSize.height, 0)
         XCTAssertEqual(runtime.hotkeyDriver.starts, 0)
+    }
+}
+
+private final class CapturingPopupMenu: NSMenu {
+    var positionedItem: NSMenuItem?
+    var location: NSPoint?
+    override func popUp(positioning item: NSMenuItem?, at location: NSPoint, in view: NSView?) -> Bool {
+        positionedItem = item
+        self.location = location
+        return false
     }
 }
 

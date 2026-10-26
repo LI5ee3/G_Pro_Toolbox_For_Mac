@@ -1,18 +1,12 @@
 import SwiftUI
 import ToolboxApplication
 
-struct OperationLogSheet: View {
+struct OperationLogView: View {
     @ToolboxActions var state
     @Environment(LogModel.self) private var logs
-    @Environment(\.dismiss) private var dismiss
     var body: some View {
         VStack(alignment: .leading, spacing: 18) {
-            HStack {
-                Text("操作日志").font(.system(size: 24, weight: .semibold))
-                Spacer()
-                Button("完成") { dismiss() }
-                    .toolboxAction()
-            }
+            Text("操作日志").font(Theme.pageTitle)
             ScrollViewReader { proxy in
                 ScrollView {
                     LazyVStack(alignment: .leading, spacing: 6) {
@@ -22,7 +16,8 @@ struct OperationLogSheet: View {
                         }
                     }.padding(16)
                 }
-                .frame(height: 330).background(Theme.card, in: RoundedRectangle(cornerRadius: 12))
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .background(Theme.card, in: RoundedRectangle(cornerRadius: 12))
                 .onChange(of: logs.sequence) {
                     guard let last = logs.lines.indices.last else { return }
                     DispatchQueue.main.async { proxy.scrollTo(last, anchor: .bottom) }
@@ -33,10 +28,11 @@ struct OperationLogSheet: View {
                 Spacer()
                 Button("复制全部") {
                     state.copyLog()
-                }.focusEffectDisabled()
-                Button("导出日志") { state.chooseLogExport() }.focusEffectDisabled()
-                Button("打开目录") { state.openLogDir() }.focusEffectDisabled()
+                }.toolboxAction()
+                Button("导出日志") { state.chooseLogExport() }.toolboxAction()
+                Button("打开目录") { state.openLogDir() }.toolboxAction()
             }.font(Theme.detailFont)
-        }.padding(28).frame(width: 850).background(Theme.canvas).tint(Theme.accent)
+        }.padding(28).frame(maxWidth: .infinity, maxHeight: .infinity)
+            .background(Theme.canvas).tint(Theme.accent)
     }
 }

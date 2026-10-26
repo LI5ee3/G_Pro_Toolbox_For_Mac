@@ -12,7 +12,7 @@ struct MenuBarSettingsView: View {
             Section {
                 LabeledContent("快捷项", value: "\(keyboard.menuBarItems.count) 项")
                 Button("恢复默认") { state.menuBarItems = MenuBarCatalog.defaultEnabled }
-                    .focusEffectDisabled()
+                    .toolboxAction()
                     .help("恢复默认快捷项及其排列顺序")
             } header: {
                 Text("菜单栏配置")

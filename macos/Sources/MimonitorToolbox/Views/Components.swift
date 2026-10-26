@@ -86,7 +86,6 @@ private struct ToolboxActionModifier: ViewModifier {
     let prominent: Bool
     @ViewBuilder func body(content: Content) -> some View {
         let button = content.font(Theme.controlFont).controlSize(.large)
-            .buttonBorderShape(.roundedRectangle(radius: Theme.controlRadius))
             .focusEffectDisabled()
         if reduceTransparency || preview.reduceTransparency || contrast == .increased || preview.increasedContrast {
             if prominent { button.buttonStyle(.borderedProminent).tint(Theme.actionAccent) }
@@ -117,12 +116,113 @@ struct ToolboxSelectionButtonSurface: ViewModifier {
     }
 }
 
+struct PictureModePicker: View {
+    let selectedValue: Int
+    let onSelect: (Int) -> Void
+
+    var body: some View {
+        GlassEffectContainer(spacing: 8) {
+            HStack(spacing: 8) {
+                ForEach([14, 9, 10], id: \.self) { mode in
+                    Button { onSelect(mode) } label: {
+                        Text(RegisterMap.modeNames[mode] ?? "\(mode)")
+                            .frame(maxWidth: .infinity)
+                    }
+                    .font(Theme.controlFont).controlSize(.large)
+                    .buttonBorderShape(.capsule)
+                    .modifier(ToolboxSelectionButtonSurface(selected: selectedValue == mode))
+                    .accessibilityValue(selectedValue == mode ? "当前模式" : "未选中")
+                    .accessibilityAddTraits(selectedValue == mode ? .isSelected : [])
+                }
+            }
+        }
+        .accessibilityElement(children: .contain).accessibilityLabel("画面模式")
+    }
+}
+
 extension View {
     func toolboxGlass(cornerRadius: CGFloat = 16) -> some View {
         modifier(ToolboxGlassSurface(cornerRadius: cornerRadius))
     }
     func toolboxAction(prominent: Bool = false) -> some View {
         modifier(ToolboxActionModifier(prominent: prominent))
+    }
+}
+
+/// AppKit supplies the glass button; NSHostingMenu preserves SwiftUI actions and bindings.
+package struct ToolboxGlassMenu<Content: View>: NSViewRepresentable {
+    private let title: String
+    private let label: String
+    private let systemImage: String
+    private let content: Content
+
+    package init(_ title: String, accessibilityLabel: String? = nil, systemImage: String = "chevron.down",
+                 @ViewBuilder content: () -> Content) {
+        self.title = title
+        label = accessibilityLabel ?? title
+        self.systemImage = systemImage
+        self.content = content()
+    }
+
+    package func makeNSView(context: Context) -> NSButton {
+        let button = ToolboxGlassMenuButton()
+        button.setButtonType(.momentaryPushIn)
+        button.isBordered = true
+        button.borderShape = .capsule
+        button.controlSize = .large
+        button.font = .systemFont(ofSize: 13, weight: .medium)
+        button.focusRingType = .none
+        button.imageHugsTitle = true
+        button.symbolConfiguration = .init(pointSize: 10, weight: .medium)
+        button.target = button
+        button.action = #selector(ToolboxGlassMenuButton.showMenu)
+        button.setAccessibilityRole(.popUpButton)
+        return button
+    }
+
+    package func updateNSView(_ button: NSButton, context: Context) {
+        let environment = context.environment
+        let preview = environment.toolboxPreviewAccessibility
+        button.bezelStyle = environment.accessibilityReduceTransparency || preview.reduceTransparency
+            || environment.colorSchemeContrast == .increased || preview.increasedContrast ? .push : .glass
+        button.title = title
+        button.image = NSImage(systemSymbolName: systemImage, accessibilityDescription: nil)
+        button.imagePosition = title.isEmpty ? .imageOnly : .imageTrailing
+        button.isEnabled = environment.isEnabled
+        button.setAccessibilityLabel(label)
+        button.setAccessibilityValue(title)
+        // shortcut: Rebuild to avoid the current NSHostingMenu.rootView assertion; revisit after a system update.
+        button.menu = NSHostingMenu(rootView: content.environment(\.self, environment))
+        button.invalidateIntrinsicContentSize()
+    }
+
+    package func sizeThatFits(_ proposal: ProposedViewSize, nsView: NSButton, context: Context) -> CGSize? {
+        let minimum: CGFloat = title.isEmpty ? 28 : 80
+        let width = max(minimum, nsView.intrinsicContentSize.width)
+        return CGSize(width: max(minimum, min(width, proposal.width ?? width)), height: 28)
+    }
+}
+
+private final class ToolboxGlassMenuButton: NSButton {
+    @objc func showMenu() {
+        guard isEnabled, let menu else { return }
+        menu.minimumWidth = bounds.width
+        let selected = menu.items.first { $0.state == .on && $0.title == title }
+        let y = selected != nil
+            ? (isFlipped ? bounds.minY : bounds.maxY)
+            : (isFlipped ? bounds.maxY + 4 : bounds.minY - 4)
+        menu.popUp(positioning: selected, at: NSPoint(x: bounds.minX, y: y), in: self)
+    }
+
+    override func keyDown(with event: NSEvent) {
+        if event.keyCode == 125 || event.keyCode == 126 { performClick(nil) }
+        else { super.keyDown(with: event) }
+    }
+
+    override func accessibilityPerformShowMenu() -> Bool {
+        guard isEnabled else { return false }
+        showMenu()
+        return true
     }
 }
 

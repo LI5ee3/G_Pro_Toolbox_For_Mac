@@ -74,19 +74,10 @@ struct PresetsView: View {
                                    applicationIncomplete: state.activePresetID == preset.id && presets.presetConfiguration.applicationIncomplete,
                                    showInMenuBar: menuBarBinding(preset.id),
                                    canEnableMenuBar: presets.presetConfiguration.canEnableMenuBarPreset(id: preset.id)) {
-                            Menu {
+                            ToolboxGlassMenu("", accessibilityLabel: "管理预设 \(preset.name)", systemImage: "ellipsis") {
                                 Button("重命名") { editor = PresetNameRequest(preset: preset) }
                                 Button("删除…", role: .destructive) { deleting = preset; showDelete = true }
-                            } label: {
-                                Label("管理预设 \(preset.name)", systemImage: "ellipsis")
-                                    .labelStyle(.iconOnly).frame(width: 24, height: 24)
                             }
-                            .menuStyle(.borderlessButton)
-                            .focusEffectDisabled()
-                            .menuIndicator(.hidden)
-                            .fixedSize()
-                            .frame(width: 28, height: 28)
-                            .background(Theme.control, in: RoundedRectangle(cornerRadius: 6))
                             .help("管理预设")
                             Button { state.applyPreset(id: preset.id, edit: true); refreshImmediatePictureNavigation() } label: {
                                 Text("编辑画面").frame(width: 64)

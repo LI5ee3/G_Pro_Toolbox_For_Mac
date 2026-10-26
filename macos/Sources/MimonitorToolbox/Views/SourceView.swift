@@ -6,7 +6,7 @@ struct SourceView: View {
     @ToolboxActions var state
     @Environment(ConnectionModel.self) private var connection
     @Environment(PictureModel.self) private var picture
-    @Environment(NavigationModel.self) private var navigation
+    @Environment(ToolboxSession.self) private var session
 
     private var selectedSource: Int { picture.intValue("mitv.tvplayer.hdmi.last.source", default: -1) }
     private var sourceName: String {
@@ -39,7 +39,7 @@ struct SourceView: View {
                             Text(connection.activeControlText).textSelection(.enabled)
                                 .fixedSize(horizontal: false, vertical: true)
                         }
-                        Button("连接设置…") { navigation.showsConnectionSettings = true }
+                        Button("连接…") { session.showSettings(.connection) }
                             .toolboxAction().fixedSize()
                     }
                     Text("切换视频输入不会更改 ADB 控制通道。")

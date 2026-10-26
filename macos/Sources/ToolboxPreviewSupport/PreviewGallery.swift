@@ -33,22 +33,39 @@ public struct ToolboxPreviewGallery: View {
             Divider()
             HStack(spacing: 12) {
                 Label("安全预览", systemImage: "eye")
-                Picker("场景", selection: $selection.scenario) {
-                    ForEach(PreviewRuntime.Scenario.allCases, id: \.self) { Text($0.rawValue).tag($0) }
+                HStack(spacing: 6) {
+                    Text("场景")
+                    ToolboxGlassMenu(selection.scenario.rawValue, accessibilityLabel: "场景") {
+                        Picker("场景", selection: $selection.scenario) {
+                            ForEach(PreviewRuntime.Scenario.allCases, id: \.self) { Text($0.rawValue).tag($0) }
+                        }.pickerStyle(.inline).labelsHidden()
+                    }
                 }.frame(width: 180)
-                Picker("页面", selection: $selection.screen) {
-                    ForEach(ToolboxScreen.allCases) { Text($0.title).tag($0) }
+                HStack(spacing: 6) {
+                    Text("页面")
+                    ToolboxGlassMenu(selection.screen.title, accessibilityLabel: "页面") {
+                        Picker("页面", selection: $selection.screen) {
+                            ForEach(ToolboxScreen.allCases) { Text($0.title).tag($0) }
+                        }.pickerStyle(.inline).labelsHidden()
+                    }
                 }.frame(width: 185)
-                Picker("外观", selection: $selection.colorScheme) {
-                    Text("浅色").tag(ColorScheme.light)
-                    Text("深色").tag(ColorScheme.dark)
-                }.labelsHidden().frame(width: 80)
-                Picker("窗口", selection: $selection.windowSize) {
-                    Text("最小").tag("最小")
-                    Text("默认").tag("默认")
-                    Text("大窗").tag("大窗")
+                ToolboxGlassMenu(selection.colorScheme == .light ? "浅色" : "深色", accessibilityLabel: "外观") {
+                    Picker("外观", selection: $selection.colorScheme) {
+                        Text("浅色").tag(ColorScheme.light)
+                        Text("深色").tag(ColorScheme.dark)
+                    }.pickerStyle(.inline).labelsHidden()
+                }.frame(width: 80)
+                HStack(spacing: 6) {
+                    Text("窗口")
+                    ToolboxGlassMenu(selection.windowSize, accessibilityLabel: "窗口") {
+                        Picker("窗口", selection: $selection.windowSize) {
+                            Text("最小").tag("最小")
+                            Text("默认").tag("默认")
+                            Text("大窗").tag("大窗")
+                        }.pickerStyle(.inline).labelsHidden()
+                    }
                 }.frame(width: 115)
-                Menu("辅助功能") {
+                ToolboxGlassMenu("辅助功能") {
                     Toggle("减少透明度", isOn: $selection.accessibility.reduceTransparency)
                     Toggle("减少动态效果", isOn: $selection.accessibility.reduceMotion)
                     Toggle("增加对比度", isOn: $selection.accessibility.increasedContrast)

@@ -9,7 +9,7 @@ struct PictureView: View {
 
     var body: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 24) {
+            GlassEffectContainer { VStack(alignment: .leading, spacing: 24) {
                 PageHeader(title: "画面设置") { state.forceRefreshPage("picture") }
                     .disabled(presets.presetConfiguration.applicationIncomplete)
 
@@ -56,6 +56,7 @@ struct PictureView: View {
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(24)
             .font(Theme.bodyFont)
+            }
         }
         .onAppear { state.refreshPage("picture") }
         .loadingOverlay(picture.loadingPages.contains("picture"))
@@ -73,12 +74,10 @@ struct PictureView: View {
                 HStack(spacing: 12) {
                     Text("画面模式").font(Theme.sectionFont)
                         .frame(width: Theme.parameterLabelWidth, alignment: .leading)
-                    SegmentedOptionPicker(options: [14, 9, 10].map {
-                        Option(label: RegisterMap.modeNames[$0] ?? "\($0)", value: $0)
-                    }, selectedValue: picture.intValue("picture_mode", default: -1), controlSize: .regular) {
+                    PictureModePicker(selectedValue: picture.intValue("picture_mode", default: -1)) {
                         state.setMode($0)
                     }
-                    .frame(width: 252).accessibilityLabel("画面模式")
+                    .frame(width: 252)
                     Spacer(minLength: 12)
                     Button("恢复当前模式默认值") { state.resetCurrentMode() }
                         .toolboxAction()

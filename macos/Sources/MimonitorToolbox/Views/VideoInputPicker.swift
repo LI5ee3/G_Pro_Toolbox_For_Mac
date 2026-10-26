@@ -25,7 +25,6 @@ struct VideoInputPicker: View {
                     .contentShape(Rectangle())
                 }
                 .font(Theme.controlFont).controlSize(.large)
-                .buttonBorderShape(.roundedRectangle(radius: Theme.controlRadius))
                 .modifier(ToolboxSelectionButtonSurface(selected: selectedValue == option.value))
                 .accessibilityLabel(option.label == "DP" ? "DisplayPort" : option.label)
                 .accessibilityValue(selectedValue == option.value ? "当前输入" : "未选中")

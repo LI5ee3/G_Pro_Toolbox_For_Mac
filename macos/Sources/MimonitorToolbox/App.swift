@@ -11,7 +11,6 @@ struct MenuBarPanel: View {
     @Environment(ConnectionModel.self) private var connection
     @Environment(PresetsModel.self) private var presets
     @Environment(HotkeysModel.self) private var keyboard
-    @Environment(NavigationModel.self) private var navigation
     @Environment(\.openWindow) private var openWindow
     @State private var contentHeight: CGFloat = 64
 
@@ -26,7 +25,7 @@ struct MenuBarPanel: View {
             }.padding(.horizontal, 14).padding(.vertical, 12)
             Divider()
             ScrollView {
-                VStack(alignment: .leading, spacing: 14) {
+                GlassEffectContainer { VStack(alignment: .leading, spacing: 14) {
                     DashboardVolumeControl(compact: true)
                     if !keyboard.menuBarItems.isEmpty { Divider() }
                     ForEach(keyboard.menuBarItems, id: \.self) { id in
@@ -46,14 +45,15 @@ struct MenuBarPanel: View {
                 .onGeometryChange(for: CGFloat.self, of: { $0.size.height.rounded(.up) }) { height in
                     if height > 0 && height != contentHeight { contentHeight = height }
                 }
+                }
             }
             .frame(height: MenuBarPanelLayout.scrollHeight(contentHeight: contentHeight))
             Divider()
             HStack {
                 Button("打开主窗口") { showMainWindow() }.toolboxAction()
                 Spacer()
-                Menu("更多") {
-                    Button("连接设置…") { navigation.showsConnectionSettings = true; showMainWindow() }
+                ToolboxGlassMenu("更多") {
+                    Button("连接…") { session.settingsPane = .connection; state.requestedPage = .settings; showMainWindow() }
                     Button("菜单栏配置…") { session.settingsPane = .menuBar; state.requestedPage = .settings; showMainWindow() }
                     Button("预设管理…") { state.requestedPage = .presets; showMainWindow() }
                     Button("显示器工具…") { state.requestedPage = .tools; showMainWindow() }
@@ -62,10 +62,10 @@ struct MenuBarPanel: View {
                     if connection.isConnected || connection.connectionInProgress {
                         Button(connection.connectionInProgress ? "取消连接 / 扫描" : "断开当前连接") { state.disconnectAdb() }
                     } else {
-                        Button("连接显示器…") { navigation.showsConnectionSettings = true; showMainWindow() }
+                        Button("连接显示器…") { session.settingsPane = .connection; state.requestedPage = .settings; showMainWindow() }
                     }
                     Button("退出") { state.quit() }
-                }.menuStyle(.borderlessButton).focusEffectDisabled().fixedSize().font(Theme.detailFont)
+                }
             }.padding(.horizontal, 14).padding(.vertical, 10)
         }
         .padding(6).toolboxGlass(cornerRadius: 18).tint(Theme.accent).accentColor(Theme.accent)
@@ -180,19 +180,8 @@ private struct MenuBarPanelRow: View {
                 let raw = state.menuBarValue(for: entry.id) ?? -1
                 let current = options.contains { $0.value == raw } ? raw : -1
                 Text(entry.label).font(.callout).foregroundColor(.secondary)
-                Picker("", selection: Binding(
-                    get: { current },
-                    set: { state.applyMenuBarOption(entry.id, value: $0) }
-                )) {
-                    if current == -1 { Text("未知").tag(-1).disabled(true) }
-                    ForEach(options) { opt in
-                        Text(opt.label).tag(opt.value)
-                    }
-                }
-                .pickerStyle(.menu)
-                .focusEffectDisabled()
-                .labelsHidden()
-                .accessibilityLabel(entry.label)
+                ParameterMenu(title: entry.label, options: options, selectedValue: current,
+                              isEnabled: connection.isConnected) { state.applyMenuBarOption(entry.id, value: $0) }
                 .frame(maxWidth: .infinity, alignment: .leading)
 
             case .stepper(let lo, let hi, _):

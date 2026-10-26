@@ -41,16 +41,6 @@ struct ToolsView: View {
                         .font(Theme.detailFont)
                         .foregroundStyle(Theme.secondaryText)
                 }
-                HStack(spacing: 6) {
-                    Image(systemName: "chevron.left.forwardslash.chevron.right")
-                    Button("项目源代码") { state.openProjectSource() }
-                        .focusEffectDisabled()
-                    Spacer()
-                    Button("原项目") { state.openProjectSource(upstream: true) }
-                        .focusEffectDisabled()
-                }
-                .font(Theme.detailFont)
-                .foregroundStyle(Theme.secondaryText)
             }
             .frame(maxWidth: 970, alignment: .leading)
             .frame(maxWidth: .infinity, alignment: .leading)
@@ -169,7 +159,7 @@ struct ToolsView: View {
     // Keep the name readable while only the native control adopts its disabled appearance.
     private func settingToggle(_ title: String, isOn: Binding<Bool>, disabled: Bool) -> some View {
         LabeledContent(title) {
-            Toggle(title, isOn: isOn).labelsHidden().toggleStyle(.checkbox).disabled(disabled)
+            Toggle(title, isOn: isOn).labelsHidden().toggleStyle(.switch).disabled(disabled)
         }
     }
 
@@ -474,18 +464,24 @@ struct AdjustHotkeyRow: View {
     let onDelete: () -> Void
 
     var body: some View {
-        HStack(spacing: 8) {
-            Picker("调整参数", selection: $config.param) {
-                ForEach(adjustableParams, id: \.id) { Text($0.label).tag($0.id) }
+        let parameterLabel = adjustableParams.first { $0.id == config.param }?.label ?? "未知"
+        let directionLabel = switch config.direction {
+        case "increase": "增大"
+        case "decrease": "减小"
+        default: "未知"
+        }
+        GlassEffectContainer(spacing: 8) { HStack(spacing: 8) {
+            ToolboxGlassMenu(parameterLabel, accessibilityLabel: "调整参数") {
+                Picker("调整参数", selection: $config.param) {
+                    ForEach(adjustableParams, id: \.id) { Text($0.label).tag($0.id) }
+                }.pickerStyle(.inline).labelsHidden()
             }
-            .labelsHidden().frame(width: 100)
-            .focusEffectDisabled()
-            Picker("调整方向", selection: $config.direction) {
-                Text("增大").tag("increase")
-                Text("减小").tag("decrease")
+            ToolboxGlassMenu(directionLabel, accessibilityLabel: "调整方向") {
+                Picker("调整方向", selection: $config.direction) {
+                    Text("增大").tag("increase")
+                    Text("减小").tag("decrease")
+                }.pickerStyle(.inline).labelsHidden()
             }
-            .labelsHidden().frame(width: 70)
-            .focusEffectDisabled()
             Stepper("步长 \(config.step)", value: $config.step, in: 1...100)
                 .frame(width: 140)
             KeyRecorderButton(modifier: $config.modifier, key: $config.key, width: 130, title: "可调快捷键")
@@ -494,6 +490,7 @@ struct AdjustHotkeyRow: View {
             }
             .toolboxAction()
             .accessibilityLabel("删除可调快捷键")
+        }
         }
     }
 }

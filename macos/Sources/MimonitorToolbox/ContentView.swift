@@ -1,6 +1,7 @@
 import ToolboxDomain
 import ToolboxApplication
 import SwiftUI
+import AppKit
 
 struct ContentView: View {
     @ToolboxActions var state
@@ -10,7 +11,7 @@ struct ContentView: View {
     @Environment(SettingsModel.self) private var settings
     @Environment(\.scenePhase) private var scenePhase
     @State private var selection: Page = .home
-    @State private var showLogs = false
+    @State private var columnVisibility: NavigationSplitViewVisibility = .all
     init(initialPage: Page = .home) { _selection = State(initialValue: initialPage) }
 
     private func name(_ page: Page) -> String {
@@ -37,7 +38,7 @@ struct ContentView: View {
     }
 
     var body: some View {
-        NavigationSplitView(columnVisibility: .constant(.all)) {
+        NavigationSplitView(columnVisibility: $columnVisibility) {
             VStack(spacing: 0) {
                 HStack(spacing: 8) {
                     Image("AppMark", bundle: .module).resizable().frame(width: 24, height: 24)
@@ -58,15 +59,17 @@ struct ContentView: View {
                 .listStyle(.sidebar).frame(height: 158).accessibilityLabel("工具与应用")
 
             }
+            .background { SidebarWidthBounds().frame(width: 0, height: 0).accessibilityHidden(true) }
             .navigationSplitViewColumnWidth(min: 184, ideal: 196, max: 220)
-            .toolbar(removing: .sidebarToggle)
         } detail: {
             detailView.frame(maxWidth: .infinity, maxHeight: .infinity).background(Theme.canvas)
                 .toolbar {
-                    ToolbarItem(placement: .principal) {
-                        Text(name(selection)).font(Theme.sectionFont)
+                    if selection != .settings {
+                        ToolbarItem(placement: .principal) {
+                            Text(name(selection)).font(Theme.sectionFont)
+                        }
+                        .sharedBackgroundVisibility(.hidden)
                     }
-                    .sharedBackgroundVisibility(.hidden)
                     ToolbarItem(placement: .primaryAction) {
                         if selection != .home {
                             Label(connection.statusTitle, systemImage: connection.statusSymbol)
@@ -75,15 +78,6 @@ struct ContentView: View {
                         }
                     }
                     .sharedBackgroundVisibility(.hidden)
-                    ToolbarItemGroup(placement: .primaryAction) {
-                        Button { navigation.showsConnectionSettings = true } label: {
-                            Label("连接设置", systemImage: "cable.connector")
-                        }.labelStyle(.titleAndIcon).keyboardShortcut("k", modifiers: .command)
-                            .focusEffectDisabled()
-                        Button { showLogs = true } label: { Label("日志", systemImage: "text.alignleft") }
-                            .labelStyle(.titleAndIcon)
-                            .focusEffectDisabled()
-                    }
                 }
         }
         .navigationSplitViewStyle(.balanced)
@@ -93,10 +87,6 @@ struct ContentView: View {
         .tint(Theme.accent)
         .accentColor(Theme.accent)
         .background(Theme.canvas)
-        .sheet(isPresented: Binding(get: { navigation.showsConnectionSettings }, set: { navigation.showsConnectionSettings = $0 })) {
-            ConnectionSettingsSheet(connection: connection)
-        }
-        .sheet(isPresented: $showLogs) { OperationLogSheet() }
         .onChange(of: scenePhase) { _, phase in
             if phase == .active { state.refreshSystemStatus() }
         }
@@ -146,6 +136,51 @@ struct ContentView: View {
         case .tools: ToolsView()
         case .settings: AppSettingsView()
         case .remote: RemoteView()
+        }
+    }
+}
+
+private struct SidebarWidthBounds: NSViewControllerRepresentable {
+    func makeNSViewController(context: Context) -> BoundsController { BoundsController() }
+    func updateNSViewController(_ controller: BoundsController, context: Context) { controller.applyBounds() }
+    static func dismantleNSViewController(_ controller: BoundsController, coordinator: Void) {
+        NSLayoutConstraint.deactivate(controller.widthConstraints)
+    }
+
+    final class BoundsController: NSViewController {
+        var widthConstraints: [NSLayoutConstraint] = []
+
+        override func loadView() { view = NSView() }
+
+        override func viewDidAppear() {
+            super.viewDidAppear()
+            applyBounds()
+        }
+
+        override func viewDidLayout() {
+            super.viewDidLayout()
+            applyBounds()
+        }
+
+        func applyBounds() {
+            guard widthConstraints.isEmpty else { return }
+            var ancestor = view.superview
+            while let parentView = ancestor {
+                if let split = parentView as? NSSplitView,
+                   let sidebar = split.arrangedSubviews.first(where: { view.isDescendant(of: $0) }) {
+                    if let controller = split.delegate as? NSSplitViewController,
+                       let item = controller.splitViewItems.first(where: { view.isDescendant(of: $0.viewController.view) }) {
+                        // Restore the sidebar inside the window instead of adding its width to the window.
+                        item.collapseBehavior = .useConstraints
+                    }
+                    // SwiftUI's column width preference does not bound native divider dragging.
+                    widthConstraints = [sidebar.widthAnchor.constraint(greaterThanOrEqualToConstant: 184),
+                                        sidebar.widthAnchor.constraint(lessThanOrEqualToConstant: 220)]
+                    NSLayoutConstraint.activate(widthConstraints)
+                    return
+                }
+                ancestor = parentView.superview
+            }
         }
     }
 }

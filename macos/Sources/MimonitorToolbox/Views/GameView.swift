@@ -8,7 +8,7 @@ struct GameView: View {
 
     var body: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 24) {
+            GlassEffectContainer { VStack(alignment: .leading, spacing: 24) {
                 PageHeader(title: "游戏模式") { state.forceRefreshPage("game") }
 
                 VStack(alignment: .leading, spacing: 8) {
@@ -84,6 +84,7 @@ struct GameView: View {
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(24)
             .font(Theme.bodyFont)
+            }
         }
         .onAppear { state.refreshPage("game") }
         .loadingOverlay(picture.loadingPages.contains("game"))

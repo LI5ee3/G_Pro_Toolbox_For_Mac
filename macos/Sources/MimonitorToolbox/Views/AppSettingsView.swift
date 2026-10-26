@@ -2,19 +2,22 @@ import ToolboxApplication
 import SwiftUI
 
 public enum ToolboxSettingsPane: String, CaseIterable, Identifiable {
-    case general, keyboard, menuBar
+    case general, keyboard, menuBar, connection, logs
     public var id: String { rawValue }
     public var title: String {
         switch self {
         case .general: "通用"
         case .keyboard: "键盘控制"
         case .menuBar: "菜单栏"
+        case .connection: "连接"
+        case .logs: "日志"
         }
     }
 }
 
 struct AppSettingsView: View {
     @Environment(ToolboxSession.self) private var session
+    @Environment(ConnectionModel.self) private var connection
 
     var body: some View {
         @Bindable var session = session
@@ -22,6 +25,8 @@ struct AppSettingsView: View {
             Tab("通用", systemImage: "gearshape", value: .general) { GeneralSettingsView() }
             Tab("键盘控制", systemImage: "keyboard", value: .keyboard) { KeyboardSettingsView() }
             Tab("菜单栏", systemImage: "menubar.rectangle", value: .menuBar) { MenuBarSettingsView() }
+            Tab("连接", systemImage: "cable.connector", value: .connection) { ConnectionSettingsView(connection: connection) }
+            Tab("日志", systemImage: "text.alignleft", value: .logs) { OperationLogView() }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .tint(Theme.accent)
@@ -39,16 +44,14 @@ struct GeneralSettingsView: View {
             Section("应用偏好") {
                 LabeledContent("外观") {
                     SegmentedOptionPicker(options: [.init(label: "跟随系统", value: 0), .init(label: "深色", value: 1), .init(label: "浅色", value: 2)],
-                                          selectedValue: ["auto": 0, "dark": 1, "light": 2][settings.theme] ?? -1,
-                                          distribution: .fillProportionally, controlSize: .regular) {
+                                          selectedValue: ["auto": 0, "dark": 1, "light": 2][settings.theme] ?? -1) {
                         if let value = [0: "auto", 1: "dark", 2: "light"][$0] { settings.theme = value }
                     }
                     .frame(width: 300).accessibilityLabel("外观")
                 }
                 LabeledContent("关闭窗口时") {
                     SegmentedOptionPicker(options: [.init(label: "在菜单栏继续运行", value: 0), .init(label: "退出应用", value: 1)],
-                                          selectedValue: ["tray": 0, "exit": 1][settings.closeBehavior] ?? -1,
-                                          distribution: .fillProportionally, controlSize: .regular) {
+                                          selectedValue: ["tray": 0, "exit": 1][settings.closeBehavior] ?? -1) {
                         settings.closeBehavior = $0 == 1 ? "exit" : "tray"
                     }
                     .frame(width: 300).accessibilityLabel("关闭窗口时")
@@ -62,9 +65,9 @@ struct GeneralSettingsView: View {
                 LabeledContent {
                     HStack {
                         Button("登录项设置") { state.openLoginItemSettings() }
-                            .focusEffectDisabled()
+                            .toolboxAction()
                         Button("重新检测") { state.refreshLoginItem() }
-                            .focusEffectDisabled()
+                            .toolboxAction()
                     }
                     .disabled(settings.loginItemBusy)
                 } label: {
@@ -77,7 +80,7 @@ struct GeneralSettingsView: View {
             Section {
                 LabeledContent("本地网络") {
                     Button("打开隐私设置") { state.openLocalNetworkSettings() }
-                        .focusEffectDisabled()
+                        .toolboxAction()
                         .help("系统设置 → 隐私与安全 → 本地网络")
                 }
             } header: {
@@ -106,7 +109,7 @@ private struct KeyboardSettingsView: View {
                 LabeledContent("快捷键", value: "已配置 \(configuredHotkeyCount) 个")
                 LabeledContent("组合键、系统音量键与亮度键") {
                     Button("配置快捷键…") { showHotkeySheet = true }
-                        .focusEffectDisabled()
+                        .toolboxAction()
                 }
             } header: {
                 Text("键盘控制")
@@ -118,9 +121,9 @@ private struct KeyboardSettingsView: View {
                 if !keyboard.accessibilityTrusted {
                     HStack {
                         Button("前往授权") { state.requestAccessibilityPermission() }
-                            .focusEffectDisabled()
+                            .toolboxAction()
                         Button("重新检测") { state.refreshAccessibilityStatus() }
-                            .focusEffectDisabled()
+                            .toolboxAction()
                     }
                 }
                 if keyboard.listenerStatus == .failed {

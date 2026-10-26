@@ -2,11 +2,10 @@ import SwiftUI
 import ToolboxDomain
 import ToolboxApplication
 
-struct ConnectionSettingsSheet: View {
+struct ConnectionSettingsView: View {
     @ToolboxActions var state
     @Environment(ConnectionModel.self) private var connection
     @Environment(LogModel.self) private var logs
-    @Environment(\.dismiss) private var dismiss
     @State private var draft: ConnectionDraft
     @State private var showsDiagnostics = false
     @FocusState private var hostFocused: Bool
@@ -17,20 +16,26 @@ struct ConnectionSettingsSheet: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            HStack {
-                Text("连接设置").font(.system(size: 20, weight: .semibold))
-                Spacer()
-                Button("完成") { dismiss() }.toolboxAction().keyboardShortcut(.cancelAction)
-            }.padding(20)
-            Divider()
             ScrollView {
                 VStack(alignment: .leading, spacing: 20) {
                     activeConnection
                     Divider()
                     Text("选择连接目标").font(Theme.sectionFont)
-                    Picker("控制传输", selection: $draft.mode) {
-                        ForEach(ManualConnectionMode.allCases, id: \.self) { mode in Text(mode.rawValue).tag(mode) }
-                    }.pickerStyle(.segmented).focusEffectDisabled()
+                    HStack(spacing: 12) {
+                        Text("控制传输").font(Theme.controlFont)
+                        GlassEffectContainer(spacing: 8) {
+                            HStack(spacing: 8) {
+                                ForEach(ManualConnectionMode.allCases, id: \.self) { mode in
+                                    Button(mode.rawValue) { draft.mode = mode }
+                                        .font(Theme.controlFont).controlSize(.large)
+                                        .modifier(ToolboxSelectionButtonSurface(selected: draft.mode == mode))
+                                        .accessibilityValue(draft.mode == mode ? "已选择" : "未选择")
+                                        .accessibilityAddTraits(draft.mode == mode ? .isSelected : [])
+                                }
+                            }
+                        }
+                        .accessibilityElement(children: .contain).accessibilityLabel("控制传输")
+                    }
                     Text("浏览和选择只编辑草稿；点击下方连接按钮后才结束旧会话并连接所选目标。USB ADB 与 USB-C 视频输入分别设置。")
                         .font(Theme.detailFont).foregroundStyle(Theme.secondaryText)
                     if draft.mode == .tcp { tcpTarget } else { usbTargets }
@@ -55,7 +60,9 @@ struct ConnectionSettingsSheet: View {
                     .disabled(!draft.canConnect(connection))
             }.padding(20)
         }
-        .frame(width: 620, height: 620).background(Theme.canvas).tint(Theme.accent)
+        .frame(maxWidth: 760, maxHeight: .infinity)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(Theme.canvas).tint(Theme.accent)
         .onAppear { hostFocused = draft.mode == .tcp }
         .onChange(of: draft.mode) { _, mode in hostFocused = mode == .tcp }
     }

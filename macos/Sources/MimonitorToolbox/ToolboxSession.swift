@@ -16,7 +16,8 @@ public final class ToolboxSession {
         state.finishLogs(completion)
     }
     public var closeBehavior: String { state.closeBehavior }
-    public func showSettings() {
+    public func showSettings(_ pane: ToolboxSettingsPane? = nil) {
+        if let pane { settingsPane = pane }
         state.requestedPage = .settings
         state.showMainWindow()
     }
@@ -72,7 +73,7 @@ public struct ToolboxWindowContent: View {
         ContentView(initialPage: session.state.requestedPage ?? screen.initialPage)
             .modifier(ToolboxEnvironment(actions: session.state))
             .environment(session)
-            .focusedSceneValue(\.toolboxSettingsAction, { session.showSettings() })
+            .focusedSceneValue(\.toolboxSettingsAction, { session.showSettings($0) })
     }
 }
 

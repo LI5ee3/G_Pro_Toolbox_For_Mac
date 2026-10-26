@@ -171,7 +171,7 @@ struct MimonitorToolboxApp: App {
         .windowResizability(.contentMinSize)
         .commands {
             CommandGroup(replacing: .sidebar) {}
-            ToolboxSettingsCommands { session.showSettings(); launch.requestWindow() }
+            ToolboxSettingsCommands { pane in session.showSettings(pane); launch.requestWindow() }
         }
         MenuBarExtra {
             ToolboxMenuBarContent(session: session)
