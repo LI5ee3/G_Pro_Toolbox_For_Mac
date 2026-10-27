@@ -7,6 +7,8 @@ struct DashboardVolumeControl: View {
     @ToolboxActions var state
     @Environment(ConnectionModel.self) private var connection
     @Environment(VolumeModel.self) private var volumeState
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.toolboxPreviewAccessibility) private var preview
     @State private var volume = 0.0
     var compact = false
 
@@ -17,18 +19,18 @@ struct DashboardVolumeControl: View {
     var body: some View {
         VStack(alignment: .leading, spacing: compact ? 10 : 12) {
             if !compact {
-                Label("音量", systemImage: volumeState.dashboardMuted == true ? "speaker.slash" : "speaker.wave.2")
-                    .font(Theme.sectionFont)
+                volumeLabel
             }
-            HStack(alignment: .firstTextBaseline, spacing: 4) {
+            HStack(alignment: compact ? .center : .firstTextBaseline, spacing: 4) {
                 if compact {
-                    Label("音量", systemImage: volumeState.dashboardMuted == true ? "speaker.slash" : "speaker.wave.2")
-                        .font(Theme.sectionFont)
+                    volumeLabel
                     Spacer()
                 }
-                Text(reading.map(String.init) ?? "—")
-                    .font(compact ? .system(size: 20, weight: .medium) : Theme.readingFont).monospacedDigit()
-                Text("/ 100").font(Theme.detailFont).foregroundStyle(Theme.secondaryText)
+                HStack(alignment: .firstTextBaseline, spacing: 4) {
+                    Text(reading.map(String.init) ?? "—")
+                        .font(compact ? .system(size: 20, weight: .medium) : Theme.readingFont).monospacedDigit()
+                    Text("/ 100").font(Theme.detailFont).foregroundStyle(Theme.secondaryText)
+                }
                 if !compact { Spacer(); muteButton }
             }
             FastSlider(value: $volume, range: ControlRanges.percentage.sliderBounds, step: 1) {
@@ -48,6 +50,17 @@ struct DashboardVolumeControl: View {
         .onChange(of: connection.isConnected) { _, connected in if connected { state.refreshMediaVolumeState() } }
     }
 
+    private var volumeLabel: some View {
+        let symbol = VolumeSymbol.name(for: reading, muted: volumeState.dashboardMuted == true)
+        return Label {
+            Text("音量")
+        } icon: {
+            ToolboxSymbolImage(name: symbol, animated: !reduceMotion && !preview.reduceMotion)
+                .frame(width: 24, height: 18)
+                .accessibilityHidden(true)
+        }.font(Theme.sectionFont)
+    }
+
     private var muteButton: some View {
         Button { state.toggleDashboardMute() } label: {
             Label(volumeState.dashboardMuted == true ? "解除静音" : "静音", systemImage: "speaker.slash")
@@ -55,4 +68,17 @@ struct DashboardVolumeControl: View {
     }
 
     private func syncValue() { volume = Double(volumeState.dashboardVolume ?? 0) }
+}
+
+/// The dashboard and HUD use the same volume bands, with mute taking precedence.
+enum VolumeSymbol {
+    static func name(for volume: Int?, muted: Bool = false) -> String {
+        if muted { return "speaker.slash.fill" }
+        switch volume ?? -1 {
+        case 0: return "speaker.slash.fill"
+        case 1...33: return "speaker.wave.1.fill"
+        case 34...66: return "speaker.wave.2.fill"
+        default: return "speaker.wave.3.fill"
+        }
+    }
 }

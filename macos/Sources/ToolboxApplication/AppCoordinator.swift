@@ -149,8 +149,6 @@ public final class AppCoordinator {
         self.mediaBrightnessFocusOnly = preferences.object(forKey: "media_brightness_focus_only") as? Bool ?? true
         self.mediaBrightnessDisplayName = preferences.string(forKey: "media_brightness_display_name") ?? "Mi Monitor"
         self.mediaVolumeKeysEnabled = preferences.bool(forKey: "media_volume_keys_enabled")
-        self.mediaVolumeStep = preferences.object(forKey: "media_volume_step") as? Int ?? 5
-        self.mediaVolumeNativeOSD = preferences.object(forKey: "media_volume_native_osd") as? Bool ?? true
         self.mediaVolumeOutputGateEnabled = preferences.object(forKey: "media_volume_output_gate") as? Bool ?? true
         self.mediaVolumeOutputName = preferences.string(forKey: "media_volume_output_name") ?? "Mi Monitor"
         self.menuBarItems = Self.loadMenuBarItems(preferences)

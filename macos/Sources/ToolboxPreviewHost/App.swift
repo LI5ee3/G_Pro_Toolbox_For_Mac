@@ -13,5 +13,8 @@ struct ToolboxPreviewHostApp: App {
             .defaultSize(width: 1120, height: 820)
             .restorationBehavior(.disabled)
             .commands { ToolboxSettingsCommands() }
+        MenuBarExtra("调节提示 · 安全预览", systemImage: "display") {
+            Button("显示音量提示") { HUDWindow.shared.show(title: "音量", value: "50") }
+        }
     }
 }

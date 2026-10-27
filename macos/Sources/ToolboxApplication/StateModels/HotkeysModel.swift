@@ -16,8 +16,6 @@ package final class HotkeysModel {
     package var mediaBrightnessFocusOnly = true
     package var mediaBrightnessDisplayName = "Mi Monitor"
     package var mediaVolumeKeysEnabled = false
-    package var mediaVolumeStep = 5
-    package var mediaVolumeNativeOSD = true
     package var mediaVolumeOutputGateEnabled = true
     package var mediaVolumeOutputName = "Mi Monitor"
     package var menuBarItems: [String] = []

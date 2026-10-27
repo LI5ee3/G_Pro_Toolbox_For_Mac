@@ -182,18 +182,6 @@ extension AppCoordinator {
             } }
     }
 
-    /// 关掉原生音量 OSD 时，每按一次的音量步长
-    package var mediaVolumeStep: Int {
-        get { keyboard.mediaVolumeStep }
-        set { keyboard.mediaVolumeStep = newValue; guard !isConfiguring else { return }; preferences.set(mediaVolumeStep, forKey: "media_volume_step") }
-    }
-
-    /// 音量键是否显示 macOS 原生音量 OSD（走私有 OSDUIHelper，失败回退本应用 HUD）。
-    package var mediaVolumeNativeOSD: Bool {
-        get { keyboard.mediaVolumeNativeOSD }
-        set { keyboard.mediaVolumeNativeOSD = newValue; guard !isConfiguring else { return }; preferences.set(mediaVolumeNativeOSD, forKey: "media_volume_native_osd") }
-    }
-
     /// 是否只在默认音频输出匹配指定名称时才接管音量键
     package var mediaVolumeOutputGateEnabled: Bool {
         get { keyboard.mediaVolumeOutputGateEnabled }

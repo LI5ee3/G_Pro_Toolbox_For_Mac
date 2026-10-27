@@ -121,7 +121,7 @@ CI 要求在线且带 `toolbox-macos27` 标签的 macOS 27 ARM64 runner；没有
 
 ## ADB 音量控制
 
-键盘音量加减和静音通过当前已连接的 USB/TCP ADB 会话控制显示器，声音可继续通过 DP/HDMI 输出。保留辅助功能授权、默认音频输出限制、自定义步长和原生 OSD 16 格。ADB 离线时不接管系统音量键；CoreAudio 只读取默认输出设备，不写入音量。原蓝牙控制已移除，系统配对不受影响。
+键盘音量加减和静音通过当前已连接的 USB/TCP ADB 会话控制显示器，声音可继续通过 DP/HDMI 输出。每次加减 1、范围 0–100，提示使用 App 菜单栏下方的玻璃胶囊和连续进度条；辅助功能授权和默认音频输出限制保留。ADB 离线时不接管系统音量键；CoreAudio 只读取默认输出设备，不写入音量。原蓝牙控制已移除，系统配对不受影响。
 
 ## 连接恢复与已测范围
 
@@ -149,7 +149,7 @@ S2-01 至 S2-06 已合入，操作见上方 [手动连接与配置](#手动连�
 
 - 用顶部导航替代固定侧栏；画面、游戏、信号源、灯光、预设、自动任务和遥控器均保留独立入口，工具与菜单栏配置在右上角设置中。
 - 首页以显示器轮廓呈现连接、输入源和画面模式，下方集中放置音量、静音、背光与常用模式。未知读数显示「—」，断开时禁用设备控制。
-- 音量滑块和静音复用现有媒体音量提交逻辑；键盘音量键仍保留原来的输出设备过滤、步长、OSD 与权限设置。
+- 音量滑块和静音复用现有媒体音量提交逻辑；键盘音量键固定每次加减 1，保留输出设备过滤与权限设置。
 - 统一浅色/深色配色、分组和选中状态，重排长页面与快捷键配置；高级系统操作保持可访问，部署保活前明确说明权限与影响。
 - 提供按压反馈、导航选中块过渡和首次进入淡入；响应系统「减少动态效果」。自绘滑块支持辅助功能增减操作。
 
@@ -244,7 +244,7 @@ macos/
    ├─ ToolboxApp/                # 生产组合根、AppDelegate、Dock 生命周期
    ├─ ToolboxPreviewHost/        # 独立安全预览 App 入口
    ├─ ToolboxPreviewSupport/     # #Preview 画廊、内存设备和虚拟时间
-   ├─ ToolboxMacAdapters/        # 注入进程执行、tap、CoreAudio 读取、HUD、资源、登录项
+   ├─ ToolboxMacAdapters/        # 注入进程执行、tap、CoreAudio 读取、原生 OSD、资源、登录项
    ├─ ToolboxConcurrency/        # 请求/结果、取消、FIFO 执行桥与任务所有权
    ├─ ToolboxProcessExecution/   # POSIX 进程执行、超时/取消与回收
    ├─ ToolboxDomain/             # 独立 Swift 6、映射、范围、步进和纯值规则
@@ -260,7 +260,7 @@ macos/
 | 功能 | 实现 |
 | --- | --- |
 | 画面 / 游戏 / 信号源 / 屏幕灯 / 遥控器 | 当前 USB/TCP ADB 会话、settings 与显示器端 JNI |
-| 键盘音量键 | 当前 USB/TCP ADB 会话；支持自定义步长及 16 格 OSD |
+| 键盘音量键 | 当前 USB/TCP ADB 会话；每次加减 1、范围 0–100，连续进度玻璃提示 |
 | 全局快捷键与亮度键 | CGEventTap，需辅助功能权限 |
 | HDR/SDR 分区控光记忆 | 主机 EDR 与显示器画面模式综合判断 |
 | 登录后自动启动 | SMAppService.mainApp；保留受控旧 LaunchAgent 迁移 |
@@ -277,7 +277,7 @@ macos/
 | **菜单栏常驻 + Dock 图标按需显隐** | 普通 app 身份（启动台能找到），关掉窗口后 Dock 图标收起、只留顶栏 |
 | **菜单栏快捷项**（「菜单栏」页） | 自选把哪些控制放进顶栏下拉：画面模式 / 精密控光 / 色域 / 色温 / 背光… 支持拖动排序 |
 | **菜单栏面板** | 顶栏下拉是 `.window` 样式面板 —— 选项型是下拉、数值型是真滑块，不用开主窗口就能调 |
-| **悬浮提示（HUD）** | 按快捷键时屏幕底部弹出，带倒计时进度条 |
+| **悬浮提示（HUD）** | App 菜单栏图标下方的 Liquid Glass 胶囊；音量/背光以连续长条显示，其他选项和任务保留文字、状态与倒计时；图标不可见时回退到屏幕右上方 |
 | **独立 adb 终端** | “打开 ADB 命令行”注入 PATH 与 server 端口；“进入 ADB Shell”固定打开时的目标，见 [简短排障](#简短排障) |
 | **主题切换** | `NSApp.appearance` 全局生效，悬浮窗等 AppKit 面板也跟着变 |
 
@@ -315,7 +315,7 @@ macos/
 - **音量调节键**：同样覆盖 `NX_SYSDEFINED`（键类型 0/1/7）和普通 keyDown（keyCode 72/73/74），开了「功能键当标准功能键」时兜底 F12/F11/F10。与亮度键不同，**只有当前默认音频输出（CoreAudio）的名字匹配目标时**才拦截（默认关键字 `Mi Monitor`；eqMac 转发出来的「Mi Monitor (eqMac)」也能命中），其余情况原样交给系统去调内置扬声器 / AirPods。读不到输出设备名时也不拦截。
 - **音量走 AudioService binder，不用 keyevent 逐级发**：`cmd media_session volume --set` 在这台机器上会被 AudioService 拒掉（它把 callingPackage 写死成 `com.android.server.media`，过不了 AppOps 的包名/uid 校验），`settings put system volume_music_speaker` 没有观察者、不触发 AudioService。直接 `service call audio` 调 `setStreamVolume` / `adjustStreamVolume`（静音 ±100）/ `isStreamMute` 才是既精确又快（一次往返）的通道；txn code 和系统版本绑定，首次调用会回读验证，失败退回 `input keyevent` 逐级调整。读音量要用 `getStreamVolumeForMute`：`getStreamVolume` 在静音时返回 0，而 `settings` 在刚写完的约 1 秒内还是旧值。
 - **不弹显示器自己的音量 UI**：实测 binder 路径（`setStreamVolume` / `adjustStreamVolume`，flags=0）不会触发 Xiaomi SystemUI 的 `VolumeUIMananger` 窗口（`dumpsys window` 里不会出现），所以音量条只在 Mac 这边弹；只有 `input keyevent` 回退路径会让显示器自己弹条。静音也一样：`adjustStreamVolume` 的 ±100 不弹，`KEYCODE_VOLUME_MUTE` 会弹。
-- **音量键的反馈和去抖**：和亮度键一致——OSD/HUD 立即跟手、连按合并成最后一次绝对写入；静音状态下按音量加减键会先解除静音（跟系统行为一致）。
+- **音量键的反馈和去抖**：HUD 立即跟手、连按合并成最后一次绝对写入；静音状态下按音量加减键会先解除静音（跟系统行为一致）。
 
 **调试方法**
 

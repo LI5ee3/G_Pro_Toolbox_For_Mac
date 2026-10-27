@@ -15,8 +15,8 @@
 | ToolboxProcessExecution | ToolboxConcurrency | 6；有界 POSIX 进程执行与资源回收 |
 | MimonitorPresetCore | ToolboxDomain | 6；预设模型、计划、引擎、存储接口及 PresetWorker |
 | ToolboxApplication | ToolboxDomain、MimonitorPresetCore、ToolboxConcurrency | 5；状态模型、动作协调、注入端口、ADB 命令门面与快捷键解析 |
-| MimonitorToolbox | ToolboxApplication、ToolboxDomain、MimonitorPresetCore | 5；共享 SwiftUI 页面、控件、主题和宿主会话接口 |
-| ToolboxMacAdapters | ToolboxProcessExecution、ToolboxConcurrency、ToolboxApplication、ToolboxDomain、MimonitorPresetCore | 5；真实平台端口、资源、登录项、音频读取、日志、HUD 与预设设备适配 |
+| MimonitorToolbox | ToolboxApplication、ToolboxDomain、MimonitorPresetCore | 5；共享 SwiftUI 页面、控件、主题、HUD 和宿主会话接口 |
+| ToolboxMacAdapters | ToolboxProcessExecution、ToolboxConcurrency、ToolboxApplication、ToolboxDomain、MimonitorPresetCore | 5；真实平台端口、资源、登录项、音频读取、日志、原生 OSD 与预设设备适配 |
 | ToolboxPreviewSupport | ToolboxConcurrency、MimonitorToolbox、ToolboxApplication、ToolboxDomain、MimonitorPresetCore | 5；内存设备、偏好、假系统动作与虚拟时间 |
 | ToolboxApp | MimonitorToolbox、ToolboxMacAdapters | 5；生产组合根及 App/Dock 生命周期 |
 | ToolboxPreviewHost | ToolboxPreviewSupport | 5；独立安全预览窗口 |
@@ -39,7 +39,7 @@ Application 不导入 SwiftUI 或生产适配器，也不启动真实进程；�
 | [ToolsModel](../macos/Sources/ToolboxApplication/StateModels/ToolsModel.swift) | Guardian、4K UI、控光/FreeSync 记忆和准星说明 |
 | [HotkeysModel](../macos/Sources/ToolboxApplication/StateModels/HotkeysModel.swift) | 快捷键、媒体键、步长、OSD 和菜单项偏好 |
 
-任务、队列、取消句柄、定时器和硬件提交缓存留在协调/执行层，不放进这些模型。UI 读取所需模型，修改通过动作入口；协调器中的计算转发属性不复制状态或广播汇总通知。适配器内部的 [HUDModel](../macos/Sources/ToolboxMacAdapters/HUDWindow.swift) 仍使用 ObservableObject，不能推断全项目已移除该机制。
+任务、队列、取消句柄、定时器和硬件提交缓存留在协调/执行层，不放进这些模型。UI 读取所需模型，修改通过动作入口；协调器中的计算转发属性不复制状态或广播汇总通知。HUD 界面内部的 [HUDModel](../macos/Sources/MimonitorToolbox/HUDWindow.swift) 仍使用 ObservableObject，不能推断全项目已移除该机制。
 
 构造组合根不启动硬件服务。生产 `start()` 启动反馈、输出监控、权限/登录项读回、热键、后台任务和 ADB 预热；simulation 提前返回，不走这些真实服务。`stop()` 取消会话、工作项、系统任务及调度，停止监听和反馈；退出日志由宿主使用有界排空完成。服务生命周期属于应用会话，关主窗口是否退出由原偏好决定。[生产组合根](../macos/Sources/ToolboxMacAdapters/LiveRuntime.swift) 与 [App 宿主](../macos/Sources/ToolboxApp/App.swift) 均拒绝 Xcode Preview 上下文。
 
@@ -75,7 +75,7 @@ S1-07 的 [游戏 JNI 派生](../macos/Sources/ToolboxApplication/AppCoordinator
 
 ## 真实平台与安全 Preview
 
-[LiveRuntime](../macos/Sources/ToolboxMacAdapters/LiveRuntime.swift) 注入真实资源与 SystemProcessRunner、热键、只读 CoreAudio 默认输出、HUD、文件日志和系统动作。新登录项只用 [SMAppService.mainApp](../macos/Sources/ToolboxMacAdapters/Autostart.swift)，按系统状态读回；旧 LaunchAgent 仅在归属验证、备份和新服务启用确认后退役。权限请求成功不等于权限授予，注册成功不等于下一次真实登录已验收。
+[LiveRuntime](../macos/Sources/ToolboxMacAdapters/LiveRuntime.swift) 注入真实资源与 SystemProcessRunner、热键、只读 CoreAudio 默认输出、原生 OSD、文件日志和系统动作。App 宿主通过 `HUDPresenting` 把 UI 模块的同一个 [HUDWindow](../macos/Sources/MimonitorToolbox/HUDWindow.swift) 注入反馈端口，安全 Preview 可直接展示正式 HUD 而不链接真实适配器。新登录项只用 [SMAppService.mainApp](../macos/Sources/ToolboxMacAdapters/Autostart.swift)，按系统状态读回；旧 LaunchAgent 仅在归属验证、备份和新服务启用确认后退役。权限请求成功不等于权限授予，注册成功不等于下一次真实登录已验收。
 
 [PreviewRuntime](../macos/Sources/ToolboxPreviewSupport/PreviewRuntime.swift) 使用内存设备/偏好、记录动作和 ManualScheduler，传入的 shell 文本仅作数据解析。PreviewHost 的依赖闭包不含 ToolboxMacAdapters、ToolboxProcessExecution 或生产宿主，包内没有 adb/JAR/APK；[Preview 窗口](../macos/Sources/ToolboxPreviewHost/App.swift) 显式 `.restorationBehavior(.disabled)`，防止默认窗口恢复写入用户偏好。
 
@@ -97,7 +97,7 @@ S1-09 当时删除项为 **0**；后续确认无引用的组件与辅助方法�
 | --- | --- |
 | `adb.ip` 及旧 IP 包装入口 | [PreviewRuntime](../macos/Sources/ToolboxPreviewSupport/PreviewRuntime.swift) 使用 TCP 包装建立模拟会话；[TCPCompatibilityTests](../macos/Tests/MimonitorToolboxTests/TCPCompatibilityTests.swift) 覆盖旧入口与固定命令轨迹。[音量回调](../macos/Sources/ToolboxApplication/AppCoordinator+Volume.swift) 已比较完整 endpoint，[预设所有权](../macos/Sources/ToolboxApplication/AppCoordinator+Presets.swift) 使用确认后的兼容键 |
 | `LegacyLoginItemFiles` | [LiveLoginItems](../macos/Sources/ToolboxMacAdapters/Autostart.swift) 构造并使用它；[LoginItemTests](../macos/Tests/MimonitorToolboxTests/LoginItemTests.swift) 覆盖归属、备份和迁移，是现行旧配置兼容路径 |
-| HUD 的 ObservableObject | [HUDWindow](../macos/Sources/ToolboxMacAdapters/HUDWindow.swift) 的视图观察并持有 HUDModel，仍有真实使用者，不属于已移除的全局 AppState |
+| HUD 的 ObservableObject | [HUDWindow](../macos/Sources/MimonitorToolbox/HUDWindow.swift) 的视图观察并持有 HUDModel，仍有真实使用者，不属于已移除的全局 AppState |
 | 显式打包/安装与历史签名脚本 | workflow 的手动 package job 调用 [make_dmg.sh](../macos/make_dmg.sh)；[签名规则测试](../macos/scripts/tests/test_release_pipeline.py) 仍覆盖 distribution 门禁；[reinstall.sh](../macos/reinstall.sh) 保留显式安装入口，现行默认 CI 不调用它 |
 | R0–R6c 文档与检查点 | 保留当时的设计、测试、限制和回滚证据；旧正式发布凭据要求不作为现行 development 验收门槛 |
 

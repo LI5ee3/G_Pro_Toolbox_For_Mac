@@ -31,7 +31,7 @@ struct ContentView: View {
     private func navigationSection(_ title: String, pages: [Page]) -> some View {
         Section(title) {
             ForEach(pages) { page in
-                Label(name(page), systemImage: page.icon).tag(page)
+                SidebarNavigationLabel(title: name(page), page: page, selected: selection == page).tag(page)
                     .listItemTint(selection == page ? Theme.actionAccent : Theme.accent)
             }
         }
@@ -137,6 +137,114 @@ struct ContentView: View {
         case .settings: AppSettingsView()
         case .remote: RemoteView()
         }
+    }
+}
+
+struct SidebarNavigationLabel: View {
+    let title: String
+    let page: Page
+    let selected: Bool
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.toolboxPreviewAccessibility) private var preview
+
+    var symbolName: String {
+        guard selected else { return page.icon }
+        switch page {
+        case .source: return "arrow.triangle.2.circlepath.circle.fill"
+        case .menuBar: return page.icon
+        default: return page.icon + ".fill"
+        }
+    }
+
+    var body: some View {
+        let animated = !reduceMotion && !preview.reduceMotion
+        return Label {
+            Text(title)
+        } icon: {
+            SidebarSymbolImage(page: page, name: symbolName, selected: selected, animated: animated)
+                .frame(width: 20, height: 20)
+                .accessibilityHidden(true)
+        }
+    }
+}
+
+private struct SidebarSymbolImage: NSViewRepresentable {
+    let page: Page
+    let name: String
+    let selected: Bool
+    let animated: Bool
+
+    func makeNSView(context: Context) -> SidebarSymbolImageView {
+        let view = SidebarSymbolImageView()
+        view.symbolConfiguration = .init(pointSize: 18, weight: .regular)
+        view.imageScaling = .scaleProportionallyDown
+        return view
+    }
+
+    func updateNSView(_ view: SidebarSymbolImageView, context: Context) {
+        view.updateSymbol(page: page, name: name, selected: selected, animated: animated)
+    }
+
+    static func dismantleNSView(_ view: SidebarSymbolImageView, coordinator: Void) {
+        view.stopObservingRow()
+    }
+}
+
+final class SidebarSymbolImageView: NSImageView {
+    private var renderedPage: Page?
+    private var renderedName: String?
+    private var representsSelection = false
+    private weak var observedRow: NSTableRowView?
+    private var rowObservation: NSKeyValueObservation?
+
+    override func viewDidMoveToSuperview() {
+        super.viewDidMoveToSuperview()
+        observeRow()
+    }
+
+    override func viewDidMoveToWindow() {
+        super.viewDidMoveToWindow()
+        if window == nil { stopObservingRow() } else { observeRow() }
+    }
+
+    func updateSymbol(page: Page, name: String, selected: Bool, animated: Bool) {
+        representsSelection = selected
+        observeRow()
+        guard let target = NSImage(systemSymbolName: name, accessibilityDescription: nil) else { return }
+        // List may reuse a native image view for a different navigation item.
+        if !animated || renderedPage != page {
+            image = target
+        } else if renderedName != name {
+            setSymbolImage(target, contentTransition: .replace.magic(fallback: .replace))
+        }
+        renderedPage = page
+        renderedName = name
+    }
+
+    private func observeRow() {
+        var ancestor = superview
+        while let view = ancestor, !(view is NSTableRowView) { ancestor = view.superview }
+        let row = ancestor as? NSTableRowView
+        if row !== observedRow {
+            stopObservingRow()
+            observedRow = row
+            // List focus can de-emphasize selection while its window stays active.
+            rowObservation = row?.observe(\.isEmphasized, options: [.new]) { [weak self] _, _ in
+                MainActor.assumeIsolated { self?.updateTint() }
+            }
+        }
+        updateTint()
+    }
+
+    private func updateTint() {
+        contentTintColor = representsSelection && observedRow?.isEmphasized == true
+            ? .white : NSColor(representsSelection ? Theme.actionAccent : Theme.accent)
+    }
+
+    func stopObservingRow() {
+        rowObservation?.invalidate()
+        rowObservation = nil
+        observedRow = nil
     }
 }
 

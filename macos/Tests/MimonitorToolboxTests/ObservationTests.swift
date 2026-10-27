@@ -68,11 +68,9 @@ final class ObservationTests: XCTestCase {
 
     func testKeyboardActionFacadePreservesPreferenceKeys() {
         let runtime = PreviewRuntime(), state = runtime.makeState()
-        state.mediaVolumeStep = 7; state.mediaBrightnessStep = 9
+        state.mediaBrightnessStep = 9
         state.mediaVolumeOutputName = "Mi Monitor (eqMac)"
         state.hotkeyCountdownSeconds = 1.1
-        XCTAssertEqual(state.keyboard.mediaVolumeStep, 7)
-        XCTAssertEqual(runtime.preferences.integer(forKey: "media_volume_step"), 7)
         XCTAssertEqual(runtime.preferences.integer(forKey: "media_brightness_step"), 9)
         XCTAssertEqual(runtime.preferences.string(forKey: "media_volume_output_name"), "Mi Monitor (eqMac)")
         XCTAssertEqual(runtime.hotkeyDriver.starts, 0)

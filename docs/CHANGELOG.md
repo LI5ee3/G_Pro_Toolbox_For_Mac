@@ -4,6 +4,67 @@
 
 [ROADMAP](ROADMAP.md) 只维护当前范围、任务状态和按需执行原则。协作以用户最新明确要求和根目录 [AGENTS.md](../AGENTS.md) 为准。
 
+## 2026-10-28 侧栏导航图标加入原生符号过渡
+
+- 两组侧栏导航共用正式 `SidebarNavigationLabel`，选中／取消选中时在系统轮廓与填充符号间过渡；信号源使用可用的圆形填充变体。沿用原生 Label、List、分组、选择与路由，图标固定 18pt 字号和 20×20pt 占位。
+- 通过窄范围 `NSImageView.setSymbolImage` 调用官方 `.replace.magic(fallback: .replace)`；首次呈现、跨导航项复用图像视图及减少动态效果时直接更新。同一符号不重播；图标配色监听所属 `NSTableRowView.isEmphasized`，使列表失焦时与原生选中行同步，不给页面、分栏或窗口附加动画。
+- 2 项定向检查通过，覆盖系统符号可用性、原生行强调状态变化、同符号复用与跨项更新。安全窗口五倍慢放捕获控制台→预设的实际过渡帧，核对失焦后灰色选中行、青色图标与深色文字，以及信号源／设置跨组切换后的唯一选中页和正确图标；栏宽保持 195.5pt。跨组切换的个别初帧符号过小，未将其记为所有中间帧均已排除串图。验证产物位于 `validation/sidebar-magic-replace-20261028/`。
+- 新实现的预览减少动态效果开关启用时，信号源→控制台首个可取帧即为完整目标图标；随后关闭注入并恢复官方默认动效速度。最终 ToolboxPreviews Debug 构建、架构与安全 Preview 隔离检查通过；刷新安全宿主，回读默认版本控制台→预设的选择、图标和尺寸。既有 Canvas 静态渲染控制台与侧栏，受 Xcode 面板宽度限制仅显示局部详情；仍见既有负宽／高几何提示。未替换正式 App、连接真实设备或执行全量回归。
+
+## 2026-10-28 视频输入选中标记加入原生符号过渡
+
+- 控制台与信号源页共用的四路输入按钮保留原接口轮廓，右侧以固定 18×18pt 的官方 `circle`／`checkmark.circle.fill` 表示未选中／当前输入，通过 `.replace.magic(fallback: .replace)` 过渡。23/24/29/30 域值、`setSource` 动作、原生玻璃按钮身份、辅助功能名称与禁用条件保持。
+- 将已有音量图标的窄范围 AppKit 桥接移入共享 `ToolboxSymbolImage`，只补充实际需要的选中色与禁用环境传递；同一符号不重播，首次显示及减少动态效果时直接设置目标图像。核对 [Apple SF Symbols](https://developer.apple.com/sf-symbols/) 及本机系统目录和原生构造接口，确认通用 `cable.connector`、`cable.connector.horizontal`、`cable.connector.video` 可用，未找到分别匹配 HDMI、DisplayPort、USB-C 插座的一组专用符号；保留现有辨识方式，官方符号实绘预览保存于本次验证目录。
+- 2 项定向检查通过，覆盖原生图像视图复用、换色时不替换同一符号、四种输入和未知状态的唯一／无选中状态。安全窗口逐项切换四路输入及信号源页，AX 回读始终仅目标为当前输入；五倍慢放捕获退选标记的中间帧，目标选中的首个可获取帧已完整，不将其记为完整逐帧证据。预览减少动态效果下首帧即为完整状态，之后关闭选项并恢复默认速度。
+- 最终 ToolboxPreviews Debug 构建、架构与安全 Preview 隔离检查通过；Canvas 静态核对四按钮，刷新安全宿主确认默认版本布局与选择回读。产物位于 `validation/video-input-magic-replace-20261028/`。未新增 Preview、Target、Scheme 或依赖，未替换正式 App、操作真实设备或扩大深色／全量回归。
+
+## 2026-10-28 控制台音量图标加入原生符号过渡
+
+- 控制台音量标题改用与 HUD 共用的静音／一／二／三道声波规则：0、1–33、34–66、67–100，显式静音优先。菜单栏沿用同一 `DashboardVolumeControl`，同步获得分档和动效；读数未知仍显示“—”，音量 0–100、每次 ±1 及设备提交路径保持。
+- 本机 SwiftUI 内容过渡在此组件未呈现预期中间帧，改以仅包含音量图标的 `NSViewRepresentable` 调用 Apple [`NSImageView.setSymbolImage`](https://developer.apple.com/documentation/appkit/nsimageview/setsymbolimage(_:contenttransition:options:))，明确使用 `.replace.magic(fallback: .replace)`。图标采用 14pt 固定字号和 24×18pt 占位，同档更新不重播；首次显示及减少动态效果时直接设置目标图像。保留原生 Label、操作按钮和辅助功能读数。
+- 7 项定向检查通过，覆盖分档边界、静音优先、未知音量及原生图像视图跨动效／立即更新的复用。安全窗口回读 33→34、66→67 和静音往返，临时五倍慢放捕获实际过渡帧；预览减少动态效果下 67→66 首帧即为完整目标图标，随后恢复默认速度和预览设置。验证产物位于 `validation/console-magic-replace-20261028/`。
+- 最终 Canvas 与安全窗口核对控制台及菜单栏紧凑布局，修正原生图像引入的紧凑行对齐偏差；ToolboxPreviews Debug 构建、架构及安全 Preview 隔离检查通过。未替换正式 App、连接真实设备或执行全量回归。
+
+## 2026-10-28 有声音量图标改为一／二／三道声波
+
+- 按用户三张图片复用系统 SF Symbols：1–33 为一道、34–66 为两道、67–100 为三道，0 保留静音图标。统一 24pt 符号字号与 32pt 占位，使不同声波数量下的扬声器主体尺寸一致；跨档沿用官方 Magic Replace 与 Replace 回退，减少动态效果适配保留。分档仅影响图标，0–100、每次 ±1 和长条平滑过渡不变。
+- 取消静音时反馈当前已知的音量百分比，使低／中档恢复后也显示正确图标与长条；未知读数仍使用原文字反馈。未改变设备读写、静音动作、队列或取消逻辑。核对上游 `56fa67e8` 的 HUD 仍为文字数值提示，没有可直接复用的三档图标实现。
+- 22 项定向检查通过，覆盖 0/1/33/34/66/67/100、系统符号存在、已知／未知音量取消静音，以及既有音量和静音行为。Canvas 核对正式组件及固定字号；安全窗口回读 33→34→33、66→67→66，临时慢放检查两处跨档的中间帧，随后恢复默认速度与原 Canvas 入口。现有画廊仅补 33/66 边界快捷预览；产物位于 `validation/HUD-menubar-20261027/three-volume-bands-*`。
+- ToolboxPreviews Debug 构建、架构及安全 Preview 隔离检查通过；未替换正式 App、连接真实设备或执行全量回归。
+
+## 2026-10-28 补齐 HUD 静音与有声图标的原生过渡
+
+- 核对 Apple [SF Symbols 动效规范](https://developer.apple.com/design/human-interface-guidelines/sf-symbols) 与本机 SDK，已有公开 Magic Replace/Replace 方案，无需引入 GitHub 第三方依赖。原 HUD 只替换 `systemName`，没有声明内容过渡；现为同一个 `Image` 接入 `contentTransition(.symbolEffect(.replace.magic(fallback: .replace)))`，并仅按 `symbolName` 变化建立动画事务。匹配由系统判定，不能 Magic Replace 时使用官方 Replace 回退；减少动态效果时使用 identity、关闭动画。
+- 扩展已有检查覆盖音量 0/非零、静音开/关的符号，以及实际 HUD 模型的双向更新；6 项定向检查、ToolboxPreviews Debug 构建及架构/安全 Preview 隔离检查通过。复用现有安全画廊，在临时慢放下截图核对双向切换中间帧，减少动态效果注入下确认立即切换；随后恢复系统默认动效速度与原 Canvas 入口，刷新宿主并回读 0→1。产物位于 `validation/HUD-menubar-20261027/magic-replace-*`。
+- 音量 0–100、每次 ±1、滑条平滑过渡、窗口进出和设备提交路径保持。未替换正式 App，未连接真实设备或执行全量回归。
+
+## 2026-10-28 接入 HUD 官方玻璃进出与平滑音量过渡
+
+- 外框改由 SwiftUI 官方 `glassEffect(.regular)`、`GlassEffectContainer` 和稳定的 `glassEffectID` 共同管理，使用 [`.materialize`](https://developer.apple.com/documentation/swiftui/glasseffecttransition/materialize) 与 0.2 秒 `.smooth` 呈现/移除材质。删除独立 AppKit 玻璃桥和窗口透明度动画，等 SwiftUI 移除完成才隐藏原窗口；保留代次校验、任务状态、倒计时、菜单栏定位及点击穿透，连按只更新目标，不反复入场。
+- 音量条复用原生 `FastSlider`，仅对其显示值做 0.16 秒 `.smooth` 和 `Animatable` 插值，支持新值打断并继续过渡；动画不写回业务或发送小数音量，仍是 0–100、每次 ±1。减少动态效果时取消进出及数值动画，原减少透明度/高对比度材质回退保持。
+- 现有安全画廊持有同一 HUD 模型，补充 0/100 端点与出现/收起操作。Canvas 查看正式组件；安全窗口回读 50→51→50、0/100，临时放慢 10 倍截取滑条及玻璃入/出中间帧，确认连续位置和材质变化后恢复正式时长；截图位于 `validation/HUD-menubar-20261027/official-motion-*`。未新增 Preview、Target、Scheme 或依赖，未替换正式 App 或连接真实设备。
+- 12 项定向检查通过，覆盖整数步长/边界、显示插值、HUD 操作状态、浮窗焦点与复用、收起中再次调节和最终自动隐藏；ToolboxPreviews Debug 构建、架构与安全 Preview 隔离检查通过。未做全量回归或真机、多屏、全屏验收。
+
+## 2026-10-27 HUD 外框与音量条采用原生材质和控件
+
+- 外框改由 Apple `NSGlassEffectView` 的 `regular` 材质承载，SwiftUI 内容放入其 `contentView`；安全画廊与实际浮窗共用同一组件。保留胶囊轮廓、系统语义前景及减少透明度/高对比度回退。
+- 内部手绘进度条改为项目现有 `FastSlider`，复用原生无刻度 `Slider`。按 [Apple 的 Liquid Glass 控件说明](https://developer.apple.com/documentation/technologyoverviews/adopting-liquid-glass)，滑块的玻璃交互效果由系统管理，不再叠加第二层自定义玻璃。0–100、每次 ±1 保持；HUD 只显示读数，仍不接收点击或抢占键盘焦点。
+- 验证：5 项定向检查通过，从实际窗口视图树确认原生 `NSGlassEffectView`、`regular` 样式、33pt 圆角、内容视图和透明窗口；ToolboxPreviews Debug 构建及依赖/源码/二进制/资源隔离检查通过。Canvas 导出核对背景透射/折射、音量与静音滑条及布局；刷新已有安全宿主，查看浅色/深色实际窗口，±1 按钮回读 50→51→50。产物为 `validation/HUD-menubar-20261027/native-glass-slider-*`。临时 Canvas 选页已恢复；未替换正式 App 或操作真实设备。
+
+## 2026-10-27 修正 HUD 原生 Liquid Glass 的外观适配
+
+- 核对 `HUDView → toolboxGlass → glassEffect(.regular)` 的官方 API 调用链；核对时本机减少透明度和增加对比度均为 false，未走不透明回退。上版固定深色与白色前景，白底预览没能充分体现原生材质。
+- 移除 HUD 的固定深色，图标、填充与倒计时采用系统语义前景；保留官方自适应 `regular`。按 [Apple Materials 指导](https://developer.apple.com/design/human-interface-guidelines/materials)，`clear` 需要额外处理背景明暗和可读性，不适合直接替代覆盖任意桌面内容的 HUD。既有减少透明度/高对比度回退继续复用，音量 0–100、每次 ±1、连续长条和窗口行为保持。
+- 在现有安全画廊加入仅供预览的彩色文字背景。Canvas 实际导出确认背景染色、文字折射以及白底静音图标的可读性；已有 ToolboxPreviews 宿主已刷新并查看浅色/深色实际窗口。5 项定向检查、Debug 构建及 Preview 源码/二进制/资源隔离检查通过，产物位于 `validation/HUD-menubar-20261027/adaptive-glass-*`；临时 Canvas 选页已恢复。未修改系统辅助功能设置或安装正式 App，不把白底截图当作完整材质证据。
+
+## 2026-10-27 菜单栏下方的连续音量玻璃胶囊
+
+- 按用户选定录屏改为 308×66pt 横向胶囊：左侧扬声器/静音图标，右侧连续长条，音量不显示格线、标题或大数字。进度直接对应 0–100，0 时没有填充；背光沿用百分比长条，其他选项、倒计时及预设任务状态保留文字与反馈。表面复用 `toolboxGlass` 的系统 [Liquid Glass](https://developer.apple.com/documentation/swiftui/view/glasseffect(_:in:)) 和辅助功能回退，胶囊采用深色语义外观。
+- 音量键统一每次加减 1，并夹在 0–100；移除原生音量 OSD 的 16 格换算及自定义音量步长入口。旧两项偏好停止读取，未清除已保存配置；键盘设置同步说明固定步长与新提示。复用原有 USB/TCP 路由、默认输出过滤、静音/取消静音及合并提交逻辑，亮度键的既有步长和系统 OSD 策略保留。
+- HUD 读取本进程菜单栏图标的实际坐标，在下方显示并保留 8pt 屏幕边界；图标不可见时回退至当前屏幕右上方。不抢焦点、点击穿透、操作令牌及自动消失规则保持。对照上游 `56fa67e` 仍为底部 HUD，复用其窗口与状态逻辑；纯 HUD 移至 UI 模块，经从既有反馈接口拆出的 `HUDPresenting` 注入，正式组件进入已有安全画廊的“菜单栏”场景，无新增 Preview、Target、Scheme 或依赖。
+- 验证：25 项定向检查及 ToolboxPreviews Debug 编译通过，覆盖每次 ±1、0/100 边界、旧偏好不改变步长、连续比例、USB/TCP 目标、旧结果隔离、静音与提交行为，以及原生窗口定位、焦点和状态。Canvas 导出正式胶囊；安全窗口实际点击确认 50→51→50。自动消失沿用本次同一窗口控制逻辑已有的安全 App 回读（2.5 秒后窗口隐藏、透明度 0）；SwiftPM 的 AppKit 动画时序不作完整收起证据。验证产物位于本机 `validation/HUD-menubar-20261027/`。
+- 未替换、安装或启动正式 App，未连接真实显示器；未做物理多屏、菜单栏自动隐藏、全屏实测或全量回归。
+
 ## 2026-10-27 Guardian 3.2.1-local 修复无线授权循环
 
 - 照片热点 BSSID 为 `fe:d5:90:fb:65:cb`，本次 Mac 开机后变为 `82:69:38:99:22:69`；显示器保存的 22 个调试网络包含旧地址，不含当前地址。Android 按 BSSID 保存网络信任，单次“允许”不会持久保存；用户提出本次未勾选“始终允许”的猜想，与该状态一致。设备事件日志进一步记录授权页 `com.android.systemui/.wifi.WifiDebuggingActivity` 每约 15–30 秒抢占前台，随后返回外部输入页；用户断网后画面稳定。旧 Guardian 把无线调试关闭视为故障，即使 USB、5555 端口与 adbd 正常仍反复修复，断网时也约每分钟重启 adbd。

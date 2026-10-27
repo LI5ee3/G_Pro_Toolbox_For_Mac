@@ -103,10 +103,58 @@ private struct PreviewSurface: View {
     let fixture: PreviewFixture
     let screen: ToolboxScreen
     @State private var showMenuBar = false
+    @State private var hudVolume = 50
+    @StateObject private var hudModel = HUDModel(title: "音量", value: "50")
     var body: some View {
         let session = fixture.session
         VStack(spacing: 0) {
-            if screen == .menuBar { ToolboxMenuBarContent(session: session).frame(maxHeight: .infinity) }
+            if screen == .menuBar {
+                HStack(alignment: .top, spacing: 24) {
+                    ToolboxMenuBarContent(session: session)
+                    VStack(spacing: 16) {
+                        Text("调节提示 · Liquid Glass").font(.headline)
+                        HUDView(model: hudModel)
+                            .padding(24)
+                            .background {
+                                HStack(spacing: 0) {
+                                    Color(red: 0.12, green: 0.24, blue: 0.34)
+                                    Color(red: 0.17, green: 0.42, blue: 0.39)
+                                    Color(red: 0.43, green: 0.20, blue: 0.25)
+                                }
+                                .overlay {
+                                    HStack(spacing: 20) {
+                                        ForEach(0..<5) { _ in Text("Aa").font(.system(size: 46, weight: .bold)) }
+                                    }.foregroundStyle(.white.opacity(0.55))
+                                }
+                            }
+                        HStack {
+                            Button("−1") { hudVolume = max(0, hudVolume - 1) }
+                            Text("\(hudVolume) / 100").monospacedDigit()
+                            Button("+1") { hudVolume = min(100, hudVolume + 1) }
+                        }
+                        HStack {
+                            Button("预览 0") { hudVolume = 0 }
+                            Button("预览 33") { hudVolume = 33 }
+                            Button("预览 66") { hudVolume = 66 }
+                            Button("预览 100") { hudVolume = 100 }
+                            Button(hudModel.isPresented ? "预览收起" : "预览出现") {
+                                withAnimation(HUDWindow.transitionAnimation) { hudModel.isPresented.toggle() }
+                            }
+                        }
+                        Button("在菜单栏下显示提示") {
+                            HUDWindow.shared.show(title: "音量", value: String(hudVolume))
+                        }
+                        HUDView(model: HUDModel(title: "静音", value: "开"))
+                        Button("显示静音提示") {
+                            HUDWindow.shared.show(title: "静音", value: "开")
+                        }
+                    }
+                    .onChange(of: hudVolume) {
+                        hudModel.value = String(hudVolume)
+                        HUDWindow.shared.show(title: "音量", value: String(hudVolume))
+                    }
+                }.padding(24).frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+            }
             else { ToolboxWindowContent(session: session, screen: screen) }
             Divider()
             HStack {

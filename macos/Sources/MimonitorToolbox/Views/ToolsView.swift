@@ -282,23 +282,13 @@ struct HotkeyConfigSheet: View {
                         HStack(spacing: 12) {
                             Toggle("音量调节键调显示器音量", isOn: Binding(get: { keyboard.mediaVolumeKeysEnabled }, set: { state.mediaVolumeKeysEnabled = $0 }))
                                 .toggleStyle(.checkbox)
-                            if !keyboard.mediaVolumeNativeOSD {
-                                Stepper("步长 \(keyboard.mediaVolumeStep)", value: Binding(get: { keyboard.mediaVolumeStep }, set: { state.mediaVolumeStep = $0 }), in: 1...100)
-                                    .frame(width: 140)
-                                    .disabled(!keyboard.mediaVolumeKeysEnabled)
-                            }
                             Spacer()
                         }
                         Text("音量加减、静音键通过当前已连接的 USB/TCP ADB 会话控制此显示器。需要辅助功能权限。")
                             .font(Theme.detailFont)
                             .foregroundStyle(Theme.secondaryText)
 
-                        Toggle("使用 macOS 原生音量提示（OSD）", isOn: Binding(get: { keyboard.mediaVolumeNativeOSD }, set: { state.mediaVolumeNativeOSD = $0 }))
-                            .toggleStyle(.checkbox)
-                            .disabled(!keyboard.mediaVolumeKeysEnabled)
-                        Text(keyboard.mediaVolumeNativeOSD
-                             ? "原生音量提示固定为 16 格；提示失败时自动使用应用悬浮提示。"
-                             : "当前使用应用悬浮提示，可自行设定调节步长。")
+                        Text("每次加减 1 音量，范围为 0–100；菜单栏下方以玻璃胶囊和连续进度条显示。")
                             .font(Theme.detailFont)
                             .foregroundStyle(Theme.secondaryText)
 

@@ -1,6 +1,6 @@
 # 红米 G Pro ToolBox 设计规范
 
-更新：2026-10-26 · **已选 A「设备控制中心」：系统字体、原生控件、石墨青和实体接口图标；通过现有安全 Preview 验证，不替换已安装 App。**
+更新：2026-10-28 · **已选 A「设备控制中心」：系统字体、原生控件、石墨青和实体接口图标；通过现有安全 Preview 验证，不替换已安装 App。**
 
 ## A 方向整体重设计（2026-10-26，当前规则）
 
@@ -11,10 +11,16 @@
 - 显示器工具页不再显示“项目源代码”和“原项目”入口；HDR/SDR 记忆、FreeSync 记忆、准星模式限制及 4K UI 四处布尔设置统一使用原生 `Toggle` 的 switch 样式，由系统提供液态玻璃外观。原有绑定、未知/锁定禁用和 4K 切换前确认保持。
 - 首页将音量、背光和画面模式合在一处原生 GroupBox；四路视频输入直接操作，预设名称、保存归属和管理/新建入口同处一行。新建复用正式预设命名弹窗；不复制业务流程。未知读数、离线禁用与预设未完整应用状态保留。
 - 统一系统字体层级：页面标题22pt semibold、设备标题21pt semibold、核心读数32pt medium、区域标题14pt semibold、正文14pt、控件13pt medium、说明13pt、辅助信息12pt；数字使用系统等宽数字。菜单栏紧凑读数仍为20pt，不引入自定义字体。
+- 侧栏以正式 `SidebarNavigationLabel` 复用单图标单行的原生 Label；未选中沿用原 SF Symbols，选中使用对应填充变体，信号源使用已验证的圆形填充变体。仅在符号变化时调用官方 `NSImageView.setSymbolImage` 的 Magic Replace／Replace；列表复用图像视图到另一导航项时直接更新。原生 List 保留高亮、文字、分组、宽度与路由，图标配色跟随所属 `NSTableRowView.isEmphasized`，同步失焦反馈。减少动态效果时直接切换符号，不给窗口和页面布局附加动画。
 - Button、Slider、NSSegmentedControl、NSPopUpButton、List、Form、Settings 和 sheet 使用原生实现。共享动作按钮采用 large 尺寸和原生 glass / glassProminent 样式，不再固定圆角半径，由系统按上下文确定形状；当前 macOS 大号按钮采用胶囊形状，遵循 [Apple 新设计中的按钮规则](https://developer.apple.com/videos/play/wwdc2025/323/)。系统负责按下、回弹和禁用反馈。应用内按钮统一关闭焦点外圈，保留键盘聚焦、触发与快捷键；输入框编辑焦点照常显示。减少透明度或增加对比度时回退原生 bordered 样式。
 - 强调色沿用石墨青。普通强调在深色使用 #78C3CC；带白字的选中按钮与分段控件统一使用 #286B75，避免深色下亮青底与白字对比不足。中性按钮清除继承的 tint，突出当前选项而非所有动作。
+- 调节 HUD 参照用户选定录屏，采用 308×66pt 横向玻璃胶囊，左侧图标、右侧连续音量条；音量不显示格线、标题或大数字，直接对应 0–100，每次音量键只加减 1。外框复用 `toolboxGlass` 的官方 SwiftUI `glassEffect(.regular)`，由 `GlassEffectContainer` 统一管理材质与过渡，正式浮窗与安全预览共用；内部复用现有 `FastSlider` 的原生无刻度 `Slider`，轨道与滑块玻璃反馈遵循系统样式，不手绘或嵌套第二层玻璃。HUD 的滑条仅显示读数，不接受鼠标或键盘输入；静音使用静音图标和零值滑条，其他选项和任务保留文字、状态与倒计时。从 App 菜单栏图标下方出现，距菜单栏与屏幕左右边缘至少 8pt；图标不可见时回退至当前屏幕右上方。不抢焦点、点击穿透和自动消失保持；减少透明度/增加对比度时复用实底回退，前景使用系统语义色。正式 HUD 进入现有安全画廊的“菜单栏”场景，通过彩色文字背景检查实际透射与折射，沿用已有预览入口和工程。
+- HUD 进出采用官方 `glassEffectTransition(.materialize)` 与 0.2 秒 `.smooth`，等待 SwiftUI 动画完整移除后隐藏窗口；已有代次校验阻止旧收起回调隐藏新提示，连按不重播入场。音量条仅对呈现值做 0.16 秒 `.smooth` 插值，整数业务目标、0–100 范围及每次 ±1 不变。减少动态效果时取消两类动画；安全画廊复用同一模型和动画常量，提供 0/100 端点与出现/收起检查。
+- HUD 静音/有声图标复用同一个 SF Symbols `Image`，在 `symbolName` 改变时触发官方 `contentTransition(.symbolEffect(.replace.magic(fallback: .replace)))`；支持匹配的形状由 Magic Replace 处理，其余由系统 Replace 回退，不使用自绘路径或第三方库。普通音量数值改变而图标不变时不重播；减少动态效果时使用 identity 并取消动画事务。
+- 有声图标按本 App 的音量范围分为三档：1–33 使用 `speaker.wave.1.fill`、34–66 使用 `speaker.wave.2.fill`、67–100 使用 `speaker.wave.3.fill`，0 使用静音符号。HUD 符号统一 24pt 字号、32pt 占位，保留扬声器主体的一致尺寸；跨档沿用同一 Magic Replace 过渡，档内每次 ±1 只平滑更新长条。取消静音时用当前已知音量恢复对应档位与长条，读数未知时保留原文字反馈，不伪造音量。
+- 控制台及菜单栏共用的音量标题图标与 HUD 复用同一分档规则，静音状态优先；共享 `ToolboxSymbolImage` 以窄范围 `NSImageView.setSymbolImage` 桥接触发官方 Magic Replace／Replace，减少动态效果时直接设置图像。图标固定 14pt 字号与 24×18pt 占位，同档不重播；读数未知仍显示“—”，不作为零音量。
 - 画面模式与首页共用原生玻璃选择按钮；所有正式下拉入口及安全预览底栏共用 `ToolboxGlassMenu`：AppKit `NSButton.BezelStyle.glass` 与系统 `NSHostingMenu`，不叠加自绘或额外玻璃底板。选择器展开时以当前选中项定位，使其与按钮处于同一行；动作菜单在按钮下方展开。菜单内容继续使用原 SwiftUI Picker / Button / Toggle，保留绑定、勾选、未知、禁用、键盘和辅助功能语义。按钮高28pt、最小宽80pt，长文字按可用宽度扩展；预设管理保留紧凑图标入口，模式按钮继续发布当前选中项。
-- HDMI 1/2 使用双肩梯形插座，DisplayPort 使用单侧削角插座，USB-C 使用圆角槽；图形只作原生按钮内的符号。视频输入按钮采用 large 尺寸下的系统默认胶囊形状，不固定圆角半径。标签和辅助功能名称保留，23/24/29/30 原有域值及 setSource 动作复用，未知时四项均不选中。首页和信号源页使用同一正式组件；选中变化只更新 tint 和勾号，保持原生按钮身份及键盘焦点。
+- HDMI 1/2 使用双肩梯形插座，DisplayPort 使用单侧削角插座，USB-C 使用圆角槽；图形只作原生按钮内的符号。视频输入按钮采用 large 尺寸下的系统默认胶囊形状，不固定圆角半径。标签和辅助功能名称保留，23/24/29/30 原有域值及 setSource 动作复用，未知时四项均不选中。首页和信号源页使用同一正式组件；右侧固定 18×18pt 的 `circle`／`checkmark.circle.fill` 通过共享 `ToolboxSymbolImage` 执行官方 Magic Replace／Replace，符号不变时不重播，减少动态效果时立即更新，保留原生按钮身份及键盘焦点。接口轮廓继续自绘；本机官方符号库提供通用线缆符号，没有找到分别匹配三类插座的一组专用符号。
 - 新 App 图标为石墨青底、银白显示器和两条调节滑块，无文字、外侧透明。用户最终指定采用首张生成原图 exec-51c1bc21-d33f-4016-862b-6b03adf6ee71.png，保留原有光泽和边缘效果。生产源在 macos/assets/AppIcon.png，ICNS 用既有 make_icon.sh 生成，同步更新 RuntimeAssets.lock.json 中该资源的摘要；侧栏 AppMark 来自同一素材。历史对比图与旧图标备份保留。
 - 范围仅 UI、图标与设计文档；连接、恢复、设备协议、调度、预设存储和权限逻辑不变。统一 PreviewGallery、Scheme、Target 和模拟实现不变。过程及验收证据位于 validation/UI-UX-redesign-20261026/implementation/。
 

@@ -70,17 +70,7 @@ extension AppCoordinator {
         guard isConnected else { return }
 
         let base = mediaVolumePreview ?? mediaVolumeHardware ?? 50
-        let next: Int
-        if mediaVolumeNativeOSD {
-            // 系统 OSD 固定 16 格；开原生 OSD 时每按一次移动一格（和系统音量键一致）
-            let chiclets = 16
-            let chiclet = Int((Double(base) / 100 * Double(chiclets)).rounded())
-            let target = min(max(chiclet + (increase ? 1 : -1), 0), chiclets)
-            next = clamp(Int((Double(target) / Double(chiclets) * 100).rounded()), 0, 100)
-        } else {
-            let step = max(1, mediaVolumeStep)
-            next = clamp(ControlStep.alignToStep(base, step: step, increasing: increase), 0, 100)
-        }
+        let next = clamp(base + (increase ? 1 : -1), 0, 100)
 
         // 静音时按音量键先解除静音（和 macOS/Android 原生行为一致）
         mediaMuteIntent += 1
@@ -93,11 +83,7 @@ extension AppCoordinator {
         dashboardMuted = false
         currentValues["volume_music_speaker"] = String(next)
 
-        if mediaVolumeNativeOSD, environment.feedback.volume(next) {
-            // 原生 OSD 自带淡出，不需要收尾
-        } else {
-            environment.feedback.show(title: "音量", value: "\(next)")
-        }
+        environment.feedback.show(title: "音量", value: "\(next)")
 
         // 首次按下立即下发；之后连按只更新预览，由收尾任务合并成最后一次
         if !mediaVolumeCommitInFlight, mediaVolumeCommit == nil {
@@ -213,8 +199,8 @@ extension AppCoordinator {
         dashboardMuted = muted
         // 更新的静音动作覆盖掉「按键先解除静音」的意图，避免收尾提交把它又打开
         mediaVolumeNeedsUnmute = false
-        if mediaVolumeNativeOSD, environment.feedback.mute(muted) {
-            // 原生静音 OSD
+        if !muted, let volume = mediaVolumePreview ?? mediaVolumeHardware ?? dashboardVolume {
+            environment.feedback.show(title: "音量", value: String(volume))
         } else {
             environment.feedback.show(title: "静音", value: muted ? "开" : "关")
         }

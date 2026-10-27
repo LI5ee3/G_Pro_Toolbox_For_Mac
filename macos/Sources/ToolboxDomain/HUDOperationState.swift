@@ -1,6 +1,6 @@
 import Foundation
 
-package enum HUDOperationResult: Equatable, Sendable {
+public enum HUDOperationResult: Equatable, Sendable {
     case success, failure, cancelled
 
     package static func completion(isCurrentConnection: Bool, hasError: Bool,

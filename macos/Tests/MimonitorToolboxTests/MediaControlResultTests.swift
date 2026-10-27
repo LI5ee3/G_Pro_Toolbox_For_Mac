@@ -140,6 +140,45 @@ final class MediaControlCoordinatorTests: XCTestCase {
         return state
     }
 
+    func testVolumeKeysUseOneUnitAcrossTheFullRangeRegardlessOfLegacyOSDPreferences() async {
+        for (base, increase, expected) in [(0, false, 0), (0, true, 1), (16, true, 17),
+                                           (16, false, 15), (99, true, 100), (100, true, 100), (100, false, 99)] {
+            let runtime = PreviewRuntime()
+            runtime.preferences.set(25, forKey: "media_volume_step")
+            runtime.preferences.set(true, forKey: "media_volume_native_osd")
+            runtime.display.volume = base
+            let state = fixture(runtime, execute: runtime.display.execute)
+            state.seedSimulationReadings(volume: base, muted: false)
+            state.adjustMediaVolume(increase: increase)
+            XCTAssertEqual(state.mediaVolumePreview, expected)
+            XCTAssertEqual(state.dashboardVolume, expected)
+            XCTAssertEqual(runtime.feedback.hints.last, "音量:\(expected)")
+            await state.waitForPendingWork()
+            XCTAssertEqual(runtime.display.volume, expected)
+            state.stop()
+        }
+    }
+
+    func testUnmutingShowsTheKnownVolumeInsteadOfAlwaysUsingTheHighVolumeSymbol() {
+        for volume in [0, 1, 33, 34, 66, 67, 100] {
+            let runtime = PreviewRuntime()
+            let state = fixture(runtime, execute: runtime.display.execute)
+            state.seedSimulationReadings(volume: volume, muted: true)
+            state.applyMediaMute(false, writeToDevice: false)
+            XCTAssertEqual(runtime.feedback.hints.last, "音量:\(volume)")
+            XCTAssertEqual(state.dashboardVolume, volume)
+            state.stop()
+        }
+        let runtime = PreviewRuntime()
+        let state = fixture(runtime, execute: runtime.display.execute)
+        state.mediaVolumePreview = nil
+        state.mediaVolumeHardware = nil
+        state.dashboardVolume = nil
+        state.applyMediaMute(false, writeToDevice: false)
+        XCTAssertEqual(runtime.feedback.hints.last, "静音:关")
+        state.stop()
+    }
+
     func testVolumeFailuresReleaseBusyStateDoNotRetryAndAllowSameTargetAgain() async {
         // Read failure, failed keyevent, and a Binder write whose result cannot be confirmed.
         for failurePath in 0...2 {
@@ -273,13 +312,11 @@ final class MediaControlCoordinatorTests: XCTestCase {
                 return result
             }
             state.seedSimulationReadings(volume: 10, muted: true)
-            state.mediaVolumeNativeOSD = false
-            state.mediaVolumeStep = 5
             state.refreshMediaVolumeState()
             await fulfillment(of: [pollRead], timeout: 3)
 
-            let first = nativeVolumeKey ? 15 : 27
-            let latest = nativeVolumeKey ? 20 : 39
+            let first = nativeVolumeKey ? 11 : 27
+            let latest = nativeVolumeKey ? 12 : 39
             if nativeVolumeKey {
                 state.adjustMediaVolume(increase: true)
                 state.adjustMediaVolume(increase: true)

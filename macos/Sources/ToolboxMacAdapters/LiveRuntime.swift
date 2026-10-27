@@ -59,13 +59,15 @@ final class LiveHotkeyDriver: HotkeyDriving {
 }
 
 final class LiveFeedback: FeedbackPresenting {
+    private let hud: any HUDPresenting
     private var active = false
+    init(hud: any HUDPresenting) { self.hud = hud }
     func start() { guard !active else { return }; active = true; NativeOSD.shared.start() }
-    func show(title: String, value: String) { guard active else { return }; HUDWindow.shared.show(title: title, value: value) }
-    func show(title: String, value: String, countdown: TimeInterval) { guard active else { return }; HUDWindow.shared.show(title: title, value: value, countdown: countdown) }
-    func endCountdown() { guard active else { return }; HUDWindow.shared.endCountdown() }
-    func beginOperation(title: String) -> UUID { guard active else { return UUID() }; return HUDWindow.shared.beginOperation(title: title) }
-    func finishOperation(token: UUID, result: HUDOperationResult, title: String?) { guard active else { return }; HUDWindow.shared.finishOperation(token: token, result: result, title: title) }
+    func show(title: String, value: String) { guard active else { return }; hud.show(title: title, value: value) }
+    func show(title: String, value: String, countdown: TimeInterval) { guard active else { return }; hud.show(title: title, value: value, countdown: countdown) }
+    func endCountdown() { guard active else { return }; hud.endCountdown() }
+    func beginOperation(title: String) -> UUID { guard active else { return UUID() }; return hud.beginOperation(title: title) }
+    func finishOperation(token: UUID, result: HUDOperationResult, title: String?) { guard active else { return }; hud.finishOperation(token: token, result: result, title: title) }
     func brightness(_ value: Int) -> Bool {
         guard active else { return false }
         return NativeOSD.shared.showBrightness(value: value) { [weak self] in self?.show(title: "背光", value: "\(value)") }
@@ -78,12 +80,12 @@ final class LiveFeedback: FeedbackPresenting {
         guard active else { return false }
         return NativeOSD.shared.showMute { [weak self] in self?.show(title: "静音", value: muted ? "开" : "关") }
     }
-    func stop() { guard active else { return }; active = false; HUDWindow.shared.stop(); NativeOSD.shared.stop() }
+    func stop() { guard active else { return }; active = false; hud.stop(); NativeOSD.shared.stop() }
 }
 
 extension AppEnvironment {
     /// Call only from the production composition root, after choosing the runtime mode.
-    @MainActor static func live() -> AppEnvironment {
+    @MainActor static func live(hud: any HUDPresenting) -> AppEnvironment {
         precondition(ProcessInfo.processInfo.environment["XCODE_RUNNING_FOR_PREVIEWS"] != "1", "Use the ToolboxPreviewHost scheme for safe previews")
         let resources = RuntimeResources(adbPath: LiveResourceLocator.locateAdb(),
             serverPort: ProcessInfo.processInfo.environment["MIMONITOR_ADB_SERVER_PORT"] ?? "5038",
@@ -181,7 +183,7 @@ extension AppEnvironment {
         system.exportLog = { logFile.export($0, text: $1, completion: $2) }
         system.openLogDirectory = logFile.open
         return AppEnvironment(mode: .live, preferences: UserDefaults.standard, adb: adb,
-            hotkeys: HotkeyManager(driver: LiveHotkeyDriver()), feedback: LiveFeedback(),
+            hotkeys: HotkeyManager(driver: LiveHotkeyDriver()), feedback: LiveFeedback(hud: hud),
             scheduler: LiveScheduler(), system: system, now: Date.init,
             presetDevice: { AdbPresetDevice(adb: $0, endpoint: $1, identity: $2) })
     }
@@ -196,5 +198,7 @@ public enum LiveToolboxRuntime {
         return AppLaunchPolicy.startsInMenuBar(arguments: CommandLine.arguments, loginEvent: login)
     }
 
-    @MainActor public static func makeCoordinator() -> AppCoordinator { AppCoordinator(environment: .live()) }
+    @MainActor public static func makeCoordinator(hud: any HUDPresenting) -> AppCoordinator {
+        AppCoordinator(environment: .live(hud: hud))
+    }
 }

@@ -155,7 +155,7 @@ struct MimonitorToolboxApp: App {
     init() {
         precondition(ProcessInfo.processInfo.environment["XCODE_RUNNING_FOR_PREVIEWS"] != "1",
                      "Select ToolboxPreviewHost for previews; production adapters are disabled")
-        _session = State(initialValue: ToolboxSession(coordinator: LiveToolboxRuntime.makeCoordinator()))
+        _session = State(initialValue: ToolboxSession(coordinator: LiveToolboxRuntime.makeCoordinator(hud: HUDWindow.shared)))
     }
     private func bindLifecycle() { appDelegate.session = session; appDelegate.launch = launch }
 

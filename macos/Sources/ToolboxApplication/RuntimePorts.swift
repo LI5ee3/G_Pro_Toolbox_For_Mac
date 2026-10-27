@@ -23,17 +23,21 @@ package protocol HotkeyDriving: AnyObject {
     func stop()
 }
 
-package protocol FeedbackPresenting: AnyObject {
-    @MainActor func start()
+/// The app host supplies the same HUD surface to live feedback and safe previews.
+public protocol HUDPresenting: AnyObject {
     @MainActor func show(title: String, value: String)
     @MainActor func show(title: String, value: String, countdown: TimeInterval)
     @MainActor func endCountdown()
     @MainActor func beginOperation(title: String) -> UUID
     @MainActor func finishOperation(token: UUID, result: HUDOperationResult, title: String?)
+    @MainActor func stop()
+}
+
+package protocol FeedbackPresenting: HUDPresenting {
+    @MainActor func start()
     @MainActor func brightness(_ value: Int) -> Bool
     @MainActor func volume(_ value: Int) -> Bool
     @MainActor func mute(_ muted: Bool) -> Bool
-    @MainActor func stop()
 }
 
 package struct RuntimeResources {

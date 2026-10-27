@@ -97,6 +97,32 @@ private struct ToolboxActionModifier: ViewModifier {
     }
 }
 
+/// Explicit AppKit transitions keep control symbols animated independently of SwiftUI layout updates.
+struct ToolboxSymbolImage: NSViewRepresentable {
+    let name: String
+    let animated: Bool
+    var tint: NSColor = .labelColor
+
+    func makeCoordinator() -> Coordinator { Coordinator() }
+    func makeNSView(context: Context) -> NSImageView {
+        let view = NSImageView()
+        view.symbolConfiguration = .init(pointSize: 14, weight: .semibold)
+        return view
+    }
+    func updateNSView(_ view: NSImageView, context: Context) {
+        view.contentTintColor = tint
+        view.isEnabled = context.environment.isEnabled
+        guard let image = NSImage(systemSymbolName: name, accessibilityDescription: nil) else { return }
+        if !animated || context.coordinator.name == nil {
+            view.image = image
+        } else if context.coordinator.name != name {
+            view.setSymbolImage(image, contentTransition: .replace.magic(fallback: .replace))
+        }
+        context.coordinator.name = name
+    }
+    final class Coordinator { var name: String? }
+}
+
 /// Selection updates only tint and content, preserving the native button's keyboard focus.
 struct ToolboxSelectionButtonSurface: ViewModifier {
     @Environment(\.accessibilityReduceTransparency) private var reduceTransparency

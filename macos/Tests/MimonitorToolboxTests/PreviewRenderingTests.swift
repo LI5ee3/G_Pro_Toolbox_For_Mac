@@ -8,6 +8,178 @@ import ToolboxDomain
 
 @MainActor
 final class PreviewRenderingTests: XCTestCase {
+    func testSidebarSelectionUsesAvailableSystemSymbolVariants() {
+        let expected: [(Page, String)] = [
+            (.home, "house.fill"), (.picture, "paintpalette.fill"),
+            (.presets, "square.stack.3d.up.fill"), (.game, "gamecontroller.fill"),
+            (.source, "arrow.triangle.2.circlepath.circle.fill"), (.light, "lightbulb.fill"),
+            (.menuBar, "menubar.rectangle"), (.tools, "wrench.and.screwdriver.fill"),
+            (.settings, "gearshape.fill"), (.remote, "tv.fill")
+        ]
+        XCTAssertEqual(expected.count, Page.allCases.count)
+        for (page, selectedName) in expected {
+            let normal = SidebarNavigationLabel(title: page.title, page: page, selected: false).symbolName
+            let selected = SidebarNavigationLabel(title: page.title, page: page, selected: true).symbolName
+            XCTAssertEqual(normal, page.icon)
+            XCTAssertEqual(selected, selectedName)
+            XCTAssertNotNil(NSImage(systemSymbolName: normal, accessibilityDescription: nil))
+            XCTAssertNotNil(NSImage(systemSymbolName: selected, accessibilityDescription: nil))
+        }
+    }
+
+    func testSidebarSymbolTracksNativeRowEmphasisAndReuse() throws {
+        let _ = NSApplication.shared
+        let row = NSTableRowView()
+        let image = SidebarSymbolImageView()
+        row.addSubview(image)
+        row.isEmphasized = true
+        image.updateSymbol(page: .home, name: "house.fill", selected: true, animated: false)
+        XCTAssertEqual(image.contentTintColor, .white)
+        let home = try XCTUnwrap(image.image)
+        row.isEmphasized = false
+        XCTAssertEqual(image.contentTintColor, NSColor(Theme.actionAccent))
+        row.isEmphasized = true
+        XCTAssertEqual(image.contentTintColor, .white)
+        XCTAssertTrue(image.image === home)
+        image.updateSymbol(page: .home, name: "house.fill", selected: true, animated: true)
+        XCTAssertTrue(image.image === home)
+        image.updateSymbol(page: .settings, name: "gearshape", selected: false, animated: true)
+        XCTAssertFalse(image.image === home)
+        XCTAssertEqual(image.contentTintColor, NSColor(Theme.accent))
+        image.removeFromSuperview()
+        row.isEmphasized = false
+        image.updateSymbol(page: .settings, name: "gearshape.fill", selected: true, animated: false)
+        XCTAssertEqual(image.contentTintColor, NSColor(Theme.actionAccent))
+        XCTAssertNotNil(image.image)
+    }
+
+    func testVideoInputSelectionKeepsNativeIndicators() {
+        let _ = NSApplication.shared
+        let host = NSHostingView(rootView: VideoInputPicker(selectedValue: 29, onSelect: { _ in }))
+        host.frame = NSRect(x: 0, y: 0, width: 740, height: 60)
+        host.layoutSubtreeIfNeeded()
+        func indicators(in view: NSView) -> [NSImageView] {
+            if let image = view as? NSImageView { return [image] }
+            return view.subviews.flatMap { indicators(in: $0) }
+        }
+        let initialViews = Set(indicators(in: host).map(ObjectIdentifier.init))
+        XCTAssertEqual(initialViews.count, 4)
+        for selection in [23, 24, 30, 29, -1] {
+            host.rootView = VideoInputPicker(selectedValue: selection, onSelect: { _ in })
+            host.layoutSubtreeIfNeeded()
+            let current = indicators(in: host)
+            XCTAssertEqual(Set(current.map(ObjectIdentifier.init)), initialViews)
+            XCTAssertEqual(current.filter { $0.contentTintColor == .white }.count, selection == -1 ? 0 : 1)
+        }
+    }
+
+    func testNativeSymbolImageReusesItsViewAcrossAnimatedAndImmediateUpdates() throws {
+        let _ = NSApplication.shared
+        let host = NSHostingView(rootView: ToolboxSymbolImage(name: VolumeSymbol.name(for: 33), animated: false))
+        host.frame = NSRect(x: 0, y: 0, width: 24, height: 18)
+        host.layoutSubtreeIfNeeded()
+        func imageView(in view: NSView) -> NSImageView? {
+            if let image = view as? NSImageView { return image }
+            return view.subviews.lazy.compactMap { imageView(in: $0) }.first
+        }
+        let image = try XCTUnwrap(imageView(in: host))
+        let low = try XCTUnwrap(image.image)
+        host.rootView = ToolboxSymbolImage(name: VolumeSymbol.name(for: 34), animated: true)
+        host.layoutSubtreeIfNeeded()
+        XCTAssertTrue(imageView(in: host) === image)
+        let middle = try XCTUnwrap(image.image)
+        XCTAssertFalse(middle === low)
+        host.rootView = ToolboxSymbolImage(name: VolumeSymbol.name(for: 66), animated: true)
+        host.layoutSubtreeIfNeeded()
+        XCTAssertTrue(image.image === middle)
+        host.rootView = ToolboxSymbolImage(name: VolumeSymbol.name(for: 66, muted: true), animated: false)
+        host.layoutSubtreeIfNeeded()
+        XCTAssertTrue(imageView(in: host) === image)
+        XCTAssertNotNil(image.image)
+        XCTAssertFalse(image.image === middle)
+        host.rootView = ToolboxSymbolImage(name: "circle", animated: false)
+        host.layoutSubtreeIfNeeded()
+        let circle = try XCTUnwrap(image.image)
+        host.rootView = ToolboxSymbolImage(name: "circle", animated: true, tint: .white)
+        host.layoutSubtreeIfNeeded()
+        XCTAssertEqual(image.contentTintColor, .white)
+        XCTAssertTrue(image.image === circle)
+        host.rootView = ToolboxSymbolImage(name: "checkmark.circle.fill", animated: true, tint: .white)
+        host.layoutSubtreeIfNeeded()
+        XCTAssertTrue(imageView(in: host) === image)
+        XCTAssertNotNil(image.image)
+        XCTAssertFalse(image.image === circle)
+    }
+
+    func testHUDUsesTheMenuBarIconWithoutTakingKeyboardFocus() async throws {
+        let _ = NSApplication.shared
+        let item = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
+        item.button?.image = NSImage(systemSymbolName: "display", accessibilityDescription: "HUD 测试")
+        defer { HUDWindow.shared.stop(); NSStatusBar.system.removeStatusItem(item) }
+        let shown = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in
+            MainActor.assumeIsolated { item.button?.window?.isVisible == true }
+        }, object: nil)
+        await fulfillment(of: [shown], timeout: 2)
+        let icon = try XCTUnwrap(item.button?.window)
+        XCTAssertEqual(icon.level, .statusBar)
+        let keyWindow = NSApp.keyWindow
+        HUDWindow.shared.show(title: "音量", value: "16", countdown: 0.8)
+        let panel = try XCTUnwrap(NSApp.windows.first { $0.contentView is NSHostingView<HUDView> })
+        let area = try XCTUnwrap(icon.screen).visibleFrame
+        XCTAssertEqual(panel.frame.origin, HUDWindow.origin(anchor: icon.frame, in: area))
+        XCTAssertTrue(panel.isVisible)
+        XCTAssertTrue(panel.ignoresMouseEvents)
+        XCTAssertFalse(panel.isKeyWindow)
+        XCTAssertTrue(NSApp.keyWindow === keyWindow)
+        XCTAssertEqual(panel.frame.size, HUDWindow.size)
+        let host = try XCTUnwrap(panel.contentView as? NSHostingView<HUDView>)
+        host.layoutSubtreeIfNeeded()
+        XCTAssertTrue(host.rootView.model.isPresented)
+        XCTAssertFalse(panel.isOpaque)
+        XCTAssertTrue(host.rootView.model.showsCountdown)
+        HUDWindow.shared.endCountdown()
+        XCTAssertFalse(host.rootView.model.showsCountdown)
+        HUDWindow.shared.show(title: "静音", value: "开")
+        XCTAssertEqual(host.rootView.model.symbolName, "speaker.slash.fill")
+        HUDWindow.shared.show(title: "静音", value: "关")
+        XCTAssertEqual(host.rootView.model.symbolName, "speaker.wave.3.fill")
+        HUDWindow.shared.show(title: "背光", value: "80")
+        XCTAssertEqual(host.rootView.model.value, "80")
+        let token = HUDWindow.shared.beginOperation(title: "切换预设")
+        HUDWindow.shared.finishOperation(token: token, result: .success)
+        XCTAssertEqual(NSApp.windows.filter { $0.contentView is NSHostingView<HUDView> }.count, 1)
+        XCTAssertEqual(panel.frame.origin, HUDWindow.origin(anchor: icon.frame, in: area))
+        HUDWindow.shared.stop()
+        XCTAssertFalse(panel.isVisible)
+        XCTAssertFalse(host.rootView.model.isPresented)
+        HUDWindow.shared.show(title: "音量", value: "17")
+        XCTAssertTrue(panel.isVisible)
+        XCTAssertTrue(host.rootView.model.isPresented)
+        XCTAssertEqual(host.rootView.model.level, 0.17)
+    }
+
+    func testHUDClosingCanBeInterruptedWithoutAnOldCompletionHidingTheNewValue() async throws {
+        let _ = NSApplication.shared
+        defer { HUDWindow.shared.stop() }
+        HUDWindow.shared.show(title: "音量", value: "50")
+        let panel = try XCTUnwrap(NSApp.windows.first { $0.contentView is NSHostingView<HUDView> })
+        let host = try XCTUnwrap(panel.contentView as? NSHostingView<HUDView>)
+        let closing = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in
+            MainActor.assumeIsolated { !host.rootView.model.isPresented }
+        }, object: nil)
+        await fulfillment(of: [closing], timeout: 3)
+        HUDWindow.shared.show(title: "音量", value: "51")
+        try await Task.sleep(for: .milliseconds(350))
+        XCTAssertTrue(panel.isVisible)
+        XCTAssertTrue(host.rootView.model.isPresented)
+        XCTAssertEqual(host.rootView.model.value, "51")
+        let hidden = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in
+            MainActor.assumeIsolated { !panel.isVisible }
+        }, object: nil)
+        await fulfillment(of: [hidden], timeout: 3)
+        XCTAssertFalse(host.rootView.model.isPresented)
+    }
+
     func testSidebarWidthAndNativeCollapseRecovery() async throws {
         let _ = NSApplication.shared
         let controller = NSHostingController(rootView: ToolboxPreviewGallery())

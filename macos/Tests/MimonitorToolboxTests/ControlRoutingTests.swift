@@ -246,12 +246,11 @@ final class ControlRoutingTests: XCTestCase {
             assertShells(f, endpoint, ["settings put global picture_mode 10"])
             f.clear()
             s.mediaVolumeKeysEnabled = true; s.mediaVolumeOutputGateEnabled = false
-            s.mediaVolumeNativeOSD = false; s.mediaVolumeStep = 5
             await s.waitForPendingWork()
             assertShells(f, endpoint, [volumeRead, muteRead]) // Enabling media keys performs the existing initial poll.
             f.clear()
             s.handleHotkeyTrigger(HotkeyManager.mediaVolumeUpID); await s.waitForPendingWork()
-            assertShells(f, endpoint, [volumeWrite(15), volumeRead])
+            assertShells(f, endpoint, [volumeWrite(11), volumeRead])
             f.clear()
             s.handleHotkeyTrigger(HotkeyManager.mediaMuteID); await s.waitForPendingWork()
             assertShells(f, endpoint, [muteWrite])

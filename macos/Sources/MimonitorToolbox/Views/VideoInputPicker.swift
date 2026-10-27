@@ -5,10 +5,13 @@ import ToolboxDomain
 struct VideoInputPicker: View {
     let selectedValue: Int
     let onSelect: (Int) -> Void
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.toolboxPreviewAccessibility) private var preview
 
     var body: some View {
         HStack(spacing: 10) {
             ForEach(OptionLists.source) { option in
+                let selected = selectedValue == option.value
                 Button { onSelect(option.value) } label: {
                     HStack(spacing: 10) {
                         VideoPortIcon(kind: option.label == "DP" ? .displayPort : option.label == "USB-C" ? .usbC : .hdmi)
@@ -16,18 +19,19 @@ struct VideoInputPicker: View {
                             .accessibilityHidden(true)
                         Text(option.label).lineLimit(1)
                         Spacer(minLength: 0)
-                        Image(systemName: "checkmark")
-                            .font(.system(size: 11, weight: .semibold))
-                            .opacity(selectedValue == option.value ? 1 : 0)
+                        ToolboxSymbolImage(name: selected ? "checkmark.circle.fill" : "circle",
+                                           animated: !reduceMotion && !preview.reduceMotion,
+                                           tint: selected ? .white : .labelColor)
+                            .frame(width: 18, height: 18)
                             .accessibilityHidden(true)
                     }
                     .padding(.horizontal, 5).frame(maxWidth: .infinity, minHeight: 38)
                     .contentShape(Rectangle())
                 }
                 .font(Theme.controlFont).controlSize(.large)
-                .modifier(ToolboxSelectionButtonSurface(selected: selectedValue == option.value))
+                .modifier(ToolboxSelectionButtonSurface(selected: selected))
                 .accessibilityLabel(option.label == "DP" ? "DisplayPort" : option.label)
-                .accessibilityValue(selectedValue == option.value ? "当前输入" : "未选中")
+                .accessibilityValue(selected ? "当前输入" : "未选中")
                 .help("切换至 \(option.label == "DP" ? "DisplayPort" : option.label)")
             }
         }
