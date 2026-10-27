@@ -113,6 +113,8 @@ CI 要求在线且带 `toolbox-macos27` 标签的 macOS 27 ARM64 runner；没有
 | 画面、游戏、灯效、信号源、遥控及记忆 | `macos/Sources/MimonitorToolbox/AppState.swift` | `Sources/ToolboxApplication/AppCoordinator+{DisplayCommands,DisplayMemory,Refresh,Tools}.swift`；保留设备命令与顺序，适配状态发布、身份归属和未知读数。 |
 | 显示器端工具与资源 | `tools/mtk_direct/`、`tools/colorful_led/`、两份 JAR 与 Guardian APK | 与上述上游提交内容一致；资源更新时同步 Java/JAR，并更新 `Config/RuntimeAssets.lock.json` 的摘要。 |
 
+2026-10-27 起，Guardian 使用本地修复版 `3.2.1-local`（versionCode 6），去掉会反复触发网络授权的无线调试强制开启逻辑；两个 JAR 仍沿用上游。最小补丁、固定基线、版本与签名迁移说明见 [Guardian README](../assets/adb_guardian/README.md)，后续同步不能直接用上游旧 APK 覆盖该修复。
+
 上游分叉后的三次提交主要涉及 macOS 26 界面、开发态 ADB 查找和签名 CI；本轮补入遗漏的 ADB 查找与提示。当前 macOS 27 界面、手动 USB/TCP、进程超时/取消、4K/JNI 失败显示、音量失败处理及安全 Preview 各有现行用途，继续保留。上游的单 IP 假设、自动重启 server、旧读数失败语义和发布签名流程不能直接覆盖这些适配。
 
 后续更新先 `git fetch upstream master`，按上表定位对应文件；无本地差异的文件直接同步，有差异的函数只移植上游实际变更。验证沿用受影响模块的现有测试和默认 CI，不为同步新增测试框架或重复未改变功能的真机验收。这里的对照是源码证据，不代表运行中的 App 已更新或新增真机验收通过。

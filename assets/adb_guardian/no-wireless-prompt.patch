@@ -1,0 +1,58 @@
+--- a/apktool.yml
++++ b/apktool.yml
+@@ -10,2 +10,2 @@
+-  versionCode: 5
+-  versionName: 3.2
++  versionCode: 6
++  versionName: 3.2.1-local
+--- a/smali/com/example/adbguardian/AdbGuardianReceiver.smali
++++ b/smali/com/example/adbguardian/AdbGuardianReceiver.smali
+@@ -373,24 +372,0 @@
+-
+-    .line 103
+-    if-eq v7, v0, :cond_4
+-
+-    .line 104
+-    invoke-virtual/range {p0 .. p0}, Landroid/content/Context;->getContentResolver()Landroid/content/ContentResolver;
+-
+-    move-result-object v5
+-
+-    const-string v8, "adb_wifi_enabled"
+-
+-    invoke-static {v5, v8, v0}, Landroid/provider/Settings$Global;->putInt(Landroid/content/ContentResolver;Ljava/lang/String;I)Z
+-
+-    .line 105
+-    nop
+-
+-    .line 106
+-    const-string v5, "AdbGuardian"
+-
+-    const-string v8, "Forced adb_wifi_enabled = 1"
+-
+-    invoke-static {v5, v8}, Landroid/util/Log;->d(Ljava/lang/String;Ljava/lang/String;)I
+-
+-    const/4 v5, 0x1
+@@ -1305 +1281 @@
+-    const-string v5, "settings${IFS}put${IFS}global${IFS}development_settings_enabled${IFS}1;settings${IFS}put${IFS}global${IFS}adb_enabled${IFS}1;settings${IFS}put${IFS}global${IFS}adb_wifi_enabled${IFS}1;setprop${IFS}service.adb.tcp.port${IFS}5555;setprop${IFS}persist.adb.tcp.port${IFS}5555;setprop${IFS}persist.appcontrol_w_mask${IFS}-134250497"
++    const-string v5, "settings${IFS}put${IFS}global${IFS}development_settings_enabled${IFS}1;settings${IFS}put${IFS}global${IFS}adb_enabled${IFS}1;setprop${IFS}service.adb.tcp.port${IFS}5555;setprop${IFS}persist.adb.tcp.port${IFS}5555;setprop${IFS}persist.appcontrol_w_mask${IFS}-134250497"
+--- a/smali/com/example/adbguardian/MainActivity.smali
++++ b/smali/com/example/adbguardian/MainActivity.smali
+@@ -788,13 +787,0 @@
+-    .line 125
+-    const-string v0, "adb_wifi_enabled"
+-
+-    invoke-direct {p0, v0}, Lcom/example/adbguardian/MainActivity;->getGlobal(Ljava/lang/String;)Ljava/lang/String;
+-
+-    move-result-object v0
+-
+-    invoke-virtual {v1, v0}, Ljava/lang/String;->equals(Ljava/lang/Object;)Z
+-
+-    move-result v0
+-
+-    if-eqz v0, :cond_0
+-
+@@ -1012 +999,3 @@
+-    invoke-direct {p0, v0, v1, v2}, Lcom/example/adbguardian/MainActivity;->appendSetting(Ljava/lang/StringBuilder;Ljava/lang/String;Ljava/lang/String;)V
++    const-string v3, ""
++
++    invoke-direct {p0, v0, v1, v2, v3}, Lcom/example/adbguardian/MainActivity;->appendValue(Ljava/lang/StringBuilder;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;)V

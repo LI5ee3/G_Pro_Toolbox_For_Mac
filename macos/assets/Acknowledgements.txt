@@ -12,9 +12,11 @@ Archive source: https://dl.google.com/android/repository/platform-tools_r37.0.1-
 MtkDirectTool.jar and ColorfulLedTool.jar execute on the display. Source references:
 tools/mtk_direct/MtkDirectTool.java and tools/colorful_led/ColorfulLedTool.java.
 
-AdbGuardian: bundled versionCode 5 / versionName 3.2, preserved unchanged.
+AdbGuardian: local versionCode 6 / versionName 3.2.1-local, derived from upstream 3.2.
+The minimal decoded-bytecode patch and build/signing provenance are retained in
+assets/adb_guardian/README.md and assets/adb_guardian/no-wireless-prompt.patch.
 The inherited README refers to /home/hq/mitv/adb_guardian, which is not available in
-this checkout; its reproducible source and redistribution permission remain unverified.
+this checkout; the original Java/Kotlin source and redistribution permission remain unverified.
 
 The application icon's redistribution license and the project-wide license have not
 been established by this build audit. Content checksums establish integrity, not rights.

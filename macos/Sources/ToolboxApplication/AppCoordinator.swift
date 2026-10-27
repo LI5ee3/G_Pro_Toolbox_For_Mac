@@ -17,7 +17,6 @@ internal struct GuardianStatus {
     package let pid: String
     package let accessibility: Bool
     package let adbEnabled: Bool
-    package let adbWifiEnabled: Bool
     package let servicePort: String
     package let persistPort: String
     package let adbd: String
@@ -26,7 +25,8 @@ internal struct GuardianStatus {
     package let readFailure: String?
 
     package var ok: Bool {
-        readFailure == nil && installed && !pid.isEmpty && adbEnabled && adbWifiEnabled
+        // USB and legacy TCP 5555 do not require Android's network-trust wireless debugging.
+        readFailure == nil && installed && !pid.isEmpty && adbEnabled
             && servicePort == "5555" && persistPort == "5555"
             && adbd == "running" && accessibility && mask == "-134250497" && !stopped
     }
@@ -38,7 +38,6 @@ internal struct GuardianStatus {
         if !installed { parts.append("未安装") }
         else if pid.isEmpty { parts.append("未运行") }
         if !adbEnabled { parts.append("adb_enabled≠1") }
-        if !adbWifiEnabled { parts.append("adb_wifi≠1") }
         if servicePort != "5555" || persistPort != "5555" { parts.append("端口≠5555") }
         if adbd != "running" { parts.append("adbd 未运行") }
         if !accessibility { parts.append("无障碍未授权") }

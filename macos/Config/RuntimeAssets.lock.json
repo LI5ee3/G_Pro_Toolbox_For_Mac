@@ -24,7 +24,7 @@
     {
       "path": "assets/adb_guardian/adbguardian-signed.apk",
       "destination": "adb_guardian/adbguardian-signed.apk",
-      "sha256": "b910dab254ce4fd9b806a0f57693850c23bc0e8a566a41f808acc283f125a083",
+      "sha256": "69a40d6d97edb8cbd61bbf616275878d6aac482d4f9a9d0dc32ae1ad540d394b",
       "source_reference": "assets/adb_guardian/README.md"
     },
     {
@@ -36,13 +36,13 @@
     {
       "path": "macos/assets/Acknowledgements.txt",
       "destination": "Acknowledgements.txt",
-      "sha256": "3fb3ce52993ad9b03af67f292ea271a29f692bc1f95ffc2ab374999445e0d17b",
+      "sha256": "17fd73a9cf245be503dd5693549ddbdbbfe1000643e9b914bf2c729f0cbcd5ce",
       "source_reference": "upstream README and runtime READMEs; unresolved rights explicitly recorded"
     }
   ],
   "provenance_notes": [
     "JAR sources retained in repository; no project-wide license grant inferred.",
-    "Guardian README cites unavailable /home/hq/mitv/adb_guardian; reproducible source and redistribution rights unverified.",
+    "Guardian 3.2.1-local is a minimal patch of upstream 3.2; original Java/Kotlin source and redistribution rights remain unverified; patch and local signing provenance are in assets/adb_guardian/README.md.",
     "AppIcon licensing not established by a content hash."
   ]
 }

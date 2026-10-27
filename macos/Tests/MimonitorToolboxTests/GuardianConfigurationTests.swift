@@ -116,4 +116,23 @@ final class GuardianConfigurationTests: XCTestCase {
         XCTAssertFalse(state.guardianStatus.contains("未知"))
         state.stop()
     }
+
+    func testHealthyGuardianDoesNotRequireWirelessDebugging() {
+        let state = fixture { request in
+            let command = request.arguments.last!
+            let output: String
+            if command.contains("enabled_accessibility_services") { output = Guardian.accessibility }
+            else if command.hasPrefix("pm path") { output = "package:/data/app/guardian/base.apk" }
+            else if command.hasPrefix("pidof") { output = "42" }
+            else if command.contains("persist.appcontrol_w_mask") { output = "-134250497" }
+            else if command.contains("adb_wifi_enabled") { output = "0" }
+            else if command.contains("adb_enabled") { output = "1" }
+            else if command.contains("adb.tcp.port") { output = "5555" }
+            else if command.contains("init.svc.adbd") { output = "running" }
+            else { output = "" }
+            return ProcessResult(output: output, exitCode: 0)
+        }
+        let status = state.readGuardianStatus()
+        XCTAssertTrue(status.ok, status.summary)
+    }
 }

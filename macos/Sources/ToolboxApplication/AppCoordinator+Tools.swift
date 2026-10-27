@@ -325,8 +325,6 @@ extension AppCoordinator {
             .trimmingCharacters(in: .whitespacesAndNewlines)
         let adbEnabled = read("settings get global adb_enabled 2>/dev/null")
             .trimmingCharacters(in: .whitespacesAndNewlines)
-        let wifiEnabled = read("settings get global adb_wifi_enabled 2>/dev/null")
-            .trimmingCharacters(in: .whitespacesAndNewlines)
         let servicePort = read("getprop service.adb.tcp.port 2>/dev/null")
             .trimmingCharacters(in: .whitespacesAndNewlines)
         let persistPort = read("getprop persist.adb.tcp.port 2>/dev/null")
@@ -340,7 +338,6 @@ extension AppCoordinator {
             pid: pid,
             accessibility: acc.contains(Guardian.accessibility),
             adbEnabled: adbEnabled == "1",
-            adbWifiEnabled: wifiEnabled == "1",
             servicePort: servicePort,
             persistPort: persistPort,
             adbd: adbd,
